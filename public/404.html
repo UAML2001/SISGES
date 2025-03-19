@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Página No Encontrada - SISGES</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap">
+  <style>
+    /* Estilos generales */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      color: #2F3542;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      text-align: center;
+    }
+
+    /* Contenedor principal */
+    .container {
+      max-width: 600px;
+      padding: 40px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Título principal */
+    h1 {
+      font-size: 120px;
+      font-weight: 600;
+      margin: 0;
+      color: #FF6B6B;
+    }
+
+    /* Subtítulo */
+    h2 {
+      font-size: 32px;
+      font-weight: 600;
+      margin: 20px 0 10px;
+      color: #2F3542;
+    }
+
+    /* Texto descriptivo */
+    p {
+      font-size: 18px;
+      margin: 20px 0;
+      color: #57606F;
+    }
+
+    /* Botón de regreso */
+    .btn {
+      display: inline-block;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      color: white;
+      background-color: #FF6B6B;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: background-color 0.3s ease;
+    }
+
+    .btn:hover {
+      background-color: #FF5252;
+    }
+
+    /* Animación de latido */
+    @keyframes heartbeat {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.1);
+      }
+    }
+
+    .heartbeat {
+      animation: heartbeat 1.5s infinite;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1 class="heartbeat">404</h1>
+    <h2>¡Ups! Página no encontrada</h2>
+    <p>La página que estás buscando no existe o ha sido movida. Por favor, verifica la URL o regresa a la página principal.</p>
+    <a href="/" class="btn">Volver al inicio</a>
+  </div>
+</body>
+
+</html>

@@ -1,0 +1,197 @@
+{
+  "usuarios": {
+    "uid1": {
+      "nombre": "Ana Pérez",
+      "email": "ana@municipio.com",
+      "password": "sisgesAna",
+      "rol": "capturista",
+      "area": "Secretaría Particular",
+      "activo": true
+    },
+    "uid2": {
+      "nombre": "Carlos Ruiz",
+      "email": "carlos@municipio.com",
+      "password": "sisgesCarlos",
+      "rol": "responsable",
+      "dependencia": "Desarrollo Social",
+      "cargo": "Titular",
+      "activo": true
+    }
+  },
+
+  "solicitudes": {
+    "folio-0001": {
+      "folio": "0001",
+      "tipo": "oficio",
+      "fechaCreacion": 1678901234567,
+      "fechaLimite": 1680456434567,
+      "solicitante": {
+        "nombre": "Juan Martínez",
+        "contacto": "juan@ciudadano.com"
+      },
+      "capturista": "uid1",
+      "dependencia": "dependencia2",
+      "responsable": "uid4",
+      "estado": "en proceso",
+      "historial": {
+        "1680456434567": {
+          "accion": "Creación de solicitud",
+          "usuario": "uid1"
+        }
+      },
+      "evidencia": {
+        "url": "firebase-storage/evidencia1.pdf",
+        "fechaCarga": 1680456434567,
+        "validador": "uid1",
+        "estadoValidacion": "pendiente"
+      },
+      "comentarios": {
+        "comentario1": {
+          "texto": "Se requiere documentación adicional",
+          "fecha": 1680456434567,
+          "usuario": "uid4"
+        }
+      }
+    }
+  },
+
+  "dependencias": {
+    "presidencia-municipal-constitucional": {
+      "nombre": "Presidencia Municipal Constitucional",
+      "direcciones": {
+        "direccion-instituto-mujeres": "Dirección del Instituto Municipal de las Mujeres",
+        "direccion-comunicacion-social": "Dirección de Comunicación Social e Imagen Institucional",
+        "direccion-innovacion-modernizacion": "Dirección de Innovación y Modernización Gubernamental",
+        "secretaria-sipinna": "Secretaría Ejecutiva de SIPINNA",
+        "direccion-transparencia": "Dirección de Transparencia, Acceso a la Información Pública y Protección de Datos Personales",
+        "direccion-consejeria-juridica": "Dirección General de la Consejería Jurídica",
+        "direccion-juridica-consejeria": "Dirección de Jurídica de la Consejería Jurídica"
+      }
+    },
+    
+    "secretaria-contraloria-interna": {
+      "nombre": "Secretaría de la Contraloría Interna Municipal",
+      "direcciones": {
+        "direccion-planeacion": "Dirección de Planeación y Evaluación",
+        "direccion-auditoria": "Dirección de Auditoría"
+      }
+    },
+
+    "secretaria-general-municipal": {
+      "nombre": "Secretaría General Municipal",
+      "direcciones": {
+        "direccion-participacion-ciudadana": "Dirección de Participación Ciudadana",
+        "direccion-gobernacion": "Dirección de Gobernación",
+        "direccion-justicia-civica": "Dirección de Justicia Cívica",
+        "direccion-archivo-municipal": "Dirección de Archivo Municipal",
+        "registro-estado-familiar": "Registro del Estado Familiar",
+        "oficialia-mayor": "Oficialía Mayor"
+      }
+    },
+
+    "secretaria-finanzas": {
+      "nombre": "Secretaría de Finanzas",
+      "direcciones": {
+        "direccion-cuenta-publica": "Dirección de Cuenta Pública",
+        "direccion-ingresos": "Dirección de Ingresos",
+        "direccion-egresos": "Dirección de Egresos",
+        "direccion-recursos-humanos": "Dirección de Recursos Humanos",
+        "direccion-catastro": "Dirección de Catastro y Recaudación Fiscal",
+        "direccion-administracion": "Dirección de Administración"
+      }
+    },
+
+    "secretaria-bienestar-social": {
+      "nombre": "Secretaría de Bienestar Social",
+      "direcciones": {
+        "direccion-educacion": "Dirección de Educación",
+        "direccion-salud": "Dirección de Salud Municipal",
+        "direccion-cultura": "Dirección de Cultura y Artes",
+        "instituto-juventud": "Dirección del Instituto Tizayuquense de la Juventud",
+        "instituto-deporte": "Dirección del Instituto Municipal del Deporte y Activación Física",
+        "instituto-discapacidad": "Dirección del Instituto Municipal para el Desarrollo e Inclusión de Personas con Discapacidad",
+        "centro-psicologico": "Dirección del Centro de Atención Psicológica Municipal"
+      }
+    },
+
+    "secretaria-obras-publicas": {
+      "nombre": "Secretaría de Obras Públicas",
+      "direcciones": {
+        "direccion-servicios-publicos": "Dirección de Servicios Públicos Municipales",
+        "direccion-ecologia": "Dirección de Ecología y Protección al Medio Ambiente",
+        "direccion-licencias": "Dirección de Licencias de Construcción",
+        "direccion-planeacion-admon": "Dirección de Planeación y Administración",
+        "direccion-obras-publicas": "Dirección de Obras Públicas"
+      }
+    },
+
+    "secretaria-desarrollo-economico": {
+      "nombre": "Secretaría de Desarrollo Económico",
+      "direcciones": {
+        "direccion-fomento-agropecuario": "Dirección de Fomento Agropecuario",
+        "direccion-rastro": "Dirección del Rastro Municipal",
+        "direccion-turismo": "Dirección de Turismo, Comercio y Servicios",
+        "direccion-competitividad": "Dirección de Competitividad Económica",
+        "direccion-proyectos-estrategicos": "Dirección de Operadora Municipal de Proyectos Estratégicos",
+        "direccion-reglamentos": "Dirección de Reglamentos"
+      }
+    },
+
+    "secretaria-seguridad-ciudadana": {
+      "nombre": "Secretaría de Seguridad Ciudadana",
+      "direcciones": {
+        "secretaria-tecnica": "Secretaría Técnica de la SSC",
+        "direccion-asuntos-internos": "Dirección de la Unidad de Asuntos Internos",
+        "direccion-juridica-ssc": "Dirección Jurídica de la SSC",
+        "direccion-administracion-ssc": "Dirección de Administración de la SSC",
+        "direccion-analisis": "Dirección de Análisis",
+        "direccion-investigacion": "Dirección de Investigación",
+        "direccion-transito": "Dirección de Tránsito y Vialidad",
+        "direccion-violencia-genero": "Dirección de Atención a Violencia Familiar y de Género",
+        "direccion-proteccion-civil": "Dirección de Protección Civil y Bomberos",
+        "direccion-seguridad-publica": "Dirección de Seguridad Pública",
+        "direccion-prevencion-delito": "Dirección de Prevención Social del Delito"
+      }
+    },
+
+    "organismos-especiales": {
+      "caamth": {
+        "nombre": "CAAMTH",
+        "tipo": "organismo_descentralizado"
+      },
+      "imduyv": {
+        "nombre": "IMDUyV",
+        "tipo": "organismo_descentralizado"
+      }
+    }
+  },
+
+  "configuracion": {
+    "ultimoFolio": 25,
+    "diasLimite": 15,
+    "tiposSolicitud": ["oficio", "audiencia", "redes sociales"],
+    "estadosSolicitud": ["pendiente", "en proceso", "atendida", "cerrada"],
+    "estructura_organizacional": {
+      "niveles": ["Secretaría", "Dirección", "Organismo Descentralizado"],
+      "dependenciasPadre": [
+        "Presidencia Municipal Constitucional",
+        "Secretaría de la Contraloría Interna Municipal",
+        "Secretaría General Municipal",
+        "Secretaría de Finanzas",
+        "Secretaría de Bienestar Social",
+        "Secretaría de Obras Públicas",
+        "Secretaría de Desarrollo Económico",
+        "Secretaría de Seguridad Ciudadana"
+      ]
+  }
+},
+
+  "notificaciones": {
+    "notificacion1": {
+      "usuario": "uid4",
+      "mensaje": "Nueva solicitud asignada - Folio 0001",
+      "fecha": 1680456434567,
+      "leida": false
+    }
+  }
+}
