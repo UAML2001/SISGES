@@ -4,11 +4,19 @@ import {
     ref, 
     get, 
     set, 
-    update,  // <- Agregar esta importación
+    update,
     onValue,
     query,
-    orderByChild 
-  } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+    orderByChild,
+    equalTo // ← Agregar esta importación
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+import { 
+    getStorage, 
+    ref as storageRef, 
+    uploadBytes, 
+    getDownloadURL 
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
+
 
 // Configuración de Firebase
 const firebaseConfig = {
@@ -16,14 +24,22 @@ const firebaseConfig = {
     authDomain: "prediapp-81350.firebaseapp.com",
     databaseURL: "https://sisges.firebaseio.com/",
     projectId: "prediapp-81350",
-    storageBucket: "prediapp-81350.firebasestorage.app",
+    storageBucket: "prediapp-81350.appspot.com",
     messagingSenderId: "649258621251",
     appId: "1:649258621251:web:54558939330b1e01d777f6",
     measurementId: "G-PBV4WW41D6"
 };
 
+// Inicializa Firebase Storage
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
+const storage = getStorage(app);
+
+let solicitudesSeguimiento = [];
+let solicitudesValidadas = [];
+const itemsPerPage = 10;
+let currentPageSeguimiento = 1;
+let currentPageValidadas = 1;
 
 window.mostrarModalEstado = function(folio) {
     document.getElementById('modalFolio').textContent = folio;
@@ -102,19 +118,271 @@ async function generarFolio() {
     return nuevoFolio.toString().padStart(4, '0');
 }
 
+// Función para cargar solicitudes validadas
+function cargarValidadas() {
+    const tabla = document.getElementById('lista-validadas');
+    const filtroSecretaria = document.getElementById('filtro-secretaria-validadas');
+    const solicitudesRef = ref(database, 'solicitudes');
+    
+    // Obtener rol del usuario
+    const userRol = parseInt(getCookie('rol')) || 0;
+    
+    // Configurar visibilidad del filtro de secretarías
+    if (userRol === 3) {
+        filtroSecretaria.style.display = 'block';
+        // Llenar opciones solo si es admin
+        filtroSecretaria.innerHTML = '<option value="">Todas las secretarías</option>';
+        Object.entries(dependenciasMap).forEach(([key, nombre]) => {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = nombre;
+            filtroSecretaria.appendChild(option);
+        });
+    } else {
+        filtroSecretaria.style.display = 'none';
+    }
+
+    const q = query(
+        solicitudesRef,
+        orderByChild('estado'),
+        equalTo('atendida')
+    );
+    
+    onValue(q, (snapshot) => {
+        solicitudesValidadas = [];
+        const userDependencias = getCookie('dependencia') ? 
+            decodeURIComponent(getCookie('dependencia')).split(',') : [];
+
+        snapshot.forEach((childSnapshot) => {
+            const solicitud = childSnapshot.val();
+            solicitud.key = childSnapshot.key;
+            
+            // Filtrar por dependencia si no es admin
+            if (userRol !== 3 && !userDependencias.includes(solicitud.dependencia)) return;
+            
+            solicitudesValidadas.push(solicitud);
+        });
+        
+        aplicarFiltrosValidadas();
+    });
+}
+
+// Función para mostrar página en validadas
+function mostrarPaginaValidadas(data) {
+    const start = (currentPageValidadas - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    const tabla = document.getElementById('lista-validadas');
+    
+    tabla.innerHTML = '';
+    
+    if (data.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td colspan="5" class="text-center py-4">
+                <i class="fas fa-info-circle me-2"></i>
+                No hay solicitudes validadas para mostrar
+            </td>
+        `;
+        tabla.appendChild(tr);
+        actualizarPaginacion('validadas', 0);
+        return;
+    }
+    
+    const items = data.slice(start, end);
+    
+    if (items.length === 0) {
+        currentPageValidadas = Math.max(1, currentPageValidadas - 1);
+        return mostrarPaginaValidadas(data);
+    }
+    
+    items.forEach(s => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${s.key}</td>
+            <td>${s.asunto}</td>
+            <td>${dependenciasMap[s.dependencia] || 'Desconocida'}</td>
+            <td>${new Date(s.fechaAtencion).toLocaleDateString()}</td>
+            <td>${s.evidencias ? `<a href="${s.evidencias}">Ver</a>` : 'N/A'}</td>
+        `;
+        tabla.appendChild(tr);
+    });
+    
+    actualizarPaginacion('validadas', data.length);
+}
+
+// Función genérica para actualizar paginación
+function actualizarPaginacion(tipo, totalItems) {
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const container = document.querySelector(`.paginacion-${tipo}`);
+    let currentPage = tipo === 'seguimiento' ? currentPageSeguimiento : currentPageValidadas;
+
+    container.innerHTML = '';
+
+    if (totalItems === 0 || totalPages === 0) {
+        return;
+    }
+
+    // Asegurar que currentPage no exceda el límite
+    if (currentPage > totalPages) {
+        currentPage = totalPages;
+        if (tipo === 'seguimiento') {
+            currentPageSeguimiento = currentPage;
+        } else {
+            currentPageValidadas = currentPage;
+        }
+    }
+
+    const paginationHTML = `
+        <div class="paginacion-contenedor">
+            <button class="btn-pag anterior" ${currentPage === 1 ? 'disabled' : ''}>
+                Anterior
+            </button>
+            <span class="info-pagina">Página ${currentPage} de ${totalPages}</span>
+            <button class="btn-pag siguiente" ${currentPage === totalPages ? 'disabled' : ''}>
+                Siguiente
+            </button>
+        </div>
+    `;
+
+    container.innerHTML = paginationHTML;
+
+    // Event listeners
+    container.querySelector('.anterior')?.addEventListener('click', () => {
+        if (tipo === 'seguimiento') {
+            currentPageSeguimiento = Math.max(1, currentPageSeguimiento - 1);
+        } else {
+            currentPageValidadas = Math.max(1, currentPageValidadas - 1);
+        }
+        tipo === 'seguimiento' ? aplicarFiltrosSeguimiento() : aplicarFiltrosValidadas();
+    });
+
+    container.querySelector('.siguiente')?.addEventListener('click', () => {
+        if (tipo === 'seguimiento') {
+            currentPageSeguimiento = Math.min(totalPages, currentPageSeguimiento + 1);
+        } else {
+            currentPageValidadas = Math.min(totalPages, currentPageValidadas + 1);
+        }
+        tipo === 'seguimiento' ? aplicarFiltrosSeguimiento() : aplicarFiltrosValidadas();
+    });
+}
+
+// Función para aplicar filtros a validadas
+function aplicarFiltrosValidadas() {
+    const busqueda = document.getElementById('busqueda-validadas').value.toLowerCase();
+    const secretaria = document.getElementById('filtro-secretaria-validadas').value;
+    
+    const filtradas = solicitudesValidadas.filter(s => {
+        const texto = `${s.key} ${s.asunto} ${dependenciasMap[s.dependencia]}`.toLowerCase();
+        const coincideSecretaria = !secretaria || s.dependencia === secretaria;
+        return texto.includes(busqueda) && coincideSecretaria;
+    });
+    
+    mostrarPaginaValidadas(filtradas);
+}
+
+function aplicarFiltrosSeguimiento() {
+    const busqueda = document.getElementById('busqueda-seguimiento').value.toLowerCase();
+    const estado = document.getElementById('filtro-estado-seguimiento').value;
+    
+    const filtradas = solicitudesSeguimiento.filter(s => {
+        // Excluir atendidas y aplicar otros filtros
+        if (s.estado === 'atendida') return false;
+        
+        const texto = `${s.key} ${s.asunto} ${dependenciasMap[s.dependencia]}`.toLowerCase();
+        const coincideEstado = !estado || s.estado === estado;
+        return texto.includes(busqueda) && coincideEstado;
+    });
+    
+    mostrarPaginaSeguimiento(filtradas);
+}
+
+// Función para mostrar página en seguimiento
+function mostrarPaginaSeguimiento(data) {
+    const start = (currentPageSeguimiento - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    const tabla = document.getElementById('lista-seguimiento');
+    
+    tabla.innerHTML = '';
+    
+    if (data.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td colspan="6" class="text-center py-4">
+                <i class="fas fa-info-circle me-2"></i>
+                No se encontraron solicitudes con los filtros aplicados
+            </td>
+        `;
+        tabla.appendChild(tr);
+        actualizarPaginacion('seguimiento', 0);
+        return;
+    }
+    
+    const items = data.slice(start, end);
+    
+    if (items.length === 0) {
+        currentPageSeguimiento = Math.max(1, currentPageSeguimiento - 1);
+        return mostrarPaginaSeguimiento(data);
+    }
+    
+    items.forEach(solicitud => {
+        tabla.appendChild(crearFilaSolicitud(solicitud));
+    });
+    
+    actualizarPaginacion('seguimiento', data.length);
+}
+
+
 async function cargarSecretarias() {
     const secretariasRef = ref(database, 'dependencias');
     const snapshot = await get(secretariasRef);
     const select = document.getElementById('secretaria');
     
+    // Obtener datos del usuario
+    const userRol = parseInt(getCookie('rol')) || 0;
+    const userDependencias = getCookie('dependencia') ? 
+        decodeURIComponent(getCookie('dependencia')).split(',') : [];
+    
     select.innerHTML = '<option value="">Seleccionar...</option>';
     
     snapshot.forEach((childSnapshot) => {
         const dependencia = childSnapshot.val();
+        const dependenciaKey = childSnapshot.key; // Cambiar a usar la key
+        
+        // Filtrar opciones si no es admin
+        if (userRol !== 3 && !userDependencias.includes(dependenciaKey)) {
+            return;
+        }
+        
         const option = document.createElement('option');
-        option.value = dependencia.nombre;
-        option.textContent = dependencia.nombre;
+        option.value = dependenciaKey; // Usar la key como valor
+        option.textContent = dependencia.nombre; // Mostrar el nombre amigable
         select.appendChild(option);
+    });
+}
+
+// 1. Crear un mapa global de dependencias
+let dependenciasMap = {};
+
+// 2. Cargar dependencias al inicio
+async function cargarDependencias() {
+    const dependenciasRef = ref(database, 'dependencias');
+    const snapshot = await get(dependenciasRef);
+    
+    // Mapeo de claves a nombres oficiales
+    const mapeoOficial = {
+        'presidencia-municipal-constitucional': 'Presidencia Municipal Constitucional',
+        'secretaria-bienestar-social': 'Secretaría de Bienestar Social',
+        'secretaria-contraloria-interna': 'Secretaría de la Contraloría Interna Municipal',
+        'secretaria-desarrollo-economico': 'Secretaría de Desarrollo Económico',
+        'secretaria-finanzas': 'Secretaría de Finanzas',
+        'secretaria-general-municipal': 'Secretaría General Municipal',
+        'secretaria-obras-publicas': 'Secretaría de Obras Públicas',
+        'secretaria-seguridad-ciudadana': 'Secretaría de Seguridad Ciudadana'
+    };
+
+    snapshot.forEach((childSnapshot) => {
+        const key = childSnapshot.key;
+        dependenciasMap[key] = mapeoOficial[key] || childSnapshot.val().nombre;
     });
 }
 
@@ -195,12 +463,19 @@ function actualizarEstadisticas(solicitudes) {
 // Modificar la función cambiarEstado para hacerla global
 window.cambiarEstado = async function(folio, nuevoEstado) {
     try {
-        await set(ref(database, `solicitudes/${folio}/estado`), nuevoEstado);
+        const updates = {
+            estado: nuevoEstado
+        };
         
-        // Elimina esta línea
-        // bootstrap.Modal.getInstance(document.getElementById('statusModal')).hide();
+        if (nuevoEstado === 'atendida') {
+            updates.fechaAtencion = new Date().toISOString();
+        }
         
-        cargarSeguimiento();
+        await update(ref(database, `solicitudes/${folio}`), updates);
+        
+        // Actualizar ambas listas
+        aplicarFiltrosSeguimiento();
+        cargarValidadas();
         
         Toastify({
             text: "Estado actualizado correctamente",
@@ -217,6 +492,62 @@ window.cambiarEstado = async function(folio, nuevoEstado) {
     }
 };
 
+// Función para subir evidencia y cambiar estado
+// Función modificada con manejo de errores detallado
+window.subirEvidenciaYCambiarEstado = async function() {
+    const fileInput = document.getElementById('evidenciaFile');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        mostrarError("Debes seleccionar un archivo primero");
+        return;
+    }
+
+    try {
+        // 1. Subir archivo
+        const storagePath = `evidencias/${folioActual}/${file.name}`;
+        const refArchivo = storageRef(storage, storagePath);
+        await uploadBytes(refArchivo, file);
+        
+        // 2. Obtener URL pública
+        const urlDescarga = await getDownloadURL(refArchivo);
+        
+        // 3. Actualizar base de datos
+        await update(ref(database, `solicitudes/${folioActual}`), {
+            estado: 'atendida',
+            fechaAtencion: new Date().toISOString(),
+            evidencias: urlDescarga
+        });
+
+        // 4. Cerrar modal y limpiar
+        fileInput.value = '';
+        bootstrap.Modal.getInstance(document.querySelector('#confirmarAtendidaModal')).hide();
+        
+        mostrarExito("Evidencia subida correctamente");
+        
+    } catch (error) {
+        console.error("Detalle completo del error:", error);
+        mostrarError(`Error técnico: ${error.code} - ${error.message}`);
+    }
+};
+
+// Funciones de utilidad
+function mostrarError(mensaje) {
+    Toastify({
+        text: mensaje,
+        className: "toastify-error",
+        duration: 3000
+    }).showToast();
+}
+
+function mostrarExito(mensaje) {
+    Toastify({
+        text: mensaje,
+        className: "toastify-success",
+        duration: 3000
+    }).showToast();
+}
+
 const estados = {
     'pendiente': {texto: 'Pendiente', color: '#491F42'},
     'por_vencer': {texto: 'Por Vencer', color: '#720F36'},
@@ -232,11 +563,12 @@ function crearFilaSolicitud(solicitud) {
     tr.dataset.estado = solicitud.estado;
     
     const estado = estados[solicitud.estado] || {texto: 'Desconocido', color: '#666'};
-    
+    const dependenciaNombre = dependenciasMap[solicitud.dependencia] || 'Desconocida';
+
     tr.innerHTML = `
         <td>${solicitud.key}</td>
         <td>${solicitud.asunto}</td>
-        <td>${solicitud.dependencia}</td>
+        <td>${dependenciaNombre}</td>
         <td><span class="status-badge" style="background:${estado.color}">${estado.texto}</span></td>
         <td>${solicitud.estado === 'atendida' ? 'Atendida' : calcularTiempoRestante(solicitud.fechaLimite)}</td>
         <td>
@@ -251,6 +583,12 @@ function crearFilaSolicitud(solicitud) {
         </td>
     `;
     return tr;
+}
+
+async function obtenerNombreDependencia(dependenciaKey) {
+    const dependenciaRef = ref(database, `dependencias/${dependenciaKey}`);
+    const snapshot = await get(dependenciaRef);
+    return snapshot.val()?.nombre || 'Desconocida';
 }
 
 // Función actualizada para actualizar estados automáticos
@@ -299,24 +637,37 @@ function cargarSeguimiento() {
         const foliosUnicos = new Set();
         tabla.innerHTML = '';
         
-        snapshot.forEach((childSnapshot) => {
-            const solicitud = childSnapshot.val();
-            solicitud.key = childSnapshot.key;
+        // Obtener datos del usuario
+        solicitudesSeguimiento = [];
+        const userRol = parseInt(getCookie('rol')) || 0;
+        const userDependencias = getCookie('dependencia') ? 
+            decodeURIComponent(getCookie('dependencia')).split(',') : [];
+
+            snapshot.forEach((childSnapshot) => {
+                const solicitud = childSnapshot.val();
+                solicitud.key = childSnapshot.key;
             
+            // Filtrar por dependencia si no es admin
+            if (userRol !== 3 && !userDependencias.includes(solicitud.dependencia)) {
+                return;  
+            }
+
             if(!foliosUnicos.has(solicitud.key)) {
                 foliosUnicos.add(solicitud.key);
                 solicitudes.push(solicitud);
                 tabla.appendChild(crearFilaSolicitud(solicitud));
             }
+
+            solicitudesSeguimiento.push(solicitud);
         });
         
-        // Ordenar por fecha más reciente primero
         solicitudes.sort((a, b) => 
             new Date(b.fechaCreacion) - new Date(a.fechaCreacion)
         );
         
-        actualizarEstadisticas(solicitudes);
-        actualizarGrafica(solicitudes);
+        aplicarFiltrosSeguimiento();
+        actualizarEstadisticas(solicitudesSeguimiento);
+        actualizarGrafica(solicitudesSeguimiento);
         iniciarActualizacionTiempo();
     });
 }
@@ -609,16 +960,45 @@ function actualizarGrafica(solicitudes) {
     });
 }
 
+// Event listeners para filtros
+document.getElementById('busqueda-seguimiento').addEventListener('input', () => {
+    currentPageSeguimiento = 1;
+    aplicarFiltrosSeguimiento();
+});
+
+document.getElementById('filtro-estado-seguimiento').addEventListener('change', () => {
+    currentPageSeguimiento = 1;
+    aplicarFiltrosSeguimiento();
+});
+
+document.getElementById('busqueda-validadas').addEventListener('input', () => {
+    currentPageValidadas = 1;
+    aplicarFiltrosValidadas();
+});
+
+document.getElementById('filtro-secretaria-validadas').addEventListener('change', () => {
+    currentPageValidadas = 1;
+    aplicarFiltrosValidadas();
+});
+
 // Sistema de navegación y UI
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', async function () {
     checkSession();
     showUserInfo();
     setupLogout();
+    
+    // Cargar primero las dependencias
+    await cargarDependencias();
+    
+    // Luego cargar otros componentes
     cargarSecretarias();
     cargarSeguimiento();
+    cargarValidadas(); // Nueva línea
 
     // Obtener rol del usuario
     const role = parseInt(getCookie('rol')) || 0;
+    const userDependencias = getCookie('dependencia') ? 
+    decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
     // Ocultar/mostrar pestañas según rol
     const nuevaLi = document.querySelector('a[data-content="nueva"]').parentElement;
@@ -627,7 +1007,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     switch (role) {
         case 1:
-            nuevaLi.style.display = 'block';
+            nuevaLi.style.display = userDependencias.length > 0 ? 'block' : 'none';
             seguimientoLi.style.display = 'block';
             validadasLi.style.display = 'none';
             break;

@@ -91,10 +91,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Crear cookies con misma fecha de expiración
                 const expiresUTC = fechaExpiracion.toUTCString();
-
+                const loginTime = new Date().toISOString();
+                document.cookie = `lastLogin=${loginTime}; expires=${expiresUTC}; path=/`;
                 document.cookie = `session=${usuarioData.uid}; expires=${expiresUTC}; path=/`;
                 document.cookie = `nombre=${encodeURIComponent(usuarioData.nombre)}; expires=${expiresUTC}; path=/`;
                 document.cookie = `rol=${encodeURIComponent(usuarioData.rol)}; expires=${expiresUTC}; path=/`;
+                document.cookie = `dependencia=${encodeURIComponent(usuarioData.dependencias)}; expires=${expiresUTC}; path=/`;
                 document.cookie = `expires=${expiresUTC}; expires=${expiresUTC}; path=/`;
 
                 mostrarNotificacion(' Acceso autorizado', 'success');
