@@ -24,7 +24,7 @@ const firebaseConfig = {
     authDomain: "prediapp-81350.firebaseapp.com",
     databaseURL: "https://sisges.firebaseio.com/",
     projectId: "prediapp-81350",
-    storageBucket: "prediapp-81350.appspot.com",
+    storageBucket: "gs://prediapp-81350.firebasestorage.app",
     messagingSenderId: "649258621251",
     appId: "1:649258621251:web:54558939330b1e01d777f6",
     measurementId: "G-PBV4WW41D6"
@@ -198,12 +198,24 @@ function mostrarPaginaValidadas(data) {
     items.forEach(s => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${s.key}</td>
-            <td>${s.asunto}</td>
-            <td>${dependenciasMap[s.dependencia] || 'Desconocida'}</td>
-            <td>${new Date(s.fechaAtencion).toLocaleDateString()}</td>
-            <td>${s.evidencias ? `<a href="${s.evidencias}">Ver</a>` : 'N/A'}</td>
-        `;
+        <td>${s.key}</td>
+        <td>${s.asunto}</td>
+        <td>${dependenciasMap[s.dependencia] || 'Desconocida'}</td>
+        <td>${new Date(s.fechaAtencion).toLocaleDateString()}</td>
+        <td>
+            ${s.evidencias ? `
+            <button class="btn btn-sm btn-info" 
+                    onclick="mostrarEvidenciaModal(
+                        '${s.key}', 
+                        '${s.asunto}', 
+                        '${dependenciasMap[s.dependencia]}', 
+                        '${s.evidencias}'
+                    )">
+                <i class="fas fa-eye me-1"></i>Ver
+            </button>
+            ` : 'N/A'}
+        </td>
+    `;
         tabla.appendChild(tr);
     });
     
@@ -360,6 +372,117 @@ async function cargarSecretarias() {
     });
 }
 
+window.mostrarEvidenciaModal = function(folio, asunto, secretaria, urlEvidencia) {
+    const modal = new bootstrap.Modal(document.getElementById('evidenciaModal'));
+    const loading = document.getElementById('loadingPreview');
+    const pdfContainer = document.getElementById('pdfContainer');
+    const imagenContainer = document.getElementById('imagenContainer');
+    const visorNoSoportado = document.getElementById('visorNoSoportado');
+    const pdfViewer = document.getElementById('pdfViewer');
+    const modalElement = document.getElementById('evidenciaModal');
+
+    // Resetear estado inicial
+    [loading, pdfContainer, imagenContainer, visorNoSoportado].forEach(el => {
+        el.classList.add('d-none');
+    });
+    loading.classList.remove('d-none');
+    pdfViewer.src = '';
+    pdfViewer.removeAttribute('data-temp-src'); // Limpiar fuentes anteriores
+
+    // Configurar eventos del modal
+    const modalShownHandler = () => {
+        if (pdfViewer.dataset.tempSrc) {
+            // Forzar recálculo de dimensiones
+            const container = pdfViewer.parentElement;
+            pdfViewer.style.height = `${container.clientHeight}px`;
+            
+            // Cargar PDF después de actualizar dimensiones
+            setTimeout(() => {
+                pdfViewer.src = pdfViewer.dataset.tempSrc;
+                delete pdfViewer.dataset.tempSrc;
+            }, 100);
+        }
+    };
+
+    // Manejador de redimensionamiento mejorado
+    const resizeHandler = () => {
+        if (pdfViewer && pdfContainer.classList.contains('d-none') === false) {
+            const container = pdfViewer.parentElement;
+            const newHeight = Math.max(400, container.clientHeight); // Altura mínima
+            pdfViewer.style.height = `${newHeight}px`;
+        }
+    };
+
+    // Configurar nombre de archivo
+    const extractFileName = (url) => {
+        try {
+            const decodedUrl = decodeURIComponent(url);
+            return decodedUrl.split('/').pop().split(/[?#]/)[0];
+        } catch (error) {
+            console.error('Error al extraer nombre:', error);
+            return 'archivo-desconocido';
+        }
+    };
+
+    const nombreArchivo = extractFileName(urlEvidencia);
+    const fileExt = nombreArchivo.split('.').pop().toLowerCase();
+    const fechaActual = new Date().toLocaleDateString('es-MX');
+
+    // Actualizar metadatos
+    document.getElementById('nombreArchivoCompleto').textContent = nombreArchivo;
+    document.getElementById('folioEvidencia').textContent = folio;
+    document.getElementById('secretariaEvidencia').textContent = secretaria || 'Sin especificar';
+    document.getElementById('fechaEvidencia').textContent = fechaActual;
+
+    // Configurar visores
+    setTimeout(() => {
+        loading.classList.add('d-none');
+        
+        if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExt)) {
+            imagenContainer.classList.remove('d-none');
+            const img = document.getElementById('visorImagen');
+            img.src = urlEvidencia;
+            img.onload = () => {
+                document.getElementById('imagenDimensions').textContent = 
+                    `${img.naturalWidth}px × ${img.naturalHeight}px`;
+            };
+        } else if (fileExt === 'pdf') {
+            pdfContainer.classList.remove('d-none');
+            document.getElementById('pdfMeta').textContent = 
+                `${nombreArchivo} | ${fechaActual}`;
+            
+            // Configurar PDF después de mostrar el contenedor
+            pdfViewer.dataset.tempSrc = `${urlEvidencia}#view=FitH`;
+            window.addEventListener('resize', resizeHandler);
+            
+            // Forzar actualización inicial
+            setTimeout(resizeHandler, 50);
+        } else {
+            visorNoSoportado.classList.remove('d-none');
+            document.getElementById('tipoArchivo').textContent = `.${fileExt}`;
+            const downloadBtn = document.getElementById('descargarEvidencia');
+            downloadBtn.href = urlEvidencia;
+            downloadBtn.download = nombreArchivo;
+        }
+    }, 300);
+
+    // Evento de zoom para imágenes
+    document.getElementById('visorImagen').onclick = function() {
+        this.classList.toggle('img-zoom');
+    };
+
+    // Manejar eventos del modal
+    modalElement.addEventListener('shown.bs.modal', modalShownHandler);
+    modalElement.addEventListener('hidden.bs.modal', () => {
+        window.removeEventListener('resize', resizeHandler);
+        modalElement.removeEventListener('shown.bs.modal', modalShownHandler);
+        pdfViewer.src = ''; // Limpiar iframe al cerrar
+    });
+
+    // Mostrar modal después de configurar todo
+    modal.show();
+};
+
 // 1. Crear un mapa global de dependencias
 let dependenciasMap = {};
 
@@ -493,7 +616,6 @@ window.cambiarEstado = async function(folio, nuevoEstado) {
 };
 
 // Función para subir evidencia y cambiar estado
-// Función modificada con manejo de errores detallado
 window.subirEvidenciaYCambiarEstado = async function() {
     const fileInput = document.getElementById('evidenciaFile');
     const file = fileInput.files[0];
@@ -504,29 +626,31 @@ window.subirEvidenciaYCambiarEstado = async function() {
     }
 
     try {
-        // 1. Subir archivo
+        const metadata = {
+            contentType: file.type,
+            cacheControl: 'public, max-age=31536000',
+        };
+
         const storagePath = `evidencias/${folioActual}/${file.name}`;
         const refArchivo = storageRef(storage, storagePath);
-        await uploadBytes(refArchivo, file);
+        await uploadBytes(refArchivo, file, metadata);
         
-        // 2. Obtener URL pública
+        // Obtener URL correctamente formada
         const urlDescarga = await getDownloadURL(refArchivo);
         
-        // 3. Actualizar base de datos
         await update(ref(database, `solicitudes/${folioActual}`), {
             estado: 'atendida',
             fechaAtencion: new Date().toISOString(),
-            evidencias: urlDescarga
+            evidencias: urlDescarga // Usar URL directa sin parámetros adicionales
         });
 
-        // 4. Cerrar modal y limpiar
+        // 4. Limpiar y cerrar
         fileInput.value = '';
-        bootstrap.Modal.getInstance(document.querySelector('#confirmarAtendidaModal')).hide();
-        
+        bootstrap.Modal.getInstance('#confirmarAtendidaModal').hide();
         mostrarExito("Evidencia subida correctamente");
         
     } catch (error) {
-        console.error("Detalle completo del error:", error);
+        console.error("Error completo:", error);
         mostrarError(`Error técnico: ${error.code} - ${error.message}`);
     }
 };

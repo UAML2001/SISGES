@@ -529,6 +529,97 @@ body {
 .table tbody tr:only-child td {
     border-bottom: none;
 }
+
+.img-zoom {
+    transform: scale(2);
+    cursor: zoom-out;
+    transition: transform 0.3s ease;
+    z-index: 1000;
+    position: relative;
+}
+
+#pdfViewer {
+    min-height: 70vh;
+}
+
+#loadingPreview {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    z-index: 100;
+}
+
+#nombreArchivoCompleto {
+    font-family: 'Poppins', monospace;
+    font-size: 1.25rem;
+    letter-spacing: -0.5px;
+}
+
+.pdf-header {
+    height: 45px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.image-meta {
+    opacity: 0.8;
+    letter-spacing: 0.5px;
+}
+
+#visorImagen {
+    transition: transform 0.3s ease;
+    cursor: zoom-in;
+    border: 1px solid #dee2e6;
+    background: white;
+}
+
+#visorImagen.img-zoom {
+    transform: scale(2);
+    cursor: zoom-out;
+    z-index: 1000;
+    position: relative;
+}
+
+#pdfMeta {
+    font-family: 'Poppins', system-ui, sans-serif;
+    font-size: 0.9em;
+}
+
+/* Estilos Personalizados */
+.dropzone-custom {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+}
+
+.dropzone-custom:hover {
+    background: color-mix(in srgb, var(--primary) 12%, transparent) !important;
+    border-color: var(--primary) !important;
+}
+
+.dz-message {
+    transition: transform 0.2s ease;
+}
+
+.dropzone-custom.dragover .dz-message {
+    transform: scale(1.02);
+}
+
+.icono-destacado {
+    transition: transform 0.3s ease;
+}
+
+.icono-destacado:hover {
+    transform: rotate(-8deg) scale(1.05);
+}
+
+/* Mejoras de accesibilidad */
+.btn:focus {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 50%, transparent);
+}
+
 /* RESPONSIVE */
 
 @media (max-width: 576px) {

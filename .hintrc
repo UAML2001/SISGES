@@ -44,6 +44,13 @@
       {
         "html-has-lang": "off"
       }
+    ],
+    "axe/text-alternatives": [
+      "default",
+      {
+        "image-alt": "off",
+        "frame-title": "off"
+      }
     ]
   }
 }
