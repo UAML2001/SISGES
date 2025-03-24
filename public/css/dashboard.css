@@ -588,36 +588,52 @@ body {
     font-size: 0.9em;
 }
 
-/* Estilos Personalizados */
-.dropzone-custom {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.file-drop-area {
+    transition: all 0.3s ease;
+    background: rgba(40, 167, 69, 0.05);
+    border-color: rgba(40, 167, 69, 0.3);
+}
+
+.file-drop-area:hover {
+    background: rgba(40, 167, 69, 0.1);
+    border-color: rgba(40, 167, 69, 0.5);
     cursor: pointer;
 }
 
-.dropzone-custom:hover {
-    background: color-mix(in srgb, var(--primary) 12%, transparent) !important;
-    border-color: var(--primary) !important;
-}
-
-.dz-message {
-    transition: transform 0.2s ease;
-}
-
-.dropzone-custom.dragover .dz-message {
+.file-drop-area.dragover {
+    background: rgba(40, 167, 69, 0.15);
+    border-color: #28a745;
     transform: scale(1.02);
 }
 
-.icono-destacado {
-    transition: transform 0.3s ease;
+.confirmation-message {
+    border-left: 3px solid #ffc107;
 }
 
-.icono-destacado:hover {
-    transform: rotate(-8deg) scale(1.05);
+#removeFile {
+    transition: all 0.3s ease;
 }
 
-/* Mejoras de accesibilidad */
-.btn:focus {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 50%, transparent);
+#removeFile:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.file-actions { margin-top: 0.5rem; }
+.remove-file-btn { 
+    cursor: pointer;
+    color: #dc3545;
+    font-size: 0.9em;
+}
+.size-error { 
+    color: #dc3545;
+    display: none;
+}
+.file-info .valid-feedback { display: none; }
+.was-validated .file-info .valid-feedback { display: block; }
+.invalid-file .file-drop-area {
+    border-color: #dc3545 !important;
+    background: rgba(220, 53, 69, 0.05);
 }
 
 /* RESPONSIVE */

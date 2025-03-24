@@ -136,9 +136,10 @@
                     <label for="receptor" class="form-label">Receptor</label>
                     <select class="form-select" id="receptor" required>
                         <option value="">Seleccionar...</option>
-                        <option>Presidencia</option>
-                        <option>Secretaría General</option>
-                        <option>Oficialía Mayor</option>
+                        <option>Comunicación</option>
+                        <option>Atención Ciudadana</option>
+                        <option>Oficina de Presidencia</option>
+                        <option>Otro</option>
                     </select>
                 </div>
 
@@ -331,29 +332,67 @@
 </div>
 
 <!-- Modal Confirmación Atendida -->
-<div class="modal fade" id="confirmarAtendidaModal">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Confirmar como Atendida</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<div class="modal fade" id="confirmarAtendidaModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle me-2"></i>Confirmar solicitud atendida
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Sección de carga de archivos -->
+                <div class="upload-section mb-4">
+                    <div class="file-drop-area rounded-3 border-2 border-dashed p-4 text-center">
+                        <div class="mb-3 text-muted">
+                            <i class="fas fa-cloud-upload-alt fa-3x"></i>
+                        </div>
+                        <input type="file" 
+                               class="form-control visually-hidden" 
+                               id="evidenciaFile" 
+                               accept=".pdf,.jpg,.jpeg,.png,.zip,.rar" 
+                               required>
+                        <label for="evidenciaFile" class="btn btn-outline-success mb-2">
+                            <i class="fas fa-file-upload me-2"></i>Seleccionar archivo
+                        </label>
+                        <div class="file-info small text-muted" id="fileInfo">
+                            Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)
+                        </div>
+                        <!-- Agrega este botón -->
+                        <button class="btn btn-sm btn-danger mt-2 d-none" id="removeFile">
+                            <i class="fas fa-times me-1"></i>Remover archivo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Mensaje de confirmación -->
+                <div class="confirmation-message bg-light rounded p-3">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-exclamation-circle text-warning me-3 fs-4"></i>
+                        <div>
+                            <p class="mb-0 fw-semibold">¿Confirmar que la solicitud ha sido completamente atendida?</p>
+                            <small class="text-muted">Esta acción ni el documento adjunto se pueden deshacer</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer border-0">
+                <button type="button" 
+                        class="btn btn-lg btn-outline-secondary" 
+                        data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>Cancelar
+                </button>
+                <button type="button" 
+                        class="btn btn-lg btn-success"
+                        onclick="subirEvidenciaYCambiarEstado()">
+                    <i class="fas fa-check me-2"></i>Confirmar atención
+                </button>
+            </div>
         </div>
-        <div class="modal-body">
-          <div class="mb-3">
-            <label for="evidenciaFile" class="form-label">Subir evidencia (PDF, imagen, etc.)</label>
-            <input type="file" class="form-control" id="evidenciaFile" accept=".pdf,.jpg,.jpeg,.png,.zip,.rar" required>
-          </div>
-          ¿Confirmar que la solicitud ha sido completamente atendida?
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="button" class="btn btn-success" onclick="subirEvidenciaYCambiarEstado()">
-            Marcar como Atendida
-          </button>
-        </div>
-      </div>
     </div>
-  </div>
+</div>
 
 <!-- Modal para Visualizar Evidencias -->
 <div class="modal fade" id="evidenciaModal" tabindex="-1">

@@ -40,6 +40,10 @@ let solicitudesValidadas = [];
 const itemsPerPage = 10;
 let currentPageSeguimiento = 1;
 let currentPageValidadas = 1;
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
 
 window.mostrarModalEstado = function(folio) {
     document.getElementById('modalFolio').textContent = folio;
@@ -130,14 +134,21 @@ function cargarValidadas() {
     // Configurar visibilidad del filtro de secretarías
     if (userRol === 3) {
         filtroSecretaria.style.display = 'block';
-        // Llenar opciones solo si es admin
+        
+        // Limpiar y establecer opciones
         filtroSecretaria.innerHTML = '<option value="">Todas las secretarías</option>';
+        
+        // Recorrer el mapa de dependencias ya validado
         Object.entries(dependenciasMap).forEach(([key, nombre]) => {
-            const option = document.createElement('option');
-            option.value = key;
-            option.textContent = nombre;
-            filtroSecretaria.appendChild(option);
+            // Validar nombre no vacío
+            if (nombre && nombre.trim() !== '') {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = nombre;
+                filtroSecretaria.appendChild(option);
+            }
         });
+        
     } else {
         filtroSecretaria.style.display = 'none';
     }
@@ -156,6 +167,9 @@ function cargarValidadas() {
         snapshot.forEach((childSnapshot) => {
             const solicitud = childSnapshot.val();
             solicitud.key = childSnapshot.key;
+            
+            // Validar datos requeridos
+            if (!solicitud.dependencia || !dependenciasMap[solicitud.dependencia]) return;
             
             // Filtrar por dependencia si no es admin
             if (userRol !== 3 && !userDependencias.includes(solicitud.dependencia)) return;
@@ -354,20 +368,27 @@ async function cargarSecretarias() {
     const userDependencias = getCookie('dependencia') ? 
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
     
-    select.innerHTML = '<option value="">Seleccionar...</option>';
-    
+    // Limpiar select
+    select.innerHTML = '<option value="" disabled selected>Seleccione una secretaría</option>';
+
     snapshot.forEach((childSnapshot) => {
         const dependencia = childSnapshot.val();
-        const dependenciaKey = childSnapshot.key; // Cambiar a usar la key
+        const dependenciaKey = childSnapshot.key;
         
-        // Filtrar opciones si no es admin
-        if (userRol !== 3 && !userDependencias.includes(dependenciaKey)) {
-            return;
-        }
+        // Validar existencia de la dependencia y su nombre
+        if (!dependencia || typeof dependencia.nombre !== 'string') return;
         
+        // Filtrar por rol
+        if (userRol !== 3 && !userDependencias.includes(dependenciaKey)) return;
+        
+        // Validar nombre no vacío
+        const nombre = dependencia.nombre.trim();
+        if (!nombre) return;
+        
+        // Crear opción válida
         const option = document.createElement('option');
-        option.value = dependenciaKey; // Usar la key como valor
-        option.textContent = dependencia.nombre; // Mostrar el nombre amigable
+        option.value = dependenciaKey;
+        option.textContent = nombre;
         select.appendChild(option);
     });
 }
@@ -615,6 +636,74 @@ window.cambiarEstado = async function(folio, nuevoEstado) {
     }
 };
 
+// Modifica el event listener del input de archivo
+document.getElementById('evidenciaFile').addEventListener('change', function(e) {
+    const fileInfo = document.getElementById('fileInfo');
+    const removeBtn = document.getElementById('removeFile');
+    
+    if(this.files.length > 0) {
+        const file = this.files[0];
+        const extension = file.name.split('.').pop().toLowerCase();
+        
+        // Validar extensión
+        if(!ALLOWED_EXTENSIONS.includes(extension)) {
+            mostrarError(`Formato no permitido: .${extension}`);
+            this.value = '';
+            fileInfo.textContent = 'Formatos permitidos: .pdf, .jpg, .jpeg, .png, .zip, .rar (Máx. 10MB)';
+            removeBtn.classList.add('d-none');
+            return;
+        }
+        
+        // Validar tamaño
+        if(file.size > MAX_FILE_SIZE_BYTES) {
+            mostrarError(`El archivo excede el tamaño máximo de ${MAX_FILE_SIZE_MB}MB`);
+            this.value = '';
+            fileInfo.textContent = 'Formatos permitidos: .pdf, .jpg, .jpeg, .png, .zip, .rar (Máx. 10MB)';
+            removeBtn.classList.add('d-none');
+            return;
+        }
+        
+        removeBtn.classList.remove('d-none');
+        fileInfo.innerHTML = `
+            <span class="text-success">
+                <i class="fas fa-file me-2"></i>${file.name}
+            </span>
+            <br><small>${(file.size / 1024 / 1024).toFixed(2)} MB</small>`;
+    } else {
+        fileInfo.textContent = 'Formatos permitidos: .pdf, .jpg, .jpeg, .png, .zip, .rar (Máx. 10MB)';
+        removeBtn.classList.add('d-none');
+    }
+});
+
+// Agrega evento para el botón de remover archivo
+document.getElementById('removeFile').addEventListener('click', () => {
+    const fileInput = document.getElementById('evidenciaFile');
+    fileInput.value = '';
+    fileInput.dispatchEvent(new Event('change'));
+});
+
+const fileDropArea = document.querySelector('.file-drop-area');
+
+['dragenter', 'dragover'].forEach(eventName => {
+    fileDropArea.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        fileDropArea.classList.add('dragover');
+    });
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+    fileDropArea.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        fileDropArea.classList.remove('dragover');
+    });
+});
+
+fileDropArea.addEventListener('drop', (e) => {
+    const input = document.getElementById('evidenciaFile');
+    input.files = e.dataTransfer.files;
+    input.dispatchEvent(new Event('change'));
+});
+
 // Función para subir evidencia y cambiar estado
 window.subirEvidenciaYCambiarEstado = async function() {
     const fileInput = document.getElementById('evidenciaFile');
@@ -622,6 +711,25 @@ window.subirEvidenciaYCambiarEstado = async function() {
     
     if (!file) {
         mostrarError("Debes seleccionar un archivo primero");
+        return;
+    }
+
+    // Validar extensión nuevamente (por si el usuario modificó el input)
+    const extension = file.name.split('.').pop().toLowerCase();
+    if(!ALLOWED_EXTENSIONS.includes(extension)) {
+        mostrarError(`Formato no permitido: .${extension}`);
+        return;
+    }
+
+    // Validar tamaño
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+        mostrarError(`El archivo excede el tamaño máximo de ${MAX_FILE_SIZE_MB}MB`);
+        return;
+    }
+
+    // Validar tamaño del archivo
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+        mostrarError(`El archivo excede el tamaño máximo de ${MAX_FILE_SIZE_MB}MB`);
         return;
     }
 
@@ -654,6 +762,7 @@ window.subirEvidenciaYCambiarEstado = async function() {
         mostrarError(`Error técnico: ${error.code} - ${error.message}`);
     }
 };
+
 
 // Funciones de utilidad
 function mostrarError(mensaje) {
@@ -1103,6 +1212,12 @@ document.getElementById('busqueda-validadas').addEventListener('input', () => {
 document.getElementById('filtro-secretaria-validadas').addEventListener('change', () => {
     currentPageValidadas = 1;
     aplicarFiltrosValidadas();
+});
+
+document.getElementById('confirmarAtendidaModal').addEventListener('hidden.bs.modal', () => {
+    const fileInput = document.getElementById('evidenciaFile');
+    fileInput.value = '';
+    fileInput.dispatchEvent(new Event('change'));
 });
 
 // Sistema de navegación y UI
