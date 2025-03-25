@@ -16,7 +16,7 @@ import {
     uploadBytes, 
     getDownloadURL 
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
-
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-analytics.js";
 
 // Configuración de Firebase
 const firebaseConfig = {
@@ -34,6 +34,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 const storage = getStorage(app);
+const analytics = getAnalytics(app);
 
 let solicitudesSeguimiento = [];
 let solicitudesValidadas = [];
