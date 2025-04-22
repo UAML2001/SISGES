@@ -44,6 +44,12 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link" href="#verificacion" data-content="verificacion">
+                        <i class="fas fa-clipboard-check"></i>
+                        Verificación
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link" href="#validadas" data-content="validadas">
                         <i class="fa-solid fa-check-double"></i>
                         Validada
@@ -92,7 +98,7 @@
     <div class="stats-card">
         <h5>En Proceso</h5>
         <div class="stats-value" id="stats-en-proceso">0</div>
-        <small><i class="fas fa-spinner"></i> En progreso</small>
+        <small><i class="fas fa-spinner"></i> En proceso</small>
     </div>
     <div class="stats-card">
         <h5>Atendidas</h5>
@@ -117,98 +123,159 @@
             </div>
 
             <!-- Otras secciones -->
-<!-- Sección Nueva Solicitud -->
-<div id="nueva-content" class="content-section" style="display: none;">
+            <!-- Sección Nueva Solicitud -->
+             <!-- Sección Verificación -->
+<div id="verificacion-content" class="content-section" style="display: none;">
     <h2 class="section-title">
-        <i class="fas fa-plus-circle"></i>
-        Nueva Solicitud
+        <i class="fas fa-clipboard-check"></i>
+        Verificación de Solicitudes
     </h2>
-
-    <div class="form-container">
-        <form id="formNuevaSolicitud" class="needs-validation" novalidate>
-            <div class="row g-3 mb-4">
-                <div class="col-md-4">
-                    <label for="fecha" class="form-label">Fecha</label>
-                    <input type="date" class="form-control" id="fecha" readonly required>
-                </div>
-
-                <div class="col-md-4">
-                    <label for="receptor" class="form-label">Receptor</label>
-                    <select class="form-select" id="receptor" required>
-                        <option value="">Seleccionar...</option>
-                        <option>Comunicación</option>
-                        <option>Atención Ciudadana</option>
-                        <option>Oficina de Presidencia</option>
-                        <option>Otro</option>
-                    </select>
-                </div>
-
-                <div class="col-md-4">
-                    <label for="canal" class="form-label">Canal</label>
-                    <select class="form-select" id="canal" required>
-                        <option value="">Seleccionar...</option>
-                        <option>Audiencias ciudadanas</option>
-                        <option>Audiencias comunitarias</option>
-                        <option>Audiencias virtuales</option>
-                        <option>Recorridos</option>
-                        <option>Redes sociales</option>
-                        <option>Oficios</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Segunda Fila -->
-            <div class="row g-3 mb-4">
-                <div class="col-md-4">
-                    <label for="nombre" class="form-label">Nombre del peticionario</label>
-                    <input type="text" class="form-control" id="nombre" required>
-                </div>
-
-                <div class="col-md-4">
-                    <label for="colonia" class="form-label">Colonia</label>
-                    <input type="text" class="form-control" id="colonia" required>
-                </div>
-
-                <div class="col-md-4">
-                    <label for="telefono" class="form-label">Número telefónico</label>
-                    <input type="tel" class="form-control" id="telefono" pattern="[0-9]{10}" required>
-                </div>
-            </div>
-
-            <!-- Tercera Fila -->
-            <div class="row g-3 mb-4">
-                <div class="col-12">
-                    <label for="asunto" class="form-label">Asunto</label>
-                    <input type="text" class="form-control" id="asunto" required>
-                </div>
-
-                <div class="col-12">
-                    <label for="comentarios" class="form-label">Comentarios</label>
-                    <textarea class="form-control" id="comentarios" rows="3"></textarea>
-                </div>
-            </div>
-
-            <!-- Cuarta Fila -->
-            <div class="row g-3 mb-4">
-                <div class="col-md-4">
-                    <label for="secretaria" class="form-label">Secretaría Asignada</label>
-                    <select class="form-select" id="secretaria" required>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Botones -->
-            <div class="d-flex justify-content-end gap-3 mt-5">
-                <button type="reset" class="btn btn-custom-secondary">
-                    <i class="fas fa-eraser me-2"></i>Limpiar
-                </button>
-                <button type="submit" class="btn btn-custom-primary">
-                    <i class="fas fa-save me-2"></i>Guardar Solicitud
-                </button>
-            </div>
-        </form>
+    <div class="filtros-container mb-4">
+        <div class="input-group">
+            <span class="input-group-text">
+                <i class="fas fa-search"></i>
+            </span>
+            <input type="text" id="busqueda-verificacion" placeholder="Buscar por folio o asunto..." 
+                   class="form-control">
+        </div>
     </div>
+    <div class="custom-table">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Folio</th>
+                    <th>Asunto</th>
+                    <th>Secretaría</th>
+                    <th>Fecha Envío</th>
+                    <th>Evidencias</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="lista-verificacion">
+                <!-- Contenido dinámico -->
+            </tbody>
+        </table>
+    </div>
+    <div class="paginacion-container paginacion-verificacion"></div>
 </div>
+
+            <div id="nueva-content" class="content-section" style="display: none;">
+                <h2 class="section-title">
+                    <i class="fas fa-plus-circle"></i>
+                    Nueva Solicitud
+                </h2>
+            
+                <div class="form-container">
+                    <form id="formNuevaSolicitud" class="needs-validation" novalidate>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-4">
+                                <label for="fecha" class="form-label">Fecha</label>
+                                <input type="date" class="form-control" id="fecha" readonly required>
+                            </div>
+            
+                            <div class="col-md-4">
+                                <label for="receptor" class="form-label">Tipo de Solicitud</label>
+                                <select class="form-select" id="receptor" required>
+                                    <option value="">Seleccionar...</option>
+                                    <option>Solicitud Ciudadana</option>
+                                    <option>Oficio</option>
+                                    <option>Junta de Gabinete</option>
+                                </select>
+                            </div>
+            
+                            <div class="col-md-4">
+                                <label for="canal" class="form-label">Canal</label>
+                                <select class="form-select" id="canal" required>
+                                    <option value="">Seleccionar...</option>
+                                    <option>Audiencias ciudadanas</option>
+                                    <option>Audiencias comunitarias</option>
+                                    <option>Audiencias virtuales</option>
+                                    <option>Recorridos</option>
+                                    <option>Redes sociales</option>
+                                    <option>Oficios</option>
+                                    <option>Junta de Gabinete</option>
+                                </select>
+                            </div>
+                        </div>
+            
+                        <!-- Segunda Fila -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-4">
+                                <label for="nombre" class="form-label">Nombre del peticionario</label>
+                                <input type="text" class="form-control" id="nombre" required>
+                            </div>
+            
+                            <div class="col-md-4">
+                                <label for="colonia" class="form-label">Colonia</label>
+                                <input type="text" class="form-control" id="colonia" required>
+                            </div>
+            
+                            <div class="col-md-4">
+                                <label for="telefono" class="form-label">Número telefónico</label>
+                                <input type="tel" class="form-control" id="telefono" pattern="[0-9]{10}" required>
+                            </div>
+                        </div>
+            
+                        <!-- Tercera Fila -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-12">
+                                <label for="asunto" class="form-label">Asunto</label>
+                                <input type="text" class="form-control" id="asunto" required>
+                            </div>
+            
+                            <div class="col-12">
+                                <label for="comentarios" class="form-label">Comentarios</label>
+                                <textarea class="form-control" id="comentarios" rows="3"></textarea>
+                            </div>
+                        </div>
+            
+                        <!-- Cuarta Fila -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-4">
+                                <label for="secretaria" class="form-label">Secretaría Asignada</label>
+                                <select class="form-select" id="secretaria" required>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Nueva Sección para Documento Inicial -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-12">
+                                <label for="documentoInicial" class="form-label">Documento Inicial</label>
+                                <div class="file-drop-area rounded-3 border-2 border-dashed p-4 text-center">
+                                    <div class="mb-3 text-muted">
+                                        <i class="fas fa-cloud-upload-alt fa-3x"></i>
+                                    </div>
+                                    <input type="file" 
+                                           class="form-control visually-hidden" 
+                                           id="documentoInicial" 
+                                           accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.zip,.rar" 
+                                           required>
+                                    <label for="documentoInicial" class="btn btn-outline-primary mb-2">
+                                        <i class="fas fa-file-upload me-2"></i>Seleccionar archivo
+                                    </label>
+                                    <div class="file-info small text-muted" id="docInicialInfo">
+                                        Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 10MB)
+                                    </div>
+                                    <button class="btn btn-sm btn-danger mt-2 d-none" id="removeDocInicial">
+                                        <i class="fas fa-times me-1"></i>Remover archivo
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+            
+                        <!-- Botones -->
+                        <div class="d-flex justify-content-end gap-3 mt-5">
+                            <button type="reset" class="btn btn-custom-secondary">
+                                <i class="fas fa-eraser me-2"></i>Limpiar
+                            </button>
+                            <button type="submit" class="btn btn-custom-primary">
+                                <i class="fas fa-save me-2"></i>Guardar Solicitud
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
 
            <!-- Sección Seguimiento -->
         <div id="seguimiento-content" class="content-section" style="display: none;">
@@ -238,6 +305,7 @@
                     <thead>
                         <tr>
                             <th>Folio</th>
+                            <th>Tipo de Solicitud</th> <!-- Nueva columna -->
                             <th>Asunto</th>
                             <th>Secretaría</th>
                             <th>Estado</th>
@@ -371,8 +439,8 @@
                     <div class="d-flex align-items-center">
                         <i class="fas fa-exclamation-circle text-warning me-3 fs-4"></i>
                         <div>
-                            <p class="mb-0 fw-semibold">¿Confirmar que la solicitud ha sido completamente atendida?</p>
-                            <small class="text-muted">Esta acción ni el documento adjunto se pueden deshacer</small>
+                            <p class="mb-0 fw-semibold">¿Confirmar que la solicitud ha sido completamente atendida para verificación?</p>
+                            <small class="text-muted">Esta acción ni el documento adjunto se pueden deshacer y se mandara a verificación</small>
                         </div>
                     </div>
                 </div>
@@ -420,7 +488,7 @@
                         </div>
                         <div class="d-flex align-items-center gap-2">
                             <i class="fas fa-building" style="color: var(--surface);"></i>
-                            <span>Secretaría: <strong id="secretariaEvidencia">-</strong></span>
+                            <span>Secretaría de Origen: <strong id="secretariaEvidencia">-</strong></span>
                         </div>
                         <div class="d-flex align-items-center gap-2">
                             <i class="fas fa-calendar-alt" style="color: var(--surface);"></i>

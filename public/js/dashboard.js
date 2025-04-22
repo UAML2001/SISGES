@@ -44,7 +44,14 @@ let currentPageValidadas = 1;
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
+// Agregar estas constantes al inicio
+const MAX_INITIAL_FILE_SIZE_MB = 10;
+const MAX_INITIAL_FILE_SIZE_BYTES = MAX_INITIAL_FILE_SIZE_MB * 1024 * 1024;
+// Actualizar constantes
+const ALLOWED_INITIAL_EXTENSIONS = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
 const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
+
+let suppressFileInputEvents = false;
 
 window.mostrarModalEstado = function(folio) {
     document.getElementById('modalFolio').textContent = folio;
@@ -740,17 +747,15 @@ window.subirEvidenciaYCambiarEstado = async function() {
             cacheControl: 'public, max-age=31536000',
         };
 
-        const storagePath = `evidencias/${folioActual}/${file.name}`;
+        const storagePath = `${folioActual}/Evidencia/${file.name}`;
         const refArchivo = storageRef(storage, storagePath);
         await uploadBytes(refArchivo, file, metadata);
-        
-        // Obtener URL correctamente formada
         const urlDescarga = await getDownloadURL(refArchivo);
-        
+
         await update(ref(database, `solicitudes/${folioActual}`), {
-            estado: 'atendida',
-            fechaAtencion: new Date().toISOString(),
-            evidencias: urlDescarga // Usar URL directa sin parámetros adicionales
+            estado: 'verificacion',
+            fechaVerificacion: new Date().toISOString(),
+            evidencias: urlDescarga
         });
 
         // 4. Limpiar y cerrar
@@ -782,6 +787,103 @@ function mostrarExito(mensaje) {
     }).showToast();
 }
 
+function cargarVerificacion() {
+    const solicitudesRef = query(ref(database, 'solicitudes'), orderByChild('estado'), equalTo('verificacion'));
+    
+    onValue(solicitudesRef, (snapshot) => {
+        const solicitudes = [];
+        snapshot.forEach((childSnapshot) => {
+            const solicitud = childSnapshot.val();
+            solicitud.key = childSnapshot.key;
+            solicitudes.push(solicitud);
+        });
+        mostrarPaginaVerificacion(solicitudes);
+    });
+}
+
+function mostrarPaginaVerificacion(data) {
+    const tabla = document.getElementById('lista-verificacion');
+    tabla.innerHTML = '';
+
+    data.forEach(solicitud => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${solicitud.key}</td>
+            <td>${solicitud.asunto}</td>
+            <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
+            <td>${new Date(solicitud.fechaVerificacion).toLocaleDateString()}</td>
+            <td>
+                <button class="btn btn-sm btn-info" 
+                        onclick="mostrarEvidenciaModal(
+                            '${solicitud.key}', 
+                            '${solicitud.evidencias ? 'Evidencia' : 'Sin evidencia'}', 
+                            '${solicitud.evidencias || ''}',
+                            '${dependenciasMap[solicitud.dependencia] || ''}'
+                        )">
+                    <i class="fas fa-eye"></i> Ver
+                </button>
+            </td>
+            <td>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-success" onclick="cambiarEstado('${solicitud.key}', 'atendida')">
+                        <i class="fas fa-check"></i> Aprobar
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="cambiarEstado('${solicitud.key}', 'pendiente')">
+                        <i class="fas fa-times"></i> Rechazar
+                    </button>
+                </div>
+            </td>
+        `;
+        tabla.appendChild(tr);
+    });
+}
+
+// Evento modificado para cambio de archivo
+document.getElementById('documentoInicial').addEventListener('change', function(e) {
+    if (suppressFileInputEvents) return;
+    
+    const fileInfo = document.getElementById('docInicialInfo');
+    const removeBtn = document.getElementById('removeDocInicial');
+    
+    if(this.files.length > 0) {
+        const file = this.files[0];
+        const extension = file.name.split('.').pop().toLowerCase();
+        
+        if(!ALLOWED_INITIAL_EXTENSIONS.includes(extension)) {
+            mostrarError(`Formato no permitido: .${extension}`);
+            this.value = '';
+            fileInfo.textContent = 'Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 5MB)';
+            removeBtn.classList.add('d-none');
+            return;
+        }
+        
+        if(file.size > MAX_INITIAL_FILE_SIZE_BYTES) {
+            mostrarError(`El archivo excede el tamaño máximo de ${MAX_INITIAL_FILE_SIZE_MB}MB`);
+            this.value = '';
+            fileInfo.textContent = 'Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 5MB)';
+            removeBtn.classList.add('d-none');
+            return;
+        }
+        
+        removeBtn.classList.remove('d-none');
+        fileInfo.innerHTML = `
+            <span class="text-success">
+                <i class="fas fa-file me-2"></i>${file.name}
+            </span>
+            <br><small>${(file.size / 1024 / 1024).toFixed(2)} MB</small>`;
+    } else {
+        fileInfo.textContent = 'Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 5MB)';
+        removeBtn.classList.add('d-none');
+    }
+});
+
+// Agregar evento para remover documento inicial
+document.getElementById('removeDocInicial').addEventListener('click', () => {
+    const fileInput = document.getElementById('documentoInicial');
+    fileInput.value = '';
+    fileInput.dispatchEvent(new Event('change'));
+});
+
 const estados = {
     'pendiente': {texto: 'Pendiente', color: '#491F42'},
     'por_vencer': {texto: 'Por Vencer', color: '#720F36'},
@@ -801,23 +903,136 @@ function crearFilaSolicitud(solicitud) {
 
     tr.innerHTML = `
         <td>${solicitud.key}</td>
+        <td>${solicitud.tiposolicitud}</td>
         <td>${solicitud.asunto}</td>
         <td>${dependenciaNombre}</td>
         <td><span class="status-badge" style="background:${estado.color}">${estado.texto}</span></td>
         <td>${solicitud.estado === 'atendida' ? 'Atendida' : calcularTiempoRestante(solicitud.fechaLimite)}</td>
         <td>
             <div class="d-flex gap-2">
+             ${solicitud.documentoInicial ? `
+                <button class="btn btn-sm btn-info" 
+                        onclick="mostrarDocumentoInicial(
+                            '${solicitud.key}', 
+                            '${solicitud.nombreDocumento}', 
+                            '${solicitud.documentoInicial}'
+                        )">
+                    <i class="fas fa-file-alt me-1"></i>Ver Documento
+                </button>
+                ` : ''}
                 <button class="btn btn-sm btn-warning" onclick="mostrarConfirmacionProceso('${solicitud.key}')">
-                    <i class="fas fa-sync-alt"></i> En Proceso
+                    <i class="fas fa-sync-alt"></i> Marcar como "En Proceso"
                 </button>
                 <button class="btn btn-sm btn-success" onclick="mostrarConfirmacionAtendida('${solicitud.key}')">
-                    <i class="fas fa-check-circle"></i> Atendida
+                    <i class="fas fa-check-circle"></i> Mandar a Verificación
                 </button>
             </div>
         </td>
     `;
     return tr;
 }
+
+window.mostrarDocumentoInicial = function(folio, nombreArchivo, url, secretariaOrigen) {
+    const modal = new bootstrap.Modal(document.getElementById('evidenciaModal'));
+    const loading = document.getElementById('loadingPreview');
+    const pdfContainer = document.getElementById('pdfContainer');
+    const imagenContainer = document.getElementById('imagenContainer');
+    const visorNoSoportado = document.getElementById('visorNoSoportado');
+    const pdfViewer = document.getElementById('pdfViewer');
+    const modalElement = document.getElementById('evidenciaModal');
+
+    // Resetear estado inicial
+    [loading, pdfContainer, imagenContainer, visorNoSoportado].forEach(el => {
+        el.classList.add('d-none');
+    });
+    loading.classList.remove('d-none');
+    pdfViewer.src = '';
+    pdfViewer.removeAttribute('data-temp-src');
+
+    // Configurar nombre de archivo
+    const extractFileName = (url) => {
+        try {
+            const decodedUrl = decodeURIComponent(url);
+            return decodedUrl.split('/').pop().split(/[?#]/)[0];
+        } catch (error) {
+            console.error('Error al extraer nombre:', error);
+            return 'archivo-desconocido';
+        }
+    };
+
+    const nombre = nombreArchivo || extractFileName(url);
+    const fileExt = nombre.split('.').pop().toLowerCase();
+    const fechaActual = new Date().toLocaleDateString('es-MX');
+
+    // Actualizar metadatos
+    document.getElementById('nombreArchivoCompleto').textContent = nombre;
+    document.getElementById('folioEvidencia').textContent = folio;
+    document.getElementById('secretariaEvidencia').textContent = '-';
+    document.getElementById('fechaEvidencia').textContent = fechaActual;
+
+    // Configurar eventos del modal
+    const modalShownHandler = () => {
+        if (pdfViewer.dataset.tempSrc) {
+            const container = pdfViewer.parentElement;
+            pdfViewer.style.height = `${container.clientHeight}px`;
+            
+            setTimeout(() => {
+                pdfViewer.src = pdfViewer.dataset.tempSrc;
+                delete pdfViewer.dataset.tempSrc;
+            }, 100);
+        }
+    };
+
+    const resizeHandler = () => {
+        if (pdfViewer && pdfContainer.classList.contains('d-none') === false) {
+            const container = pdfViewer.parentElement;
+            const newHeight = Math.max(400, container.clientHeight);
+            pdfViewer.style.height = `${newHeight}px`;
+        }
+    };
+
+    // Configurar visores
+    setTimeout(() => {
+        loading.classList.add('d-none');
+        
+        if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExt)) {
+            imagenContainer.classList.remove('d-none');
+            const img = document.getElementById('visorImagen');
+            img.src = url;
+            img.onload = () => {
+                document.getElementById('imagenDimensions').textContent = 
+                    `${img.naturalWidth}px × ${img.naturalHeight}px`;
+            };
+        } else if (fileExt === 'pdf') {
+            pdfContainer.classList.remove('d-none');
+            document.getElementById('pdfMeta').textContent = `${nombre} | ${fechaActual}`;
+            pdfViewer.dataset.tempSrc = `${url}#view=FitH`;
+            window.addEventListener('resize', resizeHandler);
+            setTimeout(resizeHandler, 50);
+        } else {
+            visorNoSoportado.classList.remove('d-none');
+            document.getElementById('tipoArchivo').textContent = `.${fileExt}`;
+            const downloadBtn = document.getElementById('descargarEvidencia');
+            downloadBtn.href = url;
+            downloadBtn.download = nombre;
+        }
+    }, 300);
+
+    // Evento de zoom para imágenes
+    document.getElementById('visorImagen').onclick = function() {
+        this.classList.toggle('img-zoom');
+    };
+
+    // Manejar eventos del modal
+    modalElement.addEventListener('shown.bs.modal', modalShownHandler);
+    modalElement.addEventListener('hidden.bs.modal', () => {
+        window.removeEventListener('resize', resizeHandler);
+        modalElement.removeEventListener('shown.bs.modal', modalShownHandler);
+        pdfViewer.src = '';
+    });
+
+    modal.show();
+};
 
 async function obtenerNombreDependencia(dependenciaKey) {
     const dependenciaRef = ref(database, `dependencias/${dependenciaKey}`);
@@ -906,78 +1121,110 @@ function cargarSeguimiento() {
     });
 }
 
-// Manejo del formulario
+// Manejo del formulario corregido
 document.getElementById('formNuevaSolicitud').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
     
+    // Validación de campos
     const camposRequeridos = [
         'receptor', 'canal', 'nombre', 
         'colonia', 'telefono', 'asunto', 
-        'secretaria'
+        'secretaria', 'documentoInicial'
     ];
     
     let validado = true;
     
+    // Validar campos requeridos
     camposRequeridos.forEach(id => {
         const campo = document.getElementById(id);
-        if(!campo.value.trim()) {
+        if (!campo || !campo.value.trim()) {
             validado = false;
-            Toastify({
-                text: `El campo ${campo.labels[0].textContent} es requerido`,
-                className: "toastify-error",
-                duration: 3000
-            }).showToast();
+            mostrarError(`El campo ${campo.labels[0].textContent} es requerido`);
         }
     });
 
+    // Validar formato de teléfono
     const telefono = document.getElementById('telefono');
-    if(!/^\d{10}$/.test(telefono.value)) {
+    if (!/^\d{10}$/.test(telefono.value)) {
         validado = false;
-        Toastify({
-            text: "El teléfono debe tener 10 dígitos",
-            className: "toastify-error",
-            duration: 3000
-        }).showToast();
+        mostrarError("El teléfono debe tener 10 dígitos");
     }
 
-    if(!validado) return;
-
-    const fechaCreacion = new Date().toISOString();
-    
-    const nuevaSolicitud = {
-        fechaCreacion: fechaCreacion,
-        tipo: document.getElementById('canal').value,
-        receptor: document.getElementById('receptor').value,
-        dependencia: document.getElementById('secretaria').value,
-        estado: 'pendiente', // Estado inicial como "Pendiente"
-        solicitante: {
-            nombre: document.getElementById('nombre').value,
-            colonia: document.getElementById('colonia').value,
-            telefono: document.getElementById('telefono').value
-        },
-        asunto: document.getElementById('asunto').value,
-        comentarios: document.getElementById('comentarios').value,
-        fechaLimite: calcularFechaLimite(fechaCreacion)
-    };
+    if (!validado) return;
 
     try {
+        // Generar folio primero
         const folio = await generarFolio();
+        
+        // Manejar documento inicial
+        const docInicialInput = document.getElementById('documentoInicial');
+        const docInicialFile = docInicialInput.files[0];
+        
+        // Validar archivo
+        if (!docInicialFile) {
+            mostrarError("Debes subir un documento inicial");
+            return;
+        }
+
+        const extension = docInicialFile.name.split('.').pop().toLowerCase();
+        if (!ALLOWED_INITIAL_EXTENSIONS.includes(extension)) {
+            mostrarError(`Formato no permitido: .${extension}`);
+            return;
+        }
+
+        if (docInicialFile.size > MAX_INITIAL_FILE_SIZE_BYTES) {
+            mostrarError(`El archivo excede el tamaño máximo de ${MAX_INITIAL_FILE_SIZE_MB}MB`);
+            return;
+        }
+
+        // Subir documento a Storage
+       const storagePath = `${folio}/Documento Inicial/${docInicialFile.name}`;
+        const docRef = storageRef(storage, storagePath);
+        await uploadBytes(docRef, docInicialFile);
+        const docUrl = await getDownloadURL(docRef);
+
+        // Crear objeto de solicitud
+        const fechaCreacion = new Date().toISOString();
+        const nuevaSolicitud = {
+            fechaCreacion: fechaCreacion,
+            tipo: document.getElementById('canal').value,
+            tiposolicitud: document.getElementById('receptor').value,
+            dependencia: document.getElementById('secretaria').value,
+            estado: 'pendiente',
+            solicitante: {
+                nombre: document.getElementById('nombre').value,
+                colonia: document.getElementById('colonia').value,
+                telefono: document.getElementById('telefono').value
+            },
+            asunto: document.getElementById('asunto').value,
+            comentarios: document.getElementById('comentarios').value,
+            fechaLimite: calcularFechaLimite(fechaCreacion),
+            documentoInicial: docUrl,
+            nombreDocumento: docInicialFile.name,
+            folio: folio
+        };
+
+        // Guardar en la base de datos
         await set(ref(database, `solicitudes/${folio}`), nuevaSolicitud);
-        Toastify({
-            text: "Solicitud creada exitosamente!",
-            className: "toastify-success",
-            duration: 3000
-        }).showToast();
+        
+        // Limpiar formulario sin triggerear alertas
+        suppressFileInputEvents = true;
         form.reset();
         document.getElementById('fecha').value = obtenerFechaHoy();
+        docInicialInput.value = '';
+        
+        // Restaurar UI manualmente
+        document.getElementById('docInicialInfo').textContent = 
+            'Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 5MB)';
+        document.getElementById('removeDocInicial').classList.add('d-none');
+        suppressFileInputEvents = false;
+        
+        mostrarExito("Solicitud creada exitosamente!");
+        
     } catch (error) {
         console.error("Error al guardar:", error);
-        Toastify({
-            text: "Error al crear la solicitud",
-            className: "toastify-error",
-            duration: 3000
-        }).showToast();
+        mostrarError(`Error al crear la solicitud: ${error.message}`);
     }
 });
 
@@ -1234,6 +1481,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     cargarSecretarias();
     cargarSeguimiento();
     cargarValidadas(); // Nueva línea
+    cargarVerificacion();
 
     // Obtener rol del usuario
     const role = parseInt(getCookie('rol')) || 0;
@@ -1244,17 +1492,20 @@ document.addEventListener('DOMContentLoaded', async function () {
     const nuevaLi = document.querySelector('a[data-content="nueva"]').parentElement;
     const seguimientoLi = document.querySelector('a[data-content="seguimiento"]').parentElement;
     const validadasLi = document.querySelector('a[data-content="validadas"]').parentElement;
+    const verificacionLi = document.querySelector('a[data-content="verificacion"]').parentElement;
 
     switch (role) {
         case 1:
             nuevaLi.style.display = userDependencias.length > 0 ? 'block' : 'none';
             seguimientoLi.style.display = 'block';
             validadasLi.style.display = 'none';
+            verificacionLi.style.display = 'none';
             break;
         case 2:
             nuevaLi.style.display = 'none';
             seguimientoLi.style.display = 'block';
             validadasLi.style.display = 'block';
+            verificacionLi.style.display = 'none';
             break;
         case 3:
             // Todas visibles por defecto
