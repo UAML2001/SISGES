@@ -38,9 +38,11 @@ const analytics = getAnalytics(app);
 
 let solicitudesSeguimiento = [];
 let solicitudesValidadas = [];
+let solicitudesVerificacion = [];
 const itemsPerPage = 10;
 let currentPageSeguimiento = 1;
 let currentPageValidadas = 1;
+let currentVerificacion = [];
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
@@ -225,17 +227,26 @@ function mostrarPaginaValidadas(data) {
         <td>${dependenciasMap[s.dependencia] || 'Desconocida'}</td>
         <td>${new Date(s.fechaAtencion).toLocaleDateString()}</td>
         <td>
-            ${s.evidencias ? `
-            <button class="btn btn-sm btn-info" 
-                    onclick="mostrarEvidenciaModal(
-                        '${s.key}', 
-                        '${s.asunto}', 
-                        '${dependenciasMap[s.dependencia]}', 
-                        '${s.evidencias}'
-                    )">
-                <i class="fas fa-eye me-1"></i>Ver
-            </button>
-            ` : 'N/A'}
+           ${s.documentoInicial ? `
+    <button class="btn btn-sm btn-info mb-1" 
+            onclick="mostrarEvidenciaModal(
+                '${s.key}', 
+                '${s.nombreDocumento}', 
+                '${s.documentoInicial}'
+            )">
+        <i class="fas fa-file-alt"></i> Inicial
+    </button>
+    ` : ''}
+    ${s.evidencias ? `
+    <button class="btn btn-sm btn-info mb-1" 
+            onclick="mostrarEvidenciaModal(
+                '${s.key}', 
+                'Evidencia', 
+                '${s.evidencias}'
+            )">
+        <i class="fas fa-eye"></i> Evidencia
+    </button>
+    ` : ''}
         </td>
     `;
         tabla.appendChild(tr);
@@ -559,57 +570,53 @@ function iniciarActualizacionTiempo() {
 }
 
 function actualizarEstadisticas(solicitudes) {
-    const ahora = new Date();
-    const estadisticas = {
+    const stats = {
         pendientes: 0,
         porVencer: 0,
         enProceso: 0,
+        verificacion: 0, // Asegurar que esta propiedad existe
         atendidas: 0,
         atrasadas: 0,
-        esteMes: 0,
         total: 0
     };
 
-    solicitudes.forEach(solicitud => {
-        estadisticas.total++;
-        const fechaCreacion = new Date(solicitud.fechaCreacion);
+    solicitudes.forEach(s => {
+        stats.total++;
+        const fechaCreacion = new Date(s.fechaCreacion);
         
-        switch(solicitud.estado) {
+        // Calcular días restantes para estados relevantes
+        const diasRest = calcularDiasRestantes(s.fechaLimite);
+        
+        switch(s.estado) {
             case 'pendiente':
-                estadisticas.pendientes++;
-                break;
-            case 'por_vencer':
-                estadisticas.porVencer++;
+                stats.pendientes++;
+                if(diasRest <= 3) stats.porVencer++;
                 break;
             case 'en_proceso':
-                estadisticas.enProceso++;
+                stats.enProceso++;
                 break;
-            case 'atrasada':
-                estadisticas.atrasadas++;
+            case 'verificacion': // Nuevo caso
+                stats.verificacion++;
                 break;
             case 'atendida':
-                estadisticas.atendidas++;
-                if(fechaCreacion.getMonth() === ahora.getMonth() && 
-                   fechaCreacion.getFullYear() === ahora.getFullYear()) {
-                    estadisticas.esteMes++;
-                }
+                stats.atendidas++;
+                break;
+            case 'atrasada':
+                stats.atrasadas++;
                 break;
         }
     });
 
-    // Actualizar todos los elementos del DOM
-    document.getElementById('stats-pendientes').textContent = estadisticas.pendientes;
-    document.getElementById('stats-vencer').textContent = estadisticas.porVencer;
-    document.getElementById('stats-en-proceso').textContent = estadisticas.enProceso;
-    document.getElementById('stats-atendidas').textContent = estadisticas.atendidas;
-    document.getElementById('stats-atrasadas').textContent = estadisticas.atrasadas;
+    // Actualizar DOM
+    document.getElementById('stats-pendientes').textContent = stats.pendientes;
+    document.getElementById('stats-vencer').textContent = stats.porVencer;
+    document.getElementById('stats-en-proceso').textContent = stats.enProceso;
+    document.getElementById('stats-verificacion').textContent = stats.verificacion; // Asegurar este elemento
+    document.getElementById('stats-atendidas').textContent = stats.atendidas;
+    document.getElementById('stats-atrasadas').textContent = stats.atrasadas;
     
-    const eficiencia = estadisticas.atendidas / (estadisticas.total || 1) * 100;
+    const eficiencia = (stats.atendidas / (stats.total || 1)) * 100;
     document.getElementById('stats-eficiencia').textContent = `${Math.round(eficiencia)}%`;
-    
-    document.querySelector('#dashboard-content .stats-card:nth-child(3) small').innerHTML = `
-        <i class="fas fa-check-circle"></i> Este mes: ${estadisticas.esteMes}
-    `;
 }
 
 // Modificar la función cambiarEstado para hacerla global
@@ -822,6 +829,14 @@ function mostrarPaginaVerificacion(data) {
                         )">
                     <i class="fas fa-eye"></i> Ver
                 </button>
+                 <button class="btn btn-sm btn-info"
+            onclick="mostrarEvidenciaModal(
+                '${solicitud.key}', 
+                '${solicitud.nombreDocumento || 'Evidencia'}', 
+                '${solicitud.evidencias}'
+            )">
+        <i class="fas fa-eye"></i> Ver
+    </button>
             </td>
             <td>
                 <div class="d-flex gap-2">
@@ -888,6 +903,7 @@ const estados = {
     'pendiente': {texto: 'Pendiente', color: '#491F42'},
     'por_vencer': {texto: 'Por Vencer', color: '#720F36'},
     'en_proceso': {texto: 'En Proceso', color: '#ae9074'},
+    'verificacion': { texto: 'En Verificación', color: '#FFA500' }, // Añadir esta línea
     'atendida': {texto: 'Atendida', color: '#2E7D32'},
     'atrasada': {texto: 'Atrasada', color: '#a90000'}
 };
@@ -898,7 +914,8 @@ function crearFilaSolicitud(solicitud) {
     tr.dataset.fechaLimite = solicitud.fechaLimite;
     tr.dataset.estado = solicitud.estado;
     
-    const estado = estados[solicitud.estado] || {texto: 'Desconocido', color: '#666'};
+    // Modificar la línea donde se obtiene el estado
+    const estado = estados[solicitud.estado] || { texto: 'Desconocido', color: '#666' } 
     const dependenciaNombre = dependenciasMap[solicitud.dependencia] || 'Desconocida';
 
     tr.innerHTML = `
@@ -1228,13 +1245,35 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
     }
 });
 
+document.getElementById('busqueda-verificacion').addEventListener('input', aplicarFiltrosVerificacion);
+
+function aplicarFiltrosVerificacion() {
+    const busqueda = document.getElementById('busqueda-verificacion').value.toLowerCase();
+    const filtradas = solicitudesVerificacion.filter(s => {
+        return `${s.key} ${s.asunto}`.toLowerCase().includes(busqueda);
+    });
+    
+    if(filtradas.length === 0) {
+        document.getElementById('lista-verificacion').innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center py-4">
+                    <i class="fas fa-info-circle me-2"></i>
+                    No hay solicitudes para verificar con los filtros actuales
+                </td>
+            </tr>`;
+    } else {
+        mostrarPaginaVerificacion(filtradas);
+    }
+}
+
 // Añadir al inicio con las constantes
 const coloresEstatus = {
     pendiente: '#491F42',
     vencer: '#720F36',
     en_progreso: '#ae9074',
     atendida: '#2E7D32',
-    atrasado: '#a90000'
+    atrasado: '#a90000',
+    verificacion : '#FFA500'
 };
 
 // Paleta de énfasis visual
@@ -1265,7 +1304,8 @@ function actualizarGrafica(solicitudes) {
         por_vencer: new Array(tiposSolicitud.length).fill(0),
         en_proceso: new Array(tiposSolicitud.length).fill(0),
         atrasada: new Array(tiposSolicitud.length).fill(0),
-        atendida: new Array(tiposSolicitud.length).fill(0)
+        atendida: new Array(tiposSolicitud.length).fill(0),
+        verificacion : new Array(tiposSolicitud.length).fill(0)
     };
 
     solicitudes.forEach(solicitud => {
@@ -1290,7 +1330,8 @@ function actualizarGrafica(solicitudes) {
         por_vencer: '#720F36',
         en_proceso: '#ae9074',
         atendida: '#2E7D32',
-        atrasada: '#a90000'
+        atrasada: '#a90000',
+        verificacion: '#FFA500'
     };
 
     myChart = new Chart(ctx, {
@@ -1338,6 +1379,15 @@ function actualizarGrafica(solicitudes) {
                     label: 'Atendidas',
                     data: datos.atendida,
                     backgroundColor: coloresEstatus.atendida,
+                    borderColor: coloresSecundarios.linea,
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    barThickness: 35
+                },
+                {
+                    label: 'En Verificación',
+                    data: datos.verificacion,
+                    backgroundColor: coloresEstatus.verificacion,
                     borderColor: coloresSecundarios.linea,
                     borderWidth: 1,
                     borderRadius: 4,
