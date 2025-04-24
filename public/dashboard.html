@@ -404,6 +404,44 @@
   </div>
 </div>
 
+<!-- Modal Confirmar Aprobación -->
+<div class="modal fade" id="confirmarAprobarModal">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title"><i class="fas fa-check-circle me-2"></i>Confirmar Aprobación</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          ¿Está seguro de aprobar esta solicitud y marcarla como atendida?
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-success" id="confirmarAprobar">Aprobar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Modal Confirmar Rechazo -->
+  <div class="modal fade" id="confirmarRechazarModal">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title"><i class="fas fa-times-circle me-2"></i>Confirmar Rechazo</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          ¿Está seguro de rechazar esta solicitud? Se eliminará la evidencia subida.
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-danger" id="confirmarRechazar">Rechazar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 <!-- Modal Confirmación Atendida -->
 <div class="modal fade" id="confirmarAtendidaModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">

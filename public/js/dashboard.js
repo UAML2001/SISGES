@@ -14,7 +14,8 @@ import {
     getStorage, 
     ref as storageRef, 
     uploadBytes, 
-    getDownloadURL 
+    getDownloadURL,
+    deleteObject  
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-analytics.js";
 
@@ -230,20 +231,22 @@ function mostrarPaginaValidadas(data) {
            ${s.documentoInicial ? `
     <button class="btn btn-sm btn-info mb-1" 
             onclick="mostrarEvidenciaModal(
-                '${s.key}', 
-                '${s.nombreDocumento}', 
-                '${s.documentoInicial}'
-            )">
+    '${s.key}',
+    'Documento Inicial',
+    '${s.documentoInicial}', // URL del documento
+    '${dependenciasMap[s.dependencia]}' // Secretaría
+)">
         <i class="fas fa-file-alt"></i> Inicial
     </button>
     ` : ''}
     ${s.evidencias ? `
     <button class="btn btn-sm btn-info mb-1" 
             onclick="mostrarEvidenciaModal(
-                '${s.key}', 
-                'Evidencia', 
-                '${s.evidencias}'
-            )">
+    '${s.key}',
+    'Evidencia',
+    '${s.evidencias}', // URL de la evidencia
+    '${dependenciasMap[s.dependencia]}' // Secretaría
+)">
         <i class="fas fa-eye"></i> Evidencia
     </button>
     ` : ''}
@@ -412,114 +415,71 @@ async function cargarSecretarias() {
     });
 }
 
-window.mostrarEvidenciaModal = function(folio, asunto, secretaria, urlEvidencia) {
+window.mostrarEvidenciaModal = function(folio, tipoDocumento, urlDocumento, secretaria = '') {
     const modal = new bootstrap.Modal(document.getElementById('evidenciaModal'));
     const loading = document.getElementById('loadingPreview');
     const pdfContainer = document.getElementById('pdfContainer');
     const imagenContainer = document.getElementById('imagenContainer');
     const visorNoSoportado = document.getElementById('visorNoSoportado');
     const pdfViewer = document.getElementById('pdfViewer');
-    const modalElement = document.getElementById('evidenciaModal');
 
-    // Resetear estado inicial
-    [loading, pdfContainer, imagenContainer, visorNoSoportado].forEach(el => {
-        el.classList.add('d-none');
-    });
+    // Resetear visores
+    [loading, pdfContainer, imagenContainer, visorNoSoportado].forEach(el => el.classList.add('d-none'));
     loading.classList.remove('d-none');
     pdfViewer.src = '';
-    pdfViewer.removeAttribute('data-temp-src'); // Limpiar fuentes anteriores
 
-    // Configurar eventos del modal
-    const modalShownHandler = () => {
-        if (pdfViewer.dataset.tempSrc) {
-            // Forzar recálculo de dimensiones
-            const container = pdfViewer.parentElement;
-            pdfViewer.style.height = `${container.clientHeight}px`;
-            
-            // Cargar PDF después de actualizar dimensiones
-            setTimeout(() => {
-                pdfViewer.src = pdfViewer.dataset.tempSrc;
-                delete pdfViewer.dataset.tempSrc;
-            }, 100);
-        }
-    };
-
-    // Manejador de redimensionamiento mejorado
-    const resizeHandler = () => {
-        if (pdfViewer && pdfContainer.classList.contains('d-none') === false) {
-            const container = pdfViewer.parentElement;
-            const newHeight = Math.max(400, container.clientHeight); // Altura mínima
-            pdfViewer.style.height = `${newHeight}px`;
-        }
-    };
-
-    // Configurar nombre de archivo
-    const extractFileName = (url) => {
+    // Extraer nombre de archivo
+    let nombreArchivo = 'Sin documento';
+    let extension = '';
+    
+    if(urlDocumento) {
         try {
-            const decodedUrl = decodeURIComponent(url);
-            return decodedUrl.split('/').pop().split(/[?#]/)[0];
-        } catch (error) {
-            console.error('Error al extraer nombre:', error);
-            return 'archivo-desconocido';
+            nombreArchivo = decodeURIComponent(urlDocumento.split('/').pop().split('?')[0]);
+            extension = nombreArchivo.split('.').pop().toLowerCase();
+        } catch(error) {
+            console.error('Error procesando URL:', error);
         }
-    };
+    }
 
-    const nombreArchivo = extractFileName(urlEvidencia);
-    const fileExt = nombreArchivo.split('.').pop().toLowerCase();
-    const fechaActual = new Date().toLocaleDateString('es-MX');
-
-    // Actualizar metadatos
-    document.getElementById('nombreArchivoCompleto').textContent = nombreArchivo;
+    // Configurar metadatos
+    document.getElementById('nombreArchivoCompleto').textContent = `${tipoDocumento}: ${nombreArchivo}`;
     document.getElementById('folioEvidencia').textContent = folio;
-    document.getElementById('secretariaEvidencia').textContent = secretaria || 'Sin especificar';
-    document.getElementById('fechaEvidencia').textContent = fechaActual;
+    document.getElementById('secretariaEvidencia').textContent = secretaria || 'No especificada';
+    document.getElementById('fechaEvidencia').textContent = new Date().toLocaleDateString('es-MX');
 
-    // Configurar visores
+    // Cargar contenido después de 300ms
     setTimeout(() => {
         loading.classList.add('d-none');
-        
-        if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExt)) {
+
+        if(!urlDocumento) {
+            visorNoSoportado.classList.remove('d-none');
+            document.getElementById('tipoArchivo').textContent = 'Documento no disponible';
+            return;
+        }
+
+        if(['pdf'].includes(extension)) {
+            pdfContainer.classList.remove('d-none');
+            pdfViewer.src = `${urlDocumento}#view=FitH&toolbar=0`;
+            document.getElementById('pdfMeta').textContent = `${nombreArchivo} | ${tipoDocumento}`;
+        } 
+        else if(['jpg', 'jpeg', 'png'].includes(extension)) {
             imagenContainer.classList.remove('d-none');
             const img = document.getElementById('visorImagen');
-            img.src = urlEvidencia;
+            img.src = urlDocumento;
             img.onload = () => {
                 document.getElementById('imagenDimensions').textContent = 
                     `${img.naturalWidth}px × ${img.naturalHeight}px`;
             };
-        } else if (fileExt === 'pdf') {
-            pdfContainer.classList.remove('d-none');
-            document.getElementById('pdfMeta').textContent = 
-                `${nombreArchivo} | ${fechaActual}`;
-            
-            // Configurar PDF después de mostrar el contenedor
-            pdfViewer.dataset.tempSrc = `${urlEvidencia}#view=FitH`;
-            window.addEventListener('resize', resizeHandler);
-            
-            // Forzar actualización inicial
-            setTimeout(resizeHandler, 50);
-        } else {
+        } 
+        else {
             visorNoSoportado.classList.remove('d-none');
-            document.getElementById('tipoArchivo').textContent = `.${fileExt}`;
+            document.getElementById('tipoArchivo').textContent = `.${extension}`;
             const downloadBtn = document.getElementById('descargarEvidencia');
-            downloadBtn.href = urlEvidencia;
+            downloadBtn.href = urlDocumento;
             downloadBtn.download = nombreArchivo;
         }
     }, 300);
 
-    // Evento de zoom para imágenes
-    document.getElementById('visorImagen').onclick = function() {
-        this.classList.toggle('img-zoom');
-    };
-
-    // Manejar eventos del modal
-    modalElement.addEventListener('shown.bs.modal', modalShownHandler);
-    modalElement.addEventListener('hidden.bs.modal', () => {
-        window.removeEventListener('resize', resizeHandler);
-        modalElement.removeEventListener('shown.bs.modal', modalShownHandler);
-        pdfViewer.src = ''; // Limpiar iframe al cerrar
-    });
-
-    // Mostrar modal después de configurar todo
     modal.show();
 };
 
@@ -620,36 +580,68 @@ function actualizarEstadisticas(solicitudes) {
 }
 
 // Modificar la función cambiarEstado para hacerla global
+let accionActual = '';
+
 window.cambiarEstado = async function(folio, nuevoEstado) {
     try {
-        const updates = {
-            estado: nuevoEstado
-        };
-        
-        if (nuevoEstado === 'atendida') {
-            updates.fechaAtencion = new Date().toISOString();
+        const solicitudRef = ref(database, `solicitudes/${folio}`);
+        const snapshot = await get(solicitudRef);
+        const datos = snapshot.val();
+
+        // Eliminar evidencia si se rechaza
+        if(nuevoEstado === 'pendiente' && datos.evidencias) {
+            try {
+                // Extraer ruta del archivo desde la URL
+                const urlEvidencia = datos.evidencias;
+                const rutaCompleta = decodeURIComponent(urlEvidencia.split('/o/')[1].split('?')[0]);
+                const evidenciaRef = storageRef(storage, rutaCompleta);
+                
+                await deleteObject(evidenciaRef);
+            } catch(error) {
+                console.error("Error eliminando evidencia:", error);
+                throw new Error("No se pudo eliminar la evidencia");
+            }
         }
-        
-        await update(ref(database, `solicitudes/${folio}`), updates);
-        
-        // Actualizar ambas listas
-        aplicarFiltrosSeguimiento();
+
+        const actualizacion = {
+            estado: nuevoEstado,
+            evidencias: nuevoEstado === 'pendiente' ? null : datos.evidencias,
+            fechaAtencion: nuevoEstado === 'atendida' ? new Date().toISOString() : null
+        };
+
+        await update(solicitudRef, actualizacion);
+
+        // Actualizar vistas
+        cargarSeguimiento();
+        cargarVerificacion();
         cargarValidadas();
+        actualizarEstadisticas(solicitudesSeguimiento);
         
-        Toastify({
-            text: "Estado actualizado correctamente",
-            className: "toastify-success",
-            duration: 3000
-        }).showToast();
-    } catch (error) {
-        console.error("Error al actualizar estado:", error);
-        Toastify({
-            text: "Error al actualizar el estado",
-            className: "toastify-error",
-            duration: 3000
-        }).showToast();
+        mostrarExito(`Evidencia de solicitud ${nuevoEstado === 'atendida' ? 'aprobada' : 'rechazada'} correctamente`);
+        
+    } catch(error) {
+        console.error("Error:", error);
+        mostrarError(`Error al procesar: ${error.message}`);
+    } finally {
+        folioActual = '';
+        accionActual = '';
     }
 };
+
+// Configurar eventos para los modales
+document.getElementById('confirmarAprobar').addEventListener('click', () => {
+    if(folioActual && accionActual === 'aprobar') {
+        cambiarEstado(folioActual, 'atendida');
+        bootstrap.Modal.getInstance('#confirmarAprobarModal').hide();
+    }
+});
+
+document.getElementById('confirmarRechazar').addEventListener('click', () => {
+    if(folioActual && accionActual === 'rechazar') {
+        cambiarEstado(folioActual, 'pendiente');
+        bootstrap.Modal.getInstance('#confirmarRechazarModal').hide();
+    }
+});
 
 // Modifica el event listener del input de archivo
 document.getElementById('evidenciaFile').addEventListener('change', function(e) {
@@ -810,7 +802,13 @@ function cargarVerificacion() {
 
 function mostrarPaginaVerificacion(data) {
     const tabla = document.getElementById('lista-verificacion');
-    tabla.innerHTML = '';
+    tabla.innerHTML = data.length > 0 ? '' : `
+        <tr>
+            <td colspan="6" class="text-center py-4">
+                <i class="fas fa-info-circle me-2"></i>
+                No hay solicitudes pendientes de verificación
+            </td>
+        </tr>`;
 
     data.forEach(solicitud => {
         const tr = document.createElement('tr');
@@ -820,38 +818,51 @@ function mostrarPaginaVerificacion(data) {
             <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
             <td>${new Date(solicitud.fechaVerificacion).toLocaleDateString()}</td>
             <td>
-                <button class="btn btn-sm btn-info" 
-                        onclick="mostrarEvidenciaModal(
-                            '${solicitud.key}', 
-                            '${solicitud.evidencias ? 'Evidencia' : 'Sin evidencia'}', 
-                            '${solicitud.evidencias || ''}',
-                            '${dependenciasMap[solicitud.dependencia] || ''}'
-                        )">
-                    <i class="fas fa-eye"></i> Ver
+                <button class="btn btn-sm btn-info me-2" 
+                    onclick="mostrarEvidenciaModal(
+    '${solicitud.key}',
+    'Documento Inicial',
+    '${solicitud.documentoInicial}', // URL del documento
+    '${dependenciasMap[solicitud.dependencia]}' // Secretaría
+)">
+                    <i class="fas fa-file-alt"></i> Inicial
                 </button>
-                 <button class="btn btn-sm btn-info"
-            onclick="mostrarEvidenciaModal(
-                '${solicitud.key}', 
-                '${solicitud.nombreDocumento || 'Evidencia'}', 
-                '${solicitud.evidencias}'
-            )">
-        <i class="fas fa-eye"></i> Ver
-    </button>
+                <button class="btn btn-sm btn-info" 
+                  onclick="mostrarEvidenciaModal(
+    '${solicitud.key}',
+    'Evidencia',
+    '${solicitud.evidencias}', // URL de la evidencia
+    '${dependenciasMap[solicitud.dependencia]}' // Secretaría
+)">
+                    <i class="fas fa-eye"></i> Evidencia
+                </button>
             </td>
             <td>
                 <div class="d-flex gap-2">
-                    <button class="btn btn-sm btn-success" onclick="cambiarEstado('${solicitud.key}', 'atendida')">
-                        <i class="fas fa-check"></i> Aprobar
-                    </button>
-                    <button class="btn btn-sm btn-danger" onclick="cambiarEstado('${solicitud.key}', 'pendiente')">
-                        <i class="fas fa-times"></i> Rechazar
-                    </button>
+                    <button class="btn btn-sm btn-success" 
+    onclick="mostrarConfirmacion('${solicitud.key}', 'aprobar')">
+    <i class="fas fa-check"></i> Aprobar
+</button>
+<button class="btn btn-sm btn-danger" 
+    onclick="mostrarConfirmacion('${solicitud.key}', 'rechazar')">
+    <i class="fas fa-times"></i> Rechazar
+</button>
                 </div>
-            </td>
-        `;
+            </td>`;
         tabla.appendChild(tr);
     });
 }
+
+window.mostrarConfirmacion = function(folio, accion) {
+    folioActual = folio;
+    accionActual = accion;
+    
+    const modalId = accion === 'aprobar' 
+        ? '#confirmarAprobarModal' 
+        : '#confirmarRechazarModal';
+    
+    new bootstrap.Modal(document.querySelector(modalId)).show();
+};
 
 // Evento modificado para cambio de archivo
 document.getElementById('documentoInicial').addEventListener('change', function(e) {
@@ -913,10 +924,13 @@ function crearFilaSolicitud(solicitud) {
     const tr = document.createElement('tr');
     tr.dataset.fechaLimite = solicitud.fechaLimite;
     tr.dataset.estado = solicitud.estado;
-    
+    const estadoActual = solicitud.estado;
+
     // Modificar la línea donde se obtiene el estado
     const estado = estados[solicitud.estado] || { texto: 'Desconocido', color: '#666' } 
     const dependenciaNombre = dependenciasMap[solicitud.dependencia] || 'Desconocida';
+    // Determinar si está en verificación
+    const enVerificacion = estadoActual === 'verificacion';
 
     tr.innerHTML = `
         <td>${solicitud.key}</td>
@@ -937,15 +951,26 @@ function crearFilaSolicitud(solicitud) {
                     <i class="fas fa-file-alt me-1"></i>Ver Documento
                 </button>
                 ` : ''}
-                <button class="btn btn-sm btn-warning" onclick="mostrarConfirmacionProceso('${solicitud.key}')">
-                    <i class="fas fa-sync-alt"></i> Marcar como "En Proceso"
+                <button class="btn btn-sm btn-warning" 
+                    ${enVerificacion ? 'disabled' : ''}
+                    onclick="mostrarConfirmacionProceso('${solicitud.key}')">
+                    <i class="fas fa-sync-alt"></i> Marcar "En Proceso"
                 </button>
-                <button class="btn btn-sm btn-success" onclick="mostrarConfirmacionAtendida('${solicitud.key}')">
+                
+                <button class="btn btn-sm btn-success" 
+                    ${enVerificacion ? 'disabled' : ''}
+                    onclick="mostrarConfirmacionAtendida('${solicitud.key}')">
                     <i class="fas fa-check-circle"></i> Mandar a Verificación
                 </button>
             </div>
         </td>
     `;
+    // Añadir estilo visual para deshabilitado
+    tr.querySelectorAll('button[disabled]').forEach(btn => {
+        btn.style.opacity = '0.6';
+        btn.style.cursor = 'not-allowed';
+    });
+    
     return tr;
 }
 
@@ -1245,26 +1270,15 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
     }
 });
 
-document.getElementById('busqueda-verificacion').addEventListener('input', aplicarFiltrosVerificacion);
-
-function aplicarFiltrosVerificacion() {
-    const busqueda = document.getElementById('busqueda-verificacion').value.toLowerCase();
-    const filtradas = solicitudesVerificacion.filter(s => {
-        return `${s.key} ${s.asunto}`.toLowerCase().includes(busqueda);
-    });
-    
-    if(filtradas.length === 0) {
-        document.getElementById('lista-verificacion').innerHTML = `
-            <tr>
-                <td colspan="6" class="text-center py-4">
-                    <i class="fas fa-info-circle me-2"></i>
-                    No hay solicitudes para verificar con los filtros actuales
-                </td>
-            </tr>`;
-    } else {
-        mostrarPaginaVerificacion(filtradas);
-    }
-}
+// Buscador en Verificación
+document.getElementById('busqueda-verificacion').addEventListener('input', function () {
+    const termino = this.value.toLowerCase();
+    const filtradas = solicitudesVerificacion.filter(s =>
+        s.key.toLowerCase().includes(termino) ||
+        s.asunto.toLowerCase().includes(termino)
+    );
+    mostrarPaginaVerificacion(filtradas);
+});
 
 // Añadir al inicio con las constantes
 const coloresEstatus = {
