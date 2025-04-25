@@ -54,6 +54,9 @@ const MAX_INITIAL_FILE_SIZE_BYTES = MAX_INITIAL_FILE_SIZE_MB * 1024 * 1024;
 const ALLOWED_INITIAL_EXTENSIONS = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
 const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
 
+const navLinks = document.querySelectorAll('.nav-link');
+const contentSections = document.querySelectorAll('.content-section');
+
 let suppressFileInputEvents = false;
 
 window.mostrarModalEstado = function(folio) {
@@ -228,28 +231,29 @@ function mostrarPaginaValidadas(data) {
         <td>${dependenciasMap[s.dependencia] || 'Desconocida'}</td>
         <td>${new Date(s.fechaAtencion).toLocaleDateString()}</td>
         <td>
-           ${s.documentoInicial ? `
-    <button class="btn btn-sm btn-info mb-1" 
-            onclick="mostrarEvidenciaModal(
-    '${s.key}',
-    'Documento Inicial',
-    '${s.documentoInicial}', // URL del documento
-    '${dependenciasMap[s.dependencia]}' // Secretaría
-)">
-        <i class="fas fa-file-alt"></i> Inicial
-    </button>
-    ` : ''}
-    ${s.evidencias ? `
-    <button class="btn btn-sm btn-info mb-1" 
-            onclick="mostrarEvidenciaModal(
-    '${s.key}',
-    'Evidencia',
-    '${s.evidencias}', // URL de la evidencia
-    '${dependenciasMap[s.dependencia]}' // Secretaría
-)">
-        <i class="fas fa-eye"></i> Evidencia
-    </button>
-    ` : ''}
+        ${s.documentoInicial ? `
+            <button class="btn btn-sm btn-documento-inicial" 
+                    onclick="mostrarEvidenciaModal(
+                        '${s.key}',
+                        'Documento Inicial',
+                        '${s.documentoInicial}',
+                        '${dependenciasMap[s.dependencia]}'
+                    )">
+                <i class="fas fa-file-import me-2"></i> Documento Inicial
+            </button>
+            ` : ''}
+            
+            ${s.evidencias ? `
+            <button class="btn btn-sm btn-evidencia" 
+                    onclick="mostrarEvidenciaModal(
+                        '${s.key}',
+                        'Evidencia',
+                        '${s.evidencias}',
+                        '${dependenciasMap[s.dependencia]}'
+                    )">
+                <i class="fas fa-search me-2"></i> Ver Evidencia
+            </button>
+            ` : ''}
         </td>
     `;
         tabla.appendChild(tr);
@@ -591,21 +595,20 @@ window.cambiarEstado = async function(folio, nuevoEstado) {
         // Eliminar evidencia si se rechaza
         if(nuevoEstado === 'pendiente' && datos.evidencias) {
             try {
-                // Extraer ruta del archivo desde la URL
-                const urlEvidencia = datos.evidencias;
-                const rutaCompleta = decodeURIComponent(urlEvidencia.split('/o/')[1].split('?')[0]);
-                const evidenciaRef = storageRef(storage, rutaCompleta);
-                
+                const url = new URL(datos.evidencias);
+                const path = decodeURIComponent(url.pathname.split('/o/')[1]);
+                const evidenciaRef = storageRef(storage, path);
                 await deleteObject(evidenciaRef);
             } catch(error) {
                 console.error("Error eliminando evidencia:", error);
-                throw new Error("No se pudo eliminar la evidencia");
+                throw new Error("Error al eliminar archivo: " + error.message);
             }
         }
 
+        // Preparar actualización segura
         const actualizacion = {
             estado: nuevoEstado,
-            evidencias: nuevoEstado === 'pendiente' ? null : datos.evidencias,
+            evidencias: nuevoEstado === 'pendiente' ? null : datos.evidencias || null,
             fechaAtencion: nuevoEstado === 'atendida' ? new Date().toISOString() : null
         };
 
@@ -617,7 +620,22 @@ window.cambiarEstado = async function(folio, nuevoEstado) {
         cargarValidadas();
         actualizarEstadisticas(solicitudesSeguimiento);
         
-        mostrarExito(`Evidencia de solicitud ${nuevoEstado === 'atendida' ? 'aprobada' : 'rechazada'} correctamente`);
+        // Mensajes personalizados
+        let mensaje = '';
+        switch(nuevoEstado) {
+            case 'atendida':
+                mensaje = 'aprobada';
+                break;
+            case 'en_proceso':
+                mensaje = 'marcada en proceso';
+                break;
+            case 'pendiente':
+                mensaje = 'rechazada';
+                break;
+            default:
+                mensaje = 'actualizada';
+        }
+        mostrarExito(`Solicitud ${mensaje} correctamente`);
         
     } catch(error) {
         console.error("Error:", error);
@@ -818,32 +836,32 @@ function mostrarPaginaVerificacion(data) {
             <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
             <td>${new Date(solicitud.fechaVerificacion).toLocaleDateString()}</td>
             <td>
-                <button class="btn btn-sm btn-info me-2" 
+                <button class="btn btn-sm btn-documento-inicial" 
                     onclick="mostrarEvidenciaModal(
     '${solicitud.key}',
     'Documento Inicial',
     '${solicitud.documentoInicial}', // URL del documento
     '${dependenciasMap[solicitud.dependencia]}' // Secretaría
 )">
-                    <i class="fas fa-file-alt"></i> Inicial
+                    <i class="fas fa-file-alt"></i>  Documento Inicial
                 </button>
-                <button class="btn btn-sm btn-info" 
+                <button class="btn btn-sm btn-evidencia" 
                   onclick="mostrarEvidenciaModal(
     '${solicitud.key}',
     'Evidencia',
     '${solicitud.evidencias}', // URL de la evidencia
     '${dependenciasMap[solicitud.dependencia]}' // Secretaría
 )">
-                    <i class="fas fa-eye"></i> Evidencia
+                    <i class="fas fa-eye"></i>  Ver Evidencia
                 </button>
             </td>
             <td>
                 <div class="d-flex gap-2">
-                    <button class="btn btn-sm btn-success" 
+                    <button class="btn btn-sm btn-aprobar" 
     onclick="mostrarConfirmacion('${solicitud.key}', 'aprobar')">
     <i class="fas fa-check"></i> Aprobar
 </button>
-<button class="btn btn-sm btn-danger" 
+<button class="btn btn-sm btn-rechazar" 
     onclick="mostrarConfirmacion('${solicitud.key}', 'rechazar')">
     <i class="fas fa-times"></i> Rechazar
 </button>
@@ -942,7 +960,7 @@ function crearFilaSolicitud(solicitud) {
         <td>
             <div class="d-flex gap-2">
              ${solicitud.documentoInicial ? `
-                <button class="btn btn-sm btn-info" 
+                <button class="btn btn-sm btn-documento" 
                         onclick="mostrarDocumentoInicial(
                             '${solicitud.key}', 
                             '${solicitud.nombreDocumento}', 
@@ -951,13 +969,13 @@ function crearFilaSolicitud(solicitud) {
                     <i class="fas fa-file-alt me-1"></i>Ver Documento
                 </button>
                 ` : ''}
-                <button class="btn btn-sm btn-warning" 
+                <button class="btn btn-sm btn-proceso" 
                     ${enVerificacion ? 'disabled' : ''}
                     onclick="mostrarConfirmacionProceso('${solicitud.key}')">
                     <i class="fas fa-sync-alt"></i> Marcar "En Proceso"
                 </button>
                 
-                <button class="btn btn-sm btn-success" 
+                <button class="btn btn-sm btn-verificacion" 
                     ${enVerificacion ? 'disabled' : ''}
                     onclick="mostrarConfirmacionAtendida('${solicitud.key}')">
                     <i class="fas fa-check-circle"></i> Mandar a Verificación
@@ -1633,10 +1651,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
     });
 
-    // Sistema de pestañas
-    const navLinks = document.querySelectorAll('.nav-link');
-    const contentSections = document.querySelectorAll('.content-section');
-
+    // 2. Función para cambiar pestañas
     function switchTab(contentId) {
         contentSections.forEach(section => {
             section.style.display = 'none';
@@ -1646,12 +1661,11 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (activeSection) {
             activeSection.style.display = 'block';
         }
-
-        localStorage.setItem('activeTab', contentId);
     }
-
+    
+    // Event listeners para los navLinks
     navLinks.forEach(link => {
-        link.addEventListener('click', function (e) {
+        link.addEventListener('click', function(e) {
             e.preventDefault();
             const contentId = this.getAttribute('data-content');
             navLinks.forEach(n => n.classList.remove('active'));

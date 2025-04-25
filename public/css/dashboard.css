@@ -817,3 +817,91 @@ body {
         width: 100%;
     }
 }
+
+/* Estilos Generales para Todos los Botones */
+.btn {
+    transition: all 0.3s ease;
+    border: none;
+    font-weight: 500;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Botones de Documento Inicial (Verde Agua) */
+.btn-documento {
+    background: #2A9D8F !important;
+    color: white !important;
+    box-shadow: 0 2px 4px rgba(42, 157, 143, 0.2);
+}
+
+.btn-documento:hover {
+    background: #21867a !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(42, 157, 143, 0.3);
+}
+
+.btn-documento-inicial {
+    background: #2A9D8F !important;
+    color: white !important;
+    box-shadow: 0 2px 4px rgba(42, 157, 143, 0.2);
+}
+
+.btn-documento-inicial:hover {
+    background: #21867a !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(42, 157, 143, 0.3);
+}
+
+/* Botones de Evidencia (Coral) */
+.btn-evidencia {
+    background: #E76F51 !important;
+    color: white !important;
+    box-shadow: 0 2px 4px rgba(231, 111, 81, 0.2);
+}
+
+.btn-evidencia:hover {
+    background: #d45d3f !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(231, 111, 81, 0.3);
+}
+
+/* Botones de Proceso (Amarillo Mostaza) */
+.btn-proceso {
+    background: #E9C46A !important;
+    color: #2A2A2A !important;
+    box-shadow: 0 2px 4px rgba(233, 196, 106, 0.2);
+}
+
+.btn-proceso:hover {
+    background: #d4b15d !important;
+}
+
+/* Botones de Verificación (Morado Moderno) */
+.btn-verificacion {
+    background: #6A4C93 !important;
+    color: white !important;
+    box-shadow: 0 2px 4px rgba(106, 76, 147, 0.2);
+}
+
+.btn-verificacion:hover {
+    background: #5d427f !important;
+}
+
+/* Botones de Aprobación/Rechazo (Verde/Rojo) */
+.btn-aprobar {
+    background: #2A9D8F !important;
+    color: white !important;
+}
+
+.btn-rechazar {
+    background: #E76F51 !important;
+    color: white !important;
+}
+
+/* Estados Deshabilitados */
+.btn[disabled] {
+    opacity: 0.7 !important;
+    filter: grayscale(0.3);
+}
