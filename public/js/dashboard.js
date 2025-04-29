@@ -128,10 +128,16 @@ function obtenerFechaHoy() {
 }
 
 // Funciones de Firebase
-async function generarFolio() {
-    const folioRef = ref(database, 'configuracion/ultimoFolio');
+async function generarFolio(tipo = 'solicitud') {
+    const tipoFolio = {
+        'acuerdo': 'ultimoFolioAcuerdo',
+        'oficio': 'ultimoFolioOficio',
+        'solicitud': 'ultimoFolio'
+    };
+    
+    const folioRef = ref(database, `configuracion/${tipoFolio[tipo]}`);
     const snapshot = await get(folioRef);
-    const nuevoFolio = snapshot.val() + 1;
+    const nuevoFolio = (snapshot.val() || 0) + 1;
     await set(folioRef, nuevoFolio);
     return nuevoFolio.toString().padStart(4, '0');
 }
@@ -1575,6 +1581,8 @@ document.addEventListener('DOMContentLoaded', async function () {
     const seguimientoLi = document.querySelector('a[data-content="seguimiento"]').parentElement;
     const validadasLi = document.querySelector('a[data-content="validadas"]').parentElement;
     const verificacionLi = document.querySelector('a[data-content="verificacion"]').parentElement;
+    const navacuerdos = document.querySelector('a[data-content="acuerdo"]').parentElement;
+    const navoficios = document.querySelector('a[data-content="oficio"]').parentElement;
 
     switch (role) {
         case 1:
@@ -1582,12 +1590,16 @@ document.addEventListener('DOMContentLoaded', async function () {
             seguimientoLi.style.display = 'block';
             validadasLi.style.display = 'none';
             verificacionLi.style.display = 'none';
+            navacuerdos.style.display = 'none';
+            navoficios.style.display = 'none';
             break;
         case 2:
             nuevaLi.style.display = 'none';
             seguimientoLi.style.display = 'block';
             validadasLi.style.display = 'block';
             verificacionLi.style.display = 'none';
+            navacuerdos.style.display = 'none';
+            navoficios.style.display = 'none';
             break;
         case 3:
             // Todas visibles por defecto
@@ -1631,7 +1643,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         <option>Audiencias virtuales</option>
         <option>Recorridos</option>
         <option>Redes sociales</option>
-        <option>Oficios</option>
     `;
 
     // Menú móvil
@@ -1746,3 +1757,194 @@ window.confirmarCambioEstado = function(nuevoEstado) {
         if (modal) modal.hide();
     });
 };
+
+// Configurar formulario Acuerdo
+document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    
+    try {
+        // Validar campos
+        const camposRequeridos = ['asuntoAcuerdo', 'descripcionAcuerdo', 
+                                'fechaLimiteAcuerdo', 'secretariaAcuerdo'];
+        if (!validarCampos(camposRequeridos)) return;
+
+        // Generar folio
+        const folio = await generarFolio('acuerdo');
+        
+        // Manejar documento
+        const docInput = document.getElementById('documentoAcuerdo');
+        const docFile = docInput.files[0];
+        if (!validarDocumento(docFile, 'acuerdo')) return;
+
+        // Subir documento
+        const storagePath = `${folio}/Documento Acuerdo/${docFile.name}`;
+        const docRef = storageRef(storage, storagePath);
+        await uploadBytes(docRef, docFile);
+        const docUrl = await getDownloadURL(docRef);
+
+        // Crear objeto acuerdo
+        const nuevoAcuerdo = {
+            tipo: 'acuerdo',
+            fechaCreacion: new Date().toISOString(),
+            asunto: document.getElementById('asuntoAcuerdo').value,
+            descripcion: document.getElementById('descripcionAcuerdo').value,
+            fechaLimite: document.getElementById('fechaLimiteAcuerdo').value,
+            dependencia: document.getElementById('secretariaAcuerdo').value,
+            comentarios: document.getElementById('comentariosAcuerdo').value,
+            documentoInicial: docUrl,
+            nombreDocumento: docFile.name,
+            estado: 'pendiente',
+            folio: folio
+        };
+
+        // Guardar en Firebase
+        await set(ref(database, `acuerdos/${folio}`), nuevoAcuerdo);
+        
+        // Limpiar formulario
+        limpiarFormulario('acuerdo');
+        mostrarExito("Acuerdo creado exitosamente!");
+
+    } catch (error) {
+        console.error("Error:", error);
+        mostrarError(`Error al crear acuerdo: ${error.message}`);
+    }
+});
+
+// Configurar formulario Oficio (similar a Acuerdo)
+document.getElementById('formNuevoOficio').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    
+    try {
+        // Validar campos
+        const camposRequeridos = ['asuntoOficio', 'descripcionOficio', 
+                                'fechaLimiteOficio', 'secretariaOficio'];
+        if (!validarCampos(camposRequeridos)) return;
+
+        // Generar folio
+        const folio = await generarFolio('oficio');
+        
+        // Manejar documento
+        const docInput = document.getElementById('documentoOficio');
+        const docFile = docInput.files[0];
+        if (!validarDocumento(docFile, 'oficio')) return;
+
+        // Subir documento
+        const storagePath = `${folio}/Documento Oficio/${docFile.name}`;
+        const docRef = storageRef(storage, storagePath);
+        await uploadBytes(docRef, docFile);
+        const docUrl = await getDownloadURL(docRef);
+
+        // Crear objeto oficio
+        const nuevoOficio = {
+            tipo: 'oficio',
+            fechaCreacion: new Date().toISOString(),
+            asunto: document.getElementById('asuntoOficio').value,
+            descripcion: document.getElementById('descripcionOficio').value,
+            fechaLimite: document.getElementById('fechaLimiteOficio').value,
+            dependencia: document.getElementById('secretariaOficio').value,
+            comentarios: document.getElementById('comentariosOficio').value,
+            documentoInicial: docUrl,
+            nombreDocumento: docFile.name,
+            estado: 'pendiente',
+            folio: folio
+        };
+
+        // Guardar en Firebase
+        await set(ref(database, `oficios/${folio}`), nuevoOficio);
+        
+        // Limpiar formulario
+        limpiarFormulario('oficio');
+        mostrarExito("Oficio creado exitosamente!");
+
+    } catch (error) {
+        console.error("Error:", error);
+        mostrarError(`Error al crear oficio: ${error.message}`);
+    }
+});
+
+// Funciones auxiliares
+function validarCampos(campos) {
+    let valido = true;
+    campos.forEach(id => {
+        const campo = document.getElementById(id);
+        if (!campo || !campo.value.trim()) {
+            valido = false;
+            campo.classList.add('is-invalid');
+        }
+    });
+    return valido;
+}
+
+function validarDocumento(file, tipo) {
+    if (!file) {
+        mostrarError("Debes subir un documento inicial");
+        return false;
+    }
+
+    const extension = file.name.split('.').pop().toLowerCase();
+    const permitidas = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
+    
+    if (!permitidas.includes(extension)) {
+        mostrarError(`Formato no permitido: .${extension}`);
+        return false;
+    }
+
+    if (file.size > 10 * 1024 * 1024) { // 10MB
+        mostrarError("El archivo excede el tamaño máximo de 10MB");
+        return false;
+    }
+
+    return true;
+}
+
+function limpiarFormulario(tipo) {
+    const prefix = tipo.charAt(0).toUpperCase() + tipo.slice(1);
+    document.getElementById(`formNuevo${prefix}`).reset();
+    document.getElementById(`documento${prefix}`).value = '';
+    document.getElementById(`doc${prefix}Info`).textContent = 
+        'Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 10MB)';
+    document.getElementById(`removeDoc${prefix}`).classList.add('d-none');
+}
+
+// Configurar eventos para los documentos
+['Acuerdo', 'Oficio'].forEach(tipo => {
+    const docInput = document.getElementById(`documento${tipo}`);
+    const removeBtn = document.getElementById(`removeDoc${tipo}`);
+    const docInfo = document.getElementById(`doc${tipo}Info`);
+
+    docInput.addEventListener('change', function(e) {
+        if (this.files.length > 0) {
+            const file = this.files[0];
+            docInfo.innerHTML = `
+                <span class="text-success">
+                    <i class="fas fa-file me-2"></i>${file.name}
+                </span>
+                <br><small>${(file.size / 1024 / 1024).toFixed(2)} MB</small>`;
+            removeBtn.classList.remove('d-none');
+        } else {
+            docInfo.textContent = 'Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 10MB)';
+            removeBtn.classList.add('d-none');
+        }
+    });
+
+    removeBtn.addEventListener('click', () => {
+        docInput.value = '';
+        docInput.dispatchEvent(new Event('change'));
+    });
+});
+
+// En DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+    // Configurar fechas
+    document.getElementById('fechaAcuerdo').value = obtenerFechaHoy();
+    document.getElementById('fechaOficio').value = obtenerFechaHoy();
+    
+    // Mostrar módulos solo para rol 3
+    const role = parseInt(getCookie('rol'));
+    if (role === 3) {
+        document.getElementById('navAcuerdo').style.display = 'block';
+        document.getElementById('navOficio').style.display = 'block';
+    }
+});

@@ -43,6 +43,18 @@
                         Seguimiento
                     </a>
                 </li>
+                <li class="nav-item" id="navAcuerdo">
+                    <a class="nav-link" href="#acuerdo" data-content="acuerdo">
+                        <i class="fas fa-handshake"></i>
+                        Nuevo Acuerdo
+                    </a>
+                </li>
+                <li class="nav-item" id="navOficio">
+                    <a class="nav-link" href="#oficio" data-content="oficio">
+                        <i class="fas fa-file-contract"></i>
+                        Nuevo Oficio
+                    </a>
+                </li>
                 <li class="nav-item">
                     <a class="nav-link" href="#verificacion" data-content="verificacion">
                         <i class="fas fa-clipboard-check"></i>
@@ -183,8 +195,8 @@
                                 <select class="form-select" id="receptor" required>
                                     <option value="">Seleccionar...</option>
                                     <option>Solicitud Ciudadana</option>
-                                    <option>Oficio</option>
-                                    <option>Junta de Gabinete</option>
+                                    <!-- <option>Oficio</option>
+                                    <option>Junta de Gabinete</option> -->
                                 </select>
                             </div>
             
@@ -197,8 +209,8 @@
                                     <option>Audiencias virtuales</option>
                                     <option>Recorridos</option>
                                     <option>Redes sociales</option>
-                                    <option>Oficios</option>
-                                    <option>Junta de Gabinete</option>
+                                    <!-- <option>Oficios</option>
+                                    <option>Junta de Gabinete</option> -->
                                 </select>
                             </div>
                         </div>
@@ -281,6 +293,172 @@
                     </form>
                 </div>
             </div>
+
+<!-- Sección Nuevo Acuerdo de Gabinete -->
+<div id="acuerdo-content" class="content-section" style="display: none;">
+    <h2 class="section-title">
+        <i class="fas fa-handshake"></i>
+        Nuevo Acuerdo de Gabinete
+    </h2>
+    <div class="form-container">
+        <form id="formNuevoAcuerdo" class="needs-validation" novalidate>
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <label for="fechaAcuerdo" class="form-label">Fecha</label>
+                    <input type="date" class="form-control" id="fechaAcuerdo" readonly required>
+                </div>
+                
+                <div class="col-md-8">
+                    <label for="asuntoAcuerdo" class="form-label">Asunto</label>
+                    <input type="text" class="form-control" id="asuntoAcuerdo" required>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-12">
+                    <label for="descripcionAcuerdo" class="form-label">Descripción del acuerdo</label>
+                    <textarea class="form-control" id="descripcionAcuerdo" rows="3" required></textarea>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label for="fechaLimiteAcuerdo" class="form-label">Fecha Límite</label>
+                    <input type="date" class="form-control" id="fechaLimiteAcuerdo" required>
+                </div>
+                
+                <div class="col-md-6">
+                    <label for="secretariaAcuerdo" class="form-label">Secretaría</label>
+                    <select class="form-select" id="secretariaAcuerdo" required></select>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-12">
+                    <label for="comentariosAcuerdo" class="form-label">Comentarios</label>
+                    <textarea class="form-control" id="comentariosAcuerdo" rows="2"></textarea>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-12">
+                    <label for="documentoAcuerdo" class="form-label">Documento Inicial</label>
+                    <div class="file-drop-area rounded-3 border-2 border-dashed p-4 text-center">
+                        <div class="mb-3 text-muted">
+                            <i class="fas fa-cloud-upload-alt fa-3x"></i>
+                        </div>
+                        <input type="file" 
+                               class="form-control visually-hidden" 
+                               id="documentoAcuerdo" 
+                               accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.zip,.rar" 
+                               required>
+                        <label for="documentoAcuerdo" class="btn btn-outline-primary mb-2">
+                            <i class="fas fa-file-upload me-2"></i>Seleccionar archivo
+                        </label>
+                        <div class="file-info small text-muted" id="docAcuerdoInfo">
+                            Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 10MB)
+                        </div>
+                        <button class="btn btn-sm btn-danger mt-2 d-none" id="removeDocAcuerdo">
+                            <i class="fas fa-times me-1"></i>Remover archivo
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-3 mt-5">
+                <button type="reset" class="btn btn-custom-secondary">
+                    <i class="fas fa-eraser me-2"></i>Limpiar
+                </button>
+                <button type="submit" class="btn btn-custom-primary">
+                    <i class="fas fa-save me-2"></i>Guardar Acuerdo
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Sección Nuevo Oficio -->
+<div id="oficio-content" class="content-section" style="display: none;">
+    <h2 class="section-title">
+        <i class="fas fa-file-contract"></i>
+        Nuevo Oficio
+    </h2>
+    <div class="form-container">
+        <form id="formNuevoOficio" class="needs-validation" novalidate>
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <label for="fechaOficio" class="form-label">Fecha</label>
+                    <input type="date" class="form-control" id="fechaOficio" readonly required>
+                </div>
+                
+                <div class="col-md-8">
+                    <label for="asuntoOficio" class="form-label">Asunto</label>
+                    <input type="text" class="form-control" id="asuntoOficio" required>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-12">
+                    <label for="descripcionOficio" class="form-label">Descripción del Oficio</label>
+                    <textarea class="form-control" id="descripcionOficio" rows="3" required></textarea>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label for="fechaLimiteOficio" class="form-label">Fecha Límite</label>
+                    <input type="date" class="form-control" id="fechaLimiteOficio" required>
+                </div>
+                
+                <div class="col-md-6">
+                    <label for="secretariaOficio" class="form-label">Secretaría</label>
+                    <select class="form-select" id="secretariaOficio" required></select>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-12">
+                    <label for="comentariosOficio" class="form-label">Comentarios</label>
+                    <textarea class="form-control" id="comentariosOficio" rows="2"></textarea>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-12">
+                    <label for="documentoOficio" class="form-label">Documento Inicial</label>
+                    <div class="file-drop-area rounded-3 border-2 border-dashed p-4 text-center">
+                        <div class="mb-3 text-muted">
+                            <i class="fas fa-cloud-upload-alt fa-3x"></i>
+                        </div>
+                        <input type="file" 
+                               class="form-control visually-hidden" 
+                               id="documentoOficio" 
+                               accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.zip,.rar" 
+                               required>
+                        <label for="documentoOficio" class="btn btn-outline-primary mb-2">
+                            <i class="fas fa-file-upload me-2"></i>Seleccionar archivo
+                        </label>
+                        <div class="file-info small text-muted" id="docOficioInfo">
+                            Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 10MB)
+                        </div>
+                        <button class="btn btn-sm btn-danger mt-2 d-none" id="removeDocOficio">
+                            <i class="fas fa-times me-1"></i>Remover archivo
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-3 mt-5">
+                <button type="reset" class="btn btn-custom-secondary">
+                    <i class="fas fa-eraser me-2"></i>Limpiar
+                </button>
+                <button type="submit" class="btn btn-custom-primary">
+                    <i class="fas fa-save me-2"></i>Guardar Oficio
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 
            <!-- Sección Seguimiento -->
         <div id="seguimiento-content" class="content-section" style="display: none;">
