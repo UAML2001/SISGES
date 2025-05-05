@@ -37,6 +37,8 @@ const database = getDatabase(app);
 const storage = getStorage(app);
 const analytics = getAnalytics(app);
 
+let tipoActual = ''; // ← Agregar esta línea
+
 let solicitudesSeguimiento = [];
 let solicitudesValidadas = [];
 let solicitudesVerificacion = [];
@@ -51,11 +53,15 @@ const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const MAX_INITIAL_FILE_SIZE_MB = 10;
 const MAX_INITIAL_FILE_SIZE_BYTES = MAX_INITIAL_FILE_SIZE_MB * 1024 * 1024;
 // Actualizar constantes
-const ALLOWED_INITIAL_EXTENSIONS = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
+const ALLOWED_INITIAL_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
 const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
+
+const MAX_ACUERDO_SIZE_MB = 10;
+const MAX_OFICIO_SIZE_MB = 10;
 
 const navLinks = document.querySelectorAll('.nav-link');
 const contentSections = document.querySelectorAll('.content-section');
+
 
 let suppressFileInputEvents = false;
 
@@ -135,11 +141,17 @@ async function generarFolio(tipo = 'solicitud') {
         'solicitud': 'ultimoFolio'
     };
     
+    const prefijos = {
+        'acuerdo': 'AG-',
+        'oficio': 'OF-',
+        'solicitud': 'SO-'
+    };
+    
     const folioRef = ref(database, `configuracion/${tipoFolio[tipo]}`);
     const snapshot = await get(folioRef);
     const nuevoFolio = (snapshot.val() || 0) + 1;
     await set(folioRef, nuevoFolio);
-    return nuevoFolio.toString().padStart(4, '0');
+    return `${prefijos[tipo]}${nuevoFolio.toString().padStart(4, '0')}`;
 }
 
 // Función para cargar solicitudes validadas
@@ -393,15 +405,16 @@ function mostrarPaginaSeguimiento(data) {
 async function cargarSecretarias() {
     const secretariasRef = ref(database, 'dependencias');
     const snapshot = await get(secretariasRef);
-    const select = document.getElementById('secretaria');
+    const selects = ['secretaria', 'secretariaAcuerdo', 'secretariaOficio'];
     
     // Obtener datos del usuario
     const userRol = parseInt(getCookie('rol')) || 0;
     const userDependencias = getCookie('dependencia') ? 
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
     
-    // Limpiar select
-    select.innerHTML = '<option value="" disabled selected>Seleccione una secretaría</option>';
+        selects.forEach(selectId => {
+            const select = document.getElementById(selectId);
+            select.innerHTML = '<option value="" disabled selected>Seleccione una secretaría</option>';
 
     snapshot.forEach((childSnapshot) => {
         const dependencia = childSnapshot.val();
@@ -423,6 +436,7 @@ async function cargarSecretarias() {
         option.textContent = nombre;
         select.appendChild(option);
     });
+});
 }
 
 window.mostrarEvidenciaModal = function(folio, tipoDocumento, urlDocumento, secretaria = '') {
@@ -594,78 +608,128 @@ let accionActual = '';
 
 window.cambiarEstado = async function(folio, nuevoEstado) {
     try {
-        const solicitudRef = ref(database, `solicitudes/${folio}`);
-        const snapshot = await get(solicitudRef);
-        const datos = snapshot.val();
+        const paths = ['solicitudes', 'acuerdos', 'oficios'];
+        let docRef = null; // Inicializar como null
+        let tipoDocumento = 'Documento';
 
-        // Eliminar evidencia si se rechaza
-        if(nuevoEstado === 'pendiente' && datos.evidencias) {
-            try {
-                const url = new URL(datos.evidencias);
-                const path = decodeURIComponent(url.pathname.split('/o/')[1]);
-                const evidenciaRef = storageRef(storage, path);
-                await deleteObject(evidenciaRef);
-            } catch(error) {
-                console.error("Error eliminando evidencia:", error);
-                throw new Error("Error al eliminar archivo: " + error.message);
+        // Buscar documento en todas las colecciones
+        for (const path of paths) {
+            const refPath = ref(database, `${path}/${folio}`);
+            const snapshot = await get(refPath);
+            if (snapshot.exists()) {
+                docRef = refPath; // Asignar correctamente la referencia
+                tipoDocumento = path === 'solicitudes' ? 'Solicitud' 
+                             : path === 'acuerdos' ? 'Acuerdo' 
+                             : 'Oficio';
+                break;
             }
         }
 
-        // Preparar actualización segura
+        if (!docRef) {
+            throw new Error('Documento no encontrado');
+        }
+
+        const snapshot = await get(docRef);
+        const datos = snapshot.val();
+
+        // Manejo seguro de evidencias
+        if (nuevoEstado === 'pendiente' && datos.evidencias) {
+            try {
+                const urlObj = new URL(datos.evidencias);
+                const pathStorage = decodeURIComponent(urlObj.pathname)
+                                  .split('/o/')[1]
+                                  .split('?')[0];
+                
+                const evidenciaRef = storageRef(storage, pathStorage);
+                await deleteObject(evidenciaRef);
+            } catch (error) {
+                console.error("Error eliminando evidencia:", error);
+                if (error.code !== 'storage/object-not-found') {
+                    throw new Error('Error al eliminar archivo adjunto');
+                }
+            }
+        }
+
+        // Preparar actualización
         const actualizacion = {
             estado: nuevoEstado,
-            evidencias: nuevoEstado === 'pendiente' ? null : datos.evidencias || null,
-            fechaAtencion: nuevoEstado === 'atendida' ? new Date().toISOString() : null
+            ultimaActualizacion: new Date().toISOString(),
+            evidencias: nuevoEstado === 'pendiente' ? null : datos.evidencias || null
         };
 
-        await update(solicitudRef, actualizacion);
-
-        // Actualizar vistas
-        cargarSeguimiento();
-        cargarVerificacion();
-        cargarValidadas();
-        actualizarEstadisticas(solicitudesSeguimiento);
-        
-        // Mensajes personalizados
-        let mensaje = '';
-        switch(nuevoEstado) {
-            case 'atendida':
-                mensaje = 'aprobada';
-                break;
-            case 'en_proceso':
-                mensaje = 'marcada en proceso';
-                break;
-            case 'pendiente':
-                mensaje = 'rechazada';
-                break;
-            default:
-                mensaje = 'actualizada';
+        // Agregar fechas específicas
+        if (nuevoEstado === 'atendida') {
+            actualizacion.fechaAtencion = new Date().toISOString();
+        } else if (nuevoEstado === 'verificacion') {
+            actualizacion.fechaVerificacion = new Date().toISOString();
         }
-        mostrarExito(`Solicitud ${mensaje} correctamente`);
+
+        // Actualizar documento
+        await update(docRef, actualizacion);
+
+        // Actualizar vistas relacionadas
+        await Promise.all([
+            cargarSeguimiento(),
+            cargarVerificacion(),
+            cargarValidadas()
+        ]);
+
+        // Mensajes de éxito
+        const mensajes = {
+            'en_proceso': `${tipoDocumento} marcada en proceso`,
+            'verificacion': `${tipoDocumento} enviada a verificación`,
+            'atendida': `${tipoDocumento} aprobada exitosamente`,
+            'pendiente': `${tipoDocumento} rechazada y reiniciada`
+        };
+
+        if (mensajes[nuevoEstado]) {
+            mostrarExito(mensajes[nuevoEstado]);
+        }
+
+    } catch (error) {
+        console.error("Error completo:", error);
+        const mensajeError = error.code === 'storage/object-not-found' 
+                           ? 'El archivo adjunto no fue encontrado'
+                           : error.message.startsWith('Error al eliminar') 
+                           ? error.message 
+                           : 'Error al actualizar el documento';
         
-    } catch(error) {
-        console.error("Error:", error);
-        mostrarError(`Error al procesar: ${error.message}`);
+        mostrarError(mensajeError);
+        throw error;
     } finally {
         folioActual = '';
         accionActual = '';
     }
 };
 
-// Configurar eventos para los modales
-document.getElementById('confirmarAprobar').addEventListener('click', () => {
-    if(folioActual && accionActual === 'aprobar') {
-        cambiarEstado(folioActual, 'atendida');
+document.getElementById('confirmarAprobar').addEventListener('click', async () => {
+    if (folioActual) {
+        await cambiarEstado(folioActual, 'atendida');
         bootstrap.Modal.getInstance('#confirmarAprobarModal').hide();
     }
 });
 
-document.getElementById('confirmarRechazar').addEventListener('click', () => {
-    if(folioActual && accionActual === 'rechazar') {
-        cambiarEstado(folioActual, 'pendiente');
+document.getElementById('confirmarRechazar').addEventListener('click', async () => {
+    if (folioActual) {
+        await cambiarEstado(folioActual, 'pendiente');
         bootstrap.Modal.getInstance('#confirmarRechazarModal').hide();
     }
 });
+
+// // Configurar eventos para los modales
+// document.getElementById('confirmarAprobar').addEventListener('click', () => {
+//     if(folioActual && accionActual === 'aprobar') {
+//         cambiarEstado(folioActual, 'atendida');
+//         bootstrap.Modal.getInstance('#confirmarAprobarModal').hide();
+//     }
+// });
+
+// document.getElementById('confirmarRechazar').addEventListener('click', () => {
+//     if(folioActual && accionActual === 'rechazar') {
+//         cambiarEstado(folioActual, 'pendiente');
+//         bootstrap.Modal.getInstance('#confirmarRechazarModal').hide();
+//     }
+// });
 
 // Modifica el event listener del input de archivo
 document.getElementById('evidenciaFile').addEventListener('change', function(e) {
@@ -739,6 +803,8 @@ fileDropArea.addEventListener('drop', (e) => {
 window.subirEvidenciaYCambiarEstado = async function() {
     const fileInput = document.getElementById('evidenciaFile');
     const file = fileInput.files[0];
+    const tipo = folioActual.startsWith('AG-') ? 'acuerdos' : 
+                folioActual.startsWith('OF-') ? 'oficios' : 'solicitudes';
     
     if (!file) {
         mostrarError("Debes seleccionar un archivo primero");
@@ -772,16 +838,16 @@ window.subirEvidenciaYCambiarEstado = async function() {
 
         const storagePath = `${folioActual}/Evidencia/${file.name}`;
         const refArchivo = storageRef(storage, storagePath);
-        await uploadBytes(refArchivo, file, metadata);
+        await uploadBytes(refArchivo, file);
         const urlDescarga = await getDownloadURL(refArchivo);
 
-        await update(ref(database, `solicitudes/${folioActual}`), {
+        await update(ref(database, `${tipo}/${folioActual}`), {
             estado: 'verificacion',
-            fechaVerificacion: new Date().toISOString(),
-            evidencias: urlDescarga
+            evidencias: urlDescarga,
+            fechaVerificacion: new Date().toISOString()
         });
 
-        // 4. Limpiar y cerrar
+        // Actualizar UI
         fileInput.value = '';
         bootstrap.Modal.getInstance('#confirmarAtendidaModal').hide();
         mostrarExito("Evidencia subida correctamente");
@@ -811,75 +877,99 @@ function mostrarExito(mensaje) {
 }
 
 function cargarVerificacion() {
-    const solicitudesRef = query(ref(database, 'solicitudes'), orderByChild('estado'), equalTo('verificacion'));
-    
-    onValue(solicitudesRef, (snapshot) => {
-        const solicitudes = [];
-        snapshot.forEach((childSnapshot) => {
-            const solicitud = childSnapshot.val();
-            solicitud.key = childSnapshot.key;
-            solicitudes.push(solicitud);
+    const paths = ['solicitudes', 'acuerdos', 'oficios'];
+    solicitudesVerificacion = [];
+
+    paths.forEach(path => {
+        const refPath = query(
+            ref(database, path),
+            orderByChild('estado'),
+            equalTo('verificacion')
+        );
+        
+        onValue(refPath, (snapshot) => {
+            // Eliminar datos antiguos del mismo tipo
+            solicitudesVerificacion = solicitudesVerificacion.filter(s => s.tipo !== path);
+            
+            snapshot.forEach(childSnapshot => {
+                const solicitud = childSnapshot.val();
+                solicitud.key = childSnapshot.key;
+                solicitud.tipo = path;
+                solicitud.folio = solicitud.folio || childSnapshot.key;
+                solicitudesVerificacion.push(solicitud);
+            });
+            
+            mostrarPaginaVerificacion(solicitudesVerificacion);
         });
-        mostrarPaginaVerificacion(solicitudes);
     });
 }
 
 function mostrarPaginaVerificacion(data) {
     const tabla = document.getElementById('lista-verificacion');
-    tabla.innerHTML = data.length > 0 ? '' : `
-        <tr>
-            <td colspan="6" class="text-center py-4">
-                <i class="fas fa-info-circle me-2"></i>
-                No hay solicitudes pendientes de verificación
-            </td>
-        </tr>`;
+    tabla.innerHTML = '';
 
     data.forEach(solicitud => {
+        // Corregir nombres de tipo
+        const tipoDocumento = solicitud.tipo === 'solicitudes' ? 'Solicitud' :
+                            solicitud.tipo === 'acuerdos' ? 'Acuerdo de Gabinete' : 
+                            'Oficio';
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${solicitud.key}</td>
+            <td>${solicitud.folio}</td>
             <td>${solicitud.asunto}</td>
+            <td>${tipoDocumento}</td>
             <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
             <td>${new Date(solicitud.fechaVerificacion).toLocaleDateString()}</td>
-            <td>
-                <button class="btn btn-sm btn-documento-inicial" 
-                    onclick="mostrarEvidenciaModal(
-    '${solicitud.key}',
-    'Documento Inicial',
-    '${solicitud.documentoInicial}', // URL del documento
-    '${dependenciasMap[solicitud.dependencia]}' // Secretaría
-)">
-                    <i class="fas fa-file-alt"></i>  Documento Inicial
-                </button>
-                <button class="btn btn-sm btn-evidencia" 
-                  onclick="mostrarEvidenciaModal(
-    '${solicitud.key}',
-    'Evidencia',
-    '${solicitud.evidencias}', // URL de la evidencia
-    '${dependenciasMap[solicitud.dependencia]}' // Secretaría
-)">
-                    <i class="fas fa-eye"></i>  Ver Evidencia
-                </button>
+            <td class="documentos-cell">
+                <div class="documentos-container">
+                    ${solicitud.documentoInicial ? `
+                    <button class="btn btn-sm btn-documento-inicial" 
+                        onclick="mostrarEvidenciaModal(
+                            '${solicitud.folio}',
+                            'Documento Inicial',
+                            '${solicitud.documentoInicial}',
+                            '${tipoDocumento}'
+                        )">
+                        <i class="fas fa-file-alt me-1"></i> Inicial
+                    </button>
+                    ` : ''}
+                    
+                    ${solicitud.evidencias ? `
+                    <button class="btn btn-sm btn-evidencia" 
+                        onclick="mostrarEvidenciaModal(
+                            '${solicitud.folio}',
+                            'Evidencia',
+                            '${solicitud.evidencias}',
+                            '${tipoDocumento}'
+                        )">
+                        <i class="fas fa-file-check me-1"></i> Evidencia
+                    </button>
+                    ` : ''}
+                </div>
             </td>
             <td>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-sm btn-aprobar" 
-    onclick="mostrarConfirmacion('${solicitud.key}', 'aprobar')">
-    <i class="fas fa-check"></i> Aprobar
-</button>
-<button class="btn btn-sm btn-rechazar" 
-    onclick="mostrarConfirmacion('${solicitud.key}', 'rechazar')">
-    <i class="fas fa-times"></i> Rechazar
-</button>
-                </div>
-            </td>`;
+                  <div class="d-flex gap-2">
+            <button class="btn btn-success btn-sm btn-aprobar" 
+                onclick="mostrarConfirmacion('${solicitud.folio}', 'aprobar', '${solicitud.tipo}')">
+                <i class="fas fa-check me-1"></i> Aprobar
+            </button>
+            
+            <button class="btn btn-danger btn-sm btn-rechazar" 
+                onclick="mostrarConfirmacion('${solicitud.folio}', 'rechazar', '${solicitud.tipo}')">
+                <i class="fas fa-times me-1"></i> Rechazar
+            </button>
+        </div>
+            </td>
+        `;
         tabla.appendChild(tr);
     });
 }
 
-window.mostrarConfirmacion = function(folio, accion) {
+window.mostrarConfirmacion = function(folio, accion, tipo) {
     folioActual = folio;
     accionActual = accion;
+    tipoActual = tipo;
     
     const modalId = accion === 'aprobar' 
         ? '#confirmarAprobarModal' 
@@ -902,7 +992,7 @@ document.getElementById('documentoInicial').addEventListener('change', function(
         if(!ALLOWED_INITIAL_EXTENSIONS.includes(extension)) {
             mostrarError(`Formato no permitido: .${extension}`);
             this.value = '';
-            fileInfo.textContent = 'Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 5MB)';
+            fileInfo.textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
             removeBtn.classList.add('d-none');
             return;
         }
@@ -910,7 +1000,7 @@ document.getElementById('documentoInicial').addEventListener('change', function(
         if(file.size > MAX_INITIAL_FILE_SIZE_BYTES) {
             mostrarError(`El archivo excede el tamaño máximo de ${MAX_INITIAL_FILE_SIZE_MB}MB`);
             this.value = '';
-            fileInfo.textContent = 'Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 5MB)';
+            fileInfo.textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
             removeBtn.classList.add('d-none');
             return;
         }
@@ -922,7 +1012,7 @@ document.getElementById('documentoInicial').addEventListener('change', function(
             </span>
             <br><small>${(file.size / 1024 / 1024).toFixed(2)} MB</small>`;
     } else {
-        fileInfo.textContent = 'Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 5MB)';
+        fileInfo.textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
         removeBtn.classList.add('d-none');
     }
 });
@@ -950,6 +1040,12 @@ function crearFilaSolicitud(solicitud) {
     tr.dataset.estado = solicitud.estado;
     const estadoActual = solicitud.estado;
 
+    const nombresTipos = {
+        'acuerdo': 'Acuerdo de Gabinete',
+        'oficio': 'Oficio',
+        'solicitud': 'Solicitud'
+    };
+
     // Modificar la línea donde se obtiene el estado
     const estado = estados[solicitud.estado] || { texto: 'Desconocido', color: '#666' } 
     const dependenciaNombre = dependenciasMap[solicitud.dependencia] || 'Desconocida';
@@ -957,34 +1053,30 @@ function crearFilaSolicitud(solicitud) {
     const enVerificacion = estadoActual === 'verificacion';
 
     tr.innerHTML = `
-        <td>${solicitud.key}</td>
-        <td>${solicitud.tiposolicitud}</td>
+        <td>${solicitud.folio}</td>
+        <td>${nombresTipos[solicitud.tipo] || solicitud.tipo}</td>
         <td>${solicitud.asunto}</td>
-        <td>${dependenciaNombre}</td>
+        <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
         <td><span class="status-badge" style="background:${estado.color}">${estado.texto}</span></td>
         <td>${solicitud.estado === 'atendida' ? 'Atendida' : calcularTiempoRestante(solicitud.fechaLimite)}</td>
         <td>
             <div class="d-flex gap-2">
-             ${solicitud.documentoInicial ? `
-                <button class="btn btn-sm btn-documento" 
-                        onclick="mostrarDocumentoInicial(
-                            '${solicitud.key}', 
-                            '${solicitud.nombreDocumento}', 
-                            '${solicitud.documentoInicial}'
-                        )">
-                    <i class="fas fa-file-alt me-1"></i>Ver Documento
-                </button>
+                ${solicitud.documentoInicial ? `
+                    <button class="btn btn-sm btn-documento" 
+                            onclick="mostrarDocumentoInicial('${solicitud.folio}', '${solicitud.nombreDocumento}', '${solicitud.documentoInicial}')">
+                        <i class="fas fa-file-alt me-1"></i>Ver Documento
+                    </button>
                 ` : ''}
                 <button class="btn btn-sm btn-proceso" 
-                    ${enVerificacion ? 'disabled' : ''}
-                    onclick="mostrarConfirmacionProceso('${solicitud.key}')">
-                    <i class="fas fa-sync-alt"></i> Marcar "En Proceso"
+                    ${solicitud.estado === 'verificacion' ? 'disabled' : ''}
+                    onclick="mostrarConfirmacionProceso('${solicitud.folio}')">
+                    <i class="fas fa-sync-alt"></i> ${solicitud.estado === 'en_proceso' ? 'En Proceso' : 'Marcar Proceso'}
                 </button>
                 
                 <button class="btn btn-sm btn-verificacion" 
-                    ${enVerificacion ? 'disabled' : ''}
-                    onclick="mostrarConfirmacionAtendida('${solicitud.key}')">
-                    <i class="fas fa-check-circle"></i> Mandar a Verificación
+                    ${solicitud.estado === 'verificacion' ? 'disabled' : ''}
+                    onclick="mostrarConfirmacionAtendida('${solicitud.folio}')">
+                    <i class="fas fa-check-circle"></i> ${solicitud.estado === 'verificacion' ? 'En Verificación' : 'Mandar a Verificación'}
                 </button>
             </div>
         </td>
@@ -1145,46 +1237,79 @@ document.addEventListener('DOMContentLoaded', actualizarEstadosAutomaticos);
 
 function cargarSeguimiento() {
     const tabla = document.getElementById('lista-seguimiento');
-    const solicitudesRef = query(ref(database, 'solicitudes'), orderByChild('fechaCreacion'));
-    
-    onValue(solicitudesRef, (snapshot) => {
-        const solicitudes = [];
-        const foliosUnicos = new Set();
-        tabla.innerHTML = '';
-        
-        // Obtener datos del usuario
-        solicitudesSeguimiento = [];
-        const userRol = parseInt(getCookie('rol')) || 0;
-        const userDependencias = getCookie('dependencia') ? 
-            decodeURIComponent(getCookie('dependencia')).split(',') : [];
+    const paths = ['solicitudes', 'acuerdos', 'oficios'];
+    const userRol = parseInt(getCookie('rol')) || 0;
+    const userDependencias = getCookie('dependencia') ? 
+        decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
+    // Limpiar datos anteriores
+    solicitudesSeguimiento = [];
+    tabla.innerHTML = '';
+
+    // Cargar datos de todas las rutas
+    paths.forEach(path => {
+        const solicitudesRef = query(
+            ref(database, path),
+            orderByChild('fechaCreacion')
+        );
+        
+        onValue(solicitudesRef, (snapshot) => {
+            // Procesar todo el snapshot de una vez
+            const nuevosDatos = [];
+            
             snapshot.forEach((childSnapshot) => {
                 const solicitud = childSnapshot.val();
                 solicitud.key = childSnapshot.key;
-            
-            // Filtrar por dependencia si no es admin
-            if (userRol !== 3 && !userDependencias.includes(solicitud.dependencia)) {
-                return;  
-            }
+                solicitud.tipo = path === 'solicitudes' ? 
+                    solicitud.tiposolicitud : 
+                    path.slice(0, -1);
 
-            if(!foliosUnicos.has(solicitud.key)) {
+                // Filtrar por dependencia si no es admin
+                if (userRol !== 3 && !userDependencias.includes(solicitud.dependencia)) return;
+
+                // Normalizar estructura
+                const solicitudNormalizada = {
+                    ...solicitud,
+                    tipo: path === 'solicitudes' ? 'solicitud' : path.slice(0, -1),
+                    documentoInicial: solicitud.documentoInicial || '',
+                    nombreDocumento: solicitud.nombreDocumento || 'Sin documento',
+                    evidencias: solicitud.evidencias || null,
+                    // Asegurar mismos campos que solicitudes
+                    fechaLimite: solicitud.fechaLimite || calcularFechaLimite(solicitud.fechaCreacion),
+                    estado: solicitud.estado || 'pendiente'
+                };
+                nuevosDatos.push(solicitudNormalizada);
+            });
+
+            // Eliminar datos antiguos de este path y agregar nuevos
+            solicitudesSeguimiento = solicitudesSeguimiento.filter(s => s.tipo !== path);
+            solicitudesSeguimiento.push(...nuevosDatos);
+
+            // Ordenar y actualizar UI una sola vez por carga
+            solicitudesSeguimiento.sort((a, b) => 
+                new Date(b.fechaCreacion) - new Date(a.fechaCreacion)
+            );
+            
+            actualizarTablaSeguimiento();
+        });
+    });
+
+    function actualizarTablaSeguimiento() {
+        tabla.innerHTML = '';
+        const foliosUnicos = new Set();
+
+        solicitudesSeguimiento.forEach(solicitud => {
+            if (!foliosUnicos.has(solicitud.key)) {
                 foliosUnicos.add(solicitud.key);
-                solicitudes.push(solicitud);
                 tabla.appendChild(crearFilaSolicitud(solicitud));
             }
-
-            solicitudesSeguimiento.push(solicitud);
         });
-        
-        solicitudes.sort((a, b) => 
-            new Date(b.fechaCreacion) - new Date(a.fechaCreacion)
-        );
-        
+
         aplicarFiltrosSeguimiento();
         actualizarEstadisticas(solicitudesSeguimiento);
         actualizarGrafica(solicitudesSeguimiento);
         iniciarActualizacionTiempo();
-    });
+    }
 }
 
 // Manejo del formulario corregido
@@ -1282,7 +1407,7 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
         
         // Restaurar UI manualmente
         document.getElementById('docInicialInfo').textContent = 
-            'Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 5MB)';
+            'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
         document.getElementById('removeDocInicial').classList.add('d-none');
         suppressFileInputEvents = false;
         
@@ -1761,37 +1886,65 @@ window.confirmarCambioEstado = function(nuevoEstado) {
 // Configurar formulario Acuerdo
 document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const form = e.target;
     
     try {
-        // Validar campos
-        const camposRequeridos = ['asuntoAcuerdo', 'descripcionAcuerdo', 
-                                'fechaLimiteAcuerdo', 'secretariaAcuerdo'];
-        if (!validarCampos(camposRequeridos)) return;
-
-        // Generar folio
-        const folio = await generarFolio('acuerdo');
-        
-        // Manejar documento
+        // Obtener elementos del DOM
         const docInput = document.getElementById('documentoAcuerdo');
         const docFile = docInput.files[0];
-        if (!validarDocumento(docFile, 'acuerdo')) return;
+        const prefix = 'Acuerdo';
+        
+        // Validar campos requeridos
+        const camposRequeridos = [
+            'asuntoAcuerdo', 
+            'descripcionAcuerdo', 
+            'secretariaAcuerdo'
+        ];
+        
+        let valido = true;
+        camposRequeridos.forEach(id => {
+            const campo = document.getElementById(id);
+            if (!campo || !campo.value.trim()) {
+                valido = false;
+                campo.classList.add('is-invalid');
+                mostrarError(`El campo ${campo.labels[0]?.textContent || 'requerido'} es obligatorio`);
+            }
+        });
 
-        // Subir documento
+        // Validar archivo
+        if (!docFile) {
+            mostrarError("Debes subir un documento para el Acuerdo");
+            valido = false;
+        } else {
+            const extension = docFile.name.split('.').pop().toLowerCase();
+            if (!ALLOWED_INITIAL_EXTENSIONS.includes(extension)) {
+                mostrarError(`Formato no permitido para Acuerdo: .${extension}`);
+                valido = false;
+            }
+            
+            if (docFile.size > MAX_INITIAL_FILE_SIZE_BYTES) {
+                mostrarError(`El archivo excede el tamaño máximo de ${MAX_INITIAL_FILE_SIZE_MB}MB para Acuerdos`);
+                valido = false;
+            }
+        }
+
+        if (!valido) return;
+
+        // Generar folio y subir documento
+        const folio = await generarFolio('acuerdo');
         const storagePath = `${folio}/Documento Acuerdo/${docFile.name}`;
         const docRef = storageRef(storage, storagePath);
         await uploadBytes(docRef, docFile);
         const docUrl = await getDownloadURL(docRef);
 
-        // Crear objeto acuerdo
+        // Crear objeto Acuerdo
         const nuevoAcuerdo = {
             tipo: 'acuerdo',
             fechaCreacion: new Date().toISOString(),
             asunto: document.getElementById('asuntoAcuerdo').value,
             descripcion: document.getElementById('descripcionAcuerdo').value,
-            fechaLimite: document.getElementById('fechaLimiteAcuerdo').value,
+            fechaLimite: document.getElementById('fechaLimiteAcuerdo').value || calcularFechaLimite(new Date().toISOString()),
             dependencia: document.getElementById('secretariaAcuerdo').value,
-            comentarios: document.getElementById('comentariosAcuerdo').value,
+            comentarios: document.getElementById('comentariosAcuerdo').value || '',
             documentoInicial: docUrl,
             nombreDocumento: docFile.name,
             estado: 'pendiente',
@@ -1806,37 +1959,26 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
         mostrarExito("Acuerdo creado exitosamente!");
 
     } catch (error) {
-        console.error("Error:", error);
-        mostrarError(`Error al crear acuerdo: ${error.message}`);
+        mostrarError(`Error al crear el Acuerdo: ${error.message}`);
+        console.error("Detalle del error:", error);
     }
 });
 
 // Configurar formulario Oficio (similar a Acuerdo)
 document.getElementById('formNuevoOficio').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const form = e.target;
     
     try {
-        // Validar campos
-        const camposRequeridos = ['asuntoOficio', 'descripcionOficio', 
-                                'fechaLimiteOficio', 'secretariaOficio'];
-        if (!validarCampos(camposRequeridos)) return;
-
-        // Generar folio
         const folio = await generarFolio('oficio');
+        const docFile = document.getElementById('documentoOficio').files[0];
         
-        // Manejar documento
-        const docInput = document.getElementById('documentoOficio');
-        const docFile = docInput.files[0];
-        if (!validarDocumento(docFile, 'oficio')) return;
+       if (!validarDocumento(docFile, true)) return;
 
-        // Subir documento
-        const storagePath = `${folio}/Documento Oficio/${docFile.name}`;
+        const storagePath = `${folio}/Documento Inicial Oficio/${docFile.name}`;
         const docRef = storageRef(storage, storagePath);
         await uploadBytes(docRef, docFile);
         const docUrl = await getDownloadURL(docRef);
 
-        // Crear objeto oficio
         const nuevoOficio = {
             tipo: 'oficio',
             fechaCreacion: new Date().toISOString(),
@@ -1851,15 +1993,11 @@ document.getElementById('formNuevoOficio').addEventListener('submit', async (e) 
             folio: folio
         };
 
-        // Guardar en Firebase
         await set(ref(database, `oficios/${folio}`), nuevoOficio);
-        
-        // Limpiar formulario
         limpiarFormulario('oficio');
         mostrarExito("Oficio creado exitosamente!");
 
     } catch (error) {
-        console.error("Error:", error);
         mostrarError(`Error al crear oficio: ${error.message}`);
     }
 });
@@ -1877,22 +2015,23 @@ function validarCampos(campos) {
     return valido;
 }
 
-function validarDocumento(file, tipo) {
+function validarDocumento(file, tipoDocumento) {
+    const ALLOWED_EXT = ['pdf','jpg', 'jpeg', 'png', 'zip', 'rar'];
+    const MAX_SIZE_MB = 10;
+    
     if (!file) {
-        mostrarError("Debes subir un documento inicial");
+        mostrarError(`Debes subir un documento para ${tipoDocumento}`);
         return false;
     }
 
     const extension = file.name.split('.').pop().toLowerCase();
-    const permitidas = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
-    
-    if (!permitidas.includes(extension)) {
-        mostrarError(`Formato no permitido: .${extension}`);
+    if (!ALLOWED_EXT.includes(extension)) {
+        mostrarError(`Formato no permitido para ${tipoDocumento}: .${extension}`);
         return false;
     }
 
-    if (file.size > 10 * 1024 * 1024) { // 10MB
-        mostrarError("El archivo excede el tamaño máximo de 10MB");
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+        mostrarError(`El archivo excede el tamaño máximo de ${MAX_SIZE_MB}MB`);
         return false;
     }
 
@@ -1901,11 +2040,22 @@ function validarDocumento(file, tipo) {
 
 function limpiarFormulario(tipo) {
     const prefix = tipo.charAt(0).toUpperCase() + tipo.slice(1);
-    document.getElementById(`formNuevo${prefix}`).reset();
-    document.getElementById(`documento${prefix}`).value = '';
-    document.getElementById(`doc${prefix}Info`).textContent = 
-        'Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 10MB)';
-    document.getElementById(`removeDoc${prefix}`).classList.add('d-none');
+    const form = document.getElementById(`formNuevo${prefix}`);
+    
+    // Resetear campos
+    form.reset();
+    
+    // Limpiar file input y UI
+    const fileInput = document.getElementById(`documento${prefix}`);
+    const fileInfo = document.getElementById(`doc${prefix}Info`);
+    const removeBtn = document.getElementById(`removeDoc${prefix}`);
+    
+    fileInput.value = '';
+    fileInfo.textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
+    removeBtn.classList.add('d-none');
+    
+    // Restablecer fecha
+    document.getElementById(`fecha${prefix}`).value = obtenerFechaHoy();
 }
 
 // Configurar eventos para los documentos
@@ -1924,7 +2074,7 @@ function limpiarFormulario(tipo) {
                 <br><small>${(file.size / 1024 / 1024).toFixed(2)} MB</small>`;
             removeBtn.classList.remove('d-none');
         } else {
-            docInfo.textContent = 'Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 10MB)';
+            docInfo.textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
             removeBtn.classList.add('d-none');
         }
     });
@@ -1948,3 +2098,46 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('navOficio').style.display = 'block';
     }
 });
+
+function validarFormulario(tipo) {
+    const prefix = tipo.charAt(0).toUpperCase() + tipo.slice(1);
+    const camposRequeridos = {
+        'acuerdo': ['asuntoAcuerdo', 'descripcionAcuerdo', 'secretariaAcuerdo', 'documentoAcuerdo'],
+        'oficio': ['asuntoOficio', 'descripcionOficio', 'secretariaOficio', 'documentoOficio']
+    };
+
+    // Validar campos requeridos
+    let valido = true;
+    camposRequeridos[tipo].forEach(id => {
+        const campo = document.getElementById(id);
+        if (!campo || !campo.value.trim()) {
+            valido = false;
+            campo.classList.add('is-invalid');
+            mostrarError(`El campo ${campo.previousElementSibling?.innerText || 'requerido'} es obligatorio`);
+        }
+    });
+
+    // Validar archivo
+    const fileInput = document.getElementById(`documento${prefix}`);
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        mostrarError(`Debe adjuntar un documento para ${prefix}`);
+        valido = false;
+    } else {
+        const extension = file.name.split('.').pop().toLowerCase();
+        const allowedExtensions = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
+        
+        if (!allowedExtensions.includes(extension)) {
+            mostrarError(`Formato no permitido para ${prefix}: .${extension}`);
+            valido = false;
+        }
+        
+        if (file.size > 10 * 1024 * 1024) { // 10MB
+            mostrarError(`El archivo excede el tamaño máximo de 10MB para ${prefix}`);
+            valido = false;
+        }
+    }
+
+    return valido;
+}

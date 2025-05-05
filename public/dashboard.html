@@ -37,22 +37,22 @@
                         Nueva Solicitud
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="#seguimiento" data-content="seguimiento">
-                        <i class="fas fa-search"></i>
-                        Seguimiento
-                    </a>
-                </li>
                 <li class="nav-item" id="navAcuerdo">
                     <a class="nav-link" href="#acuerdo" data-content="acuerdo">
                         <i class="fas fa-handshake"></i>
-                        Nuevo Acuerdo
+                        Nuevo Acuerdo de Gabinete
                     </a>
                 </li>
                 <li class="nav-item" id="navOficio">
                     <a class="nav-link" href="#oficio" data-content="oficio">
                         <i class="fas fa-file-contract"></i>
                         Nuevo Oficio
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#seguimiento" data-content="seguimiento">
+                        <i class="fas fa-search"></i>
+                        Seguimiento
                     </a>
                 </li>
                 <li class="nav-item">
@@ -162,6 +162,7 @@
                 <tr>
                     <th>Folio</th>
                     <th>Asunto</th>
+                    <th>Tipo</th>
                     <th>Secretaría</th>
                     <th>Fecha Envío</th>
                     <th>Evidencias</th>
@@ -179,7 +180,7 @@
             <div id="nueva-content" class="content-section" style="display: none;">
                 <h2 class="section-title">
                     <i class="fas fa-plus-circle"></i>
-                    Nueva Solicitud
+                    Agregar Solicitud
                 </h2>
             
                 <div class="form-container">
@@ -266,13 +267,13 @@
                                     <input type="file" 
                                            class="form-control visually-hidden" 
                                            id="documentoInicial" 
-                                           accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.zip,.rar" 
+                                           accept=".pdf,.jpg,.jpeg,.png,.zip,.rar" 
                                            required>
                                     <label for="documentoInicial" class="btn btn-outline-primary mb-2">
                                         <i class="fas fa-file-upload me-2"></i>Seleccionar archivo
                                     </label>
                                     <div class="file-info small text-muted" id="docInicialInfo">
-                                        Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 10MB)
+                                        Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)
                                     </div>
                                     <button class="btn btn-sm btn-danger mt-2 d-none" id="removeDocInicial">
                                         <i class="fas fa-times me-1"></i>Remover archivo
@@ -295,10 +296,11 @@
             </div>
 
 <!-- Sección Nuevo Acuerdo de Gabinete -->
+<!-- Sección Nuevo Acuerdo de Gabinete -->
 <div id="acuerdo-content" class="content-section" style="display: none;">
     <h2 class="section-title">
         <i class="fas fa-handshake"></i>
-        Nuevo Acuerdo de Gabinete
+        Agregar Acuerdo de Gabinete
     </h2>
     <div class="form-container">
         <form id="formNuevoAcuerdo" class="needs-validation" novalidate>
@@ -350,13 +352,13 @@
                         <input type="file" 
                                class="form-control visually-hidden" 
                                id="documentoAcuerdo" 
-                               accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.zip,.rar" 
+                               accept=".pdf,.jpg,.jpeg,.png,.zip,.rar" 
                                required>
                         <label for="documentoAcuerdo" class="btn btn-outline-primary mb-2">
                             <i class="fas fa-file-upload me-2"></i>Seleccionar archivo
                         </label>
                         <div class="file-info small text-muted" id="docAcuerdoInfo">
-                            Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 10MB)
+                            Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)
                         </div>
                         <button class="btn btn-sm btn-danger mt-2 d-none" id="removeDocAcuerdo">
                             <i class="fas fa-times me-1"></i>Remover archivo
@@ -381,7 +383,7 @@
 <div id="oficio-content" class="content-section" style="display: none;">
     <h2 class="section-title">
         <i class="fas fa-file-contract"></i>
-        Nuevo Oficio
+        Agregar Oficio
     </h2>
     <div class="form-container">
         <form id="formNuevoOficio" class="needs-validation" novalidate>
@@ -433,13 +435,13 @@
                         <input type="file" 
                                class="form-control visually-hidden" 
                                id="documentoOficio" 
-                               accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.zip,.rar" 
+                               accept=".pdf,.jpg,.jpeg,.png,.zip,.rar" 
                                required>
                         <label for="documentoOficio" class="btn btn-outline-primary mb-2">
                             <i class="fas fa-file-upload me-2"></i>Seleccionar archivo
                         </label>
                         <div class="file-info small text-muted" id="docOficioInfo">
-                            Formatos permitidos: PDF, DOC, DOCX, JPG, PNG, ZIP, RAR (Máx. 10MB)
+                            Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)
                         </div>
                         <button class="btn btn-sm btn-danger mt-2 d-none" id="removeDocOficio">
                             <i class="fas fa-times me-1"></i>Remover archivo
