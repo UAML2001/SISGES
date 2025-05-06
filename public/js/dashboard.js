@@ -2141,3 +2141,58 @@ function validarFormulario(tipo) {
 
     return valido;
 }
+
+// Configurar validación en tiempo real para Acuerdos
+document.getElementById('documentoAcuerdo').addEventListener('change', function(e) {
+    validarArchivoInput(this, 'Acuerdo');
+});
+
+// Configurar validación en tiempo real para Oficios
+document.getElementById('documentoOficio').addEventListener('change', function(e) {
+    validarArchivoInput(this, 'Oficio');
+});
+
+// Función de validación unificada para archivos
+function validarArchivoInput(input, tipoDocumento) {
+    const file = input.files[0];
+    const fileInfo = input.parentElement.querySelector('.file-info');
+    const removeBtn = input.parentElement.querySelector('.remove-file');
+
+    // Resetear estado
+    input.classList.remove('is-invalid');
+    fileInfo.classList.remove('text-danger');
+    
+    if (!file) {
+        fileInfo.textContent = `Formatos permitidos: ${ALLOWED_INITIAL_EXTENSIONS.join(', ')} (Máx. ${MAX_INITIAL_FILE_SIZE_MB}MB)`;
+        removeBtn?.classList.add('d-none');
+        return;
+    }
+
+    // Validar extensión
+    const extension = file.name.split('.').pop().toLowerCase();
+    if (!ALLOWED_INITIAL_EXTENSIONS.includes(extension)) {
+        input.value = '';
+        fileInfo.textContent = `Formato .${extension} no permitido para ${tipoDocumento}`;
+        fileInfo.classList.add('text-danger');
+        mostrarError(`Formato no permitido para ${tipoDocumento}: .${extension}`);
+        return;
+    }
+
+    // Validar tamaño
+    if (file.size > MAX_INITIAL_FILE_SIZE_BYTES) {
+        input.value = '';
+        fileInfo.textContent = `El archivo excede ${MAX_INITIAL_FILE_SIZE_MB}MB`;
+        fileInfo.classList.add('text-danger');
+        mostrarError(`El archivo es demasiado grande para ${tipoDocumento} (Máx. ${MAX_INITIAL_FILE_SIZE_MB}MB)`);
+        return;
+    }
+
+    // Mostrar información válida
+    fileInfo.innerHTML = `
+        <span class="text-success">
+            <i class="fas fa-file me-2"></i>${file.name}
+            <br><small>${(file.size / 1024 / 1024).toFixed(2)} MB</small>
+        </span>
+    `;
+    removeBtn?.classList.remove('d-none');
+}
