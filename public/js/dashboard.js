@@ -1763,6 +1763,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     const canalSelect = document.getElementById('canal');
     canalSelect.innerHTML = `
         <option value="">Seleccionar...</option>
+        <option>Oficina de Presidencia</option>
         <option>Audiencias ciudadanas</option>
         <option>Audiencias comunitarias</option>
         <option>Audiencias virtuales</option>
