@@ -49,8 +49,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Función de validación de email
-    const validarEmail = (email) => /^[^\s@]+@tizayuca\.gob\.mx$/.test(email);
+    // // Función de validación de email
+    // const validarEmail = (email) => /^[^\s@]+@tizayuca\.gob\.mx$/.test(email);
 
     // Manejador de login
     loginForm.addEventListener('submit', async (e) => {
@@ -65,10 +65,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (!validarEmail(email)) {
-            mostrarNotificacion('✖️ Solo correos oficiales (@tizayuca.gob.mx)', 'error');
-            return;
-        }
+        // if (!validarEmail(email)) {
+        //     mostrarNotificacion('✖️ Solo correos oficiales (@tizayuca.gob.mx)', 'error');
+        //     return;
+        // }
 
         try {
             spinner.classList.remove('d-none');

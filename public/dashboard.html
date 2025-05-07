@@ -34,7 +34,7 @@
                 <li class="nav-item">
                     <a class="nav-link" href="#nueva" data-content="nueva">
                         <i class="fas fa-plus-circle"></i>
-                        Nueva Solicitud
+                        Nueva Solicitud Ciudadana
                     </a>
                 </li>
                 <li class="nav-item" id="navAcuerdo">
@@ -134,9 +134,103 @@
     </div>
 </div>
 
-                <div class="chart-container">
-                    <canvas id="mainChart"></canvas>
-                </div>
+<div class="text-end mb-4">
+    <button class="btn btn-custom-primary" onclick="exportAllCharts()">
+        <i class="fas fa-file-archive me-2"></i>
+        Descargar Todas las Gráficas (ZIP)
+    </button>
+</div>
+
+<div class="charts-container row g-4">
+    <!-- Gráfica Principal Existente -->
+    <div class="col-12 col-lg-8">
+        <div class="chart-card">
+            <div class="chart-header">
+                <h5>Distribución de Solicitudes por Tipo</h5>
+                <button class="btn btn-export" onclick="exportChart('mainChart', 'distribucion-solicitudes')">
+                    <i class="fas fa-download"></i>
+                </button>
+            </div>
+            <div class="chart-container">
+                <canvas id="mainChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nueva Gráfica Circular -->
+    <div class="col-12 col-lg-4">
+        <div class="chart-card">
+            <div class="chart-header">
+                <h5>Distribución por Tipo de Documento</h5>
+                <button class="btn btn-export" onclick="exportChart('typeChart', 'tipos-documentos')">
+                    <i class="fas fa-download"></i>
+                </button>
+            </div>
+            <div class="chart-container">
+                <canvas id="typeChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfica de Tendencias -->
+    <div class="col-12 col-lg-6">
+        <div class="chart-card">
+            <div class="chart-header">
+                <h5>Tendencias Mensuales</h5>
+                <button class="btn btn-export" onclick="exportChart('trendChart', 'tendencias-mensuales')">
+                    <i class="fas fa-download"></i>
+                </button>
+            </div>
+            <div class="chart-container">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfica de Estado -->
+    <div class="col-12 col-lg-6">
+        <div class="chart-card">
+            <div class="chart-header">
+                <h5>Distribución de Estatus</h5>
+                <button class="btn btn-export" onclick="exportChart('statusChart', 'estatus-solicitudes')">
+                    <i class="fas fa-download"></i>
+                </button>
+            </div>
+            <div class="chart-container">
+                <canvas id="statusChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="chart-card">
+            <div class="chart-header">
+                <h5>Eficiencia por Departamento</h5>
+                <button class="btn btn-export" onclick="exportChart('departmentChart', 'eficiencia-departamentos')">
+                    <i class="fas fa-download"></i>
+                </button>
+            </div>
+            <div class="chart-container">
+                <canvas id="departmentChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Gráfica de Tiempos de Respuesta -->
+    <div class="col-12 col-lg-6">
+        <div class="chart-card">
+            <div class="chart-header">
+                <h5>Tiempos de Respuesta Promedio</h5>
+                <button class="btn btn-export" onclick="exportChart('efficiencyChart', 'tiempos-respuesta')">
+                    <i class="fas fa-download"></i>
+                </button>
+            </div>
+            <div class="chart-container">
+                <canvas id="efficiencyChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
             </div>
 
             <!-- Otras secciones -->
@@ -530,6 +624,7 @@
                     <thead>
                         <tr>
                             <th>Folio</th>
+                            <th>Tipo</th>
                             <th>Asunto</th>
                             <th>Secretaría</th>
                             <th>Fecha Atención</th>
@@ -805,7 +900,9 @@
     <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <!-- En el head de tu HTML -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script type="module" src="js/dashboard.js"></script>
     
 </body>

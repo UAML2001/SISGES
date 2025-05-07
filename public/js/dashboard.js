@@ -37,12 +37,22 @@ const database = getDatabase(app);
 const storage = getStorage(app);
 const analytics = getAnalytics(app);
 
+let charts = {
+    mainChart: null,
+    typeChart: null,    // <- Ya existía
+    trendChart: null,   // <- Añadir estos
+    statusChart: null,  // <- 
+    efficiencyChart: null,
+    departmentChart: null
+};
+
+
 let tipoActual = ''; // ← Agregar esta línea
 
 let solicitudesSeguimiento = [];
 let solicitudesValidadas = [];
 let solicitudesVerificacion = [];
-const itemsPerPage = 10;
+const itemsPerPage = 5;
 let currentPageSeguimiento = 1;
 let currentPageValidadas = 1;
 let currentVerificacion = [];
@@ -158,21 +168,18 @@ async function generarFolio(tipo = 'solicitud') {
 function cargarValidadas() {
     const tabla = document.getElementById('lista-validadas');
     const filtroSecretaria = document.getElementById('filtro-secretaria-validadas');
-    const solicitudesRef = ref(database, 'solicitudes');
+    const paths = ['solicitudes', 'acuerdos', 'oficios'];
     
-    // Obtener rol del usuario
     const userRol = parseInt(getCookie('rol')) || 0;
-    
-    // Configurar visibilidad del filtro de secretarías
+    const userDependencias = getCookie('dependencia') ? 
+        decodeURIComponent(getCookie('dependencia')).split(',') : [];
+
+    // Configurar filtro de secretarías
     if (userRol === 3) {
         filtroSecretaria.style.display = 'block';
-        
-        // Limpiar y establecer opciones
         filtroSecretaria.innerHTML = '<option value="">Todas las secretarías</option>';
         
-        // Recorrer el mapa de dependencias ya validado
         Object.entries(dependenciasMap).forEach(([key, nombre]) => {
-            // Validar nombre no vacío
             if (nombre && nombre.trim() !== '') {
                 const option = document.createElement('option');
                 option.value = key;
@@ -180,36 +187,53 @@ function cargarValidadas() {
                 filtroSecretaria.appendChild(option);
             }
         });
-        
     } else {
         filtroSecretaria.style.display = 'none';
     }
 
-    const q = query(
-        solicitudesRef,
-        orderByChild('estado'),
-        equalTo('atendida')
-    );
-    
-    onValue(q, (snapshot) => {
-        solicitudesValidadas = [];
-        const userDependencias = getCookie('dependencia') ? 
-            decodeURIComponent(getCookie('dependencia')).split(',') : [];
+    solicitudesValidadas = [];
 
-        snapshot.forEach((childSnapshot) => {
-            const solicitud = childSnapshot.val();
-            solicitud.key = childSnapshot.key;
+    paths.forEach(path => {
+        let q;
+        if (userRol === 3) {
+            q = query(
+                ref(database, path),
+                orderByChild('estado'),
+                equalTo('atendida')
+            );
+        } else {
+            // Filtrar por cada dependencia del usuario
+            userDependencias.forEach(dependencia => {
+                q = query(
+                    ref(database, path),
+                    orderByChild('dependencia'),
+                    equalTo(dependencia)
+                );
+            });
+        }
+
+        onValue(q, (snapshot) => {
+            snapshot.forEach((childSnapshot) => {
+                const documento = childSnapshot.val();
+                documento.key = childSnapshot.key;
+                documento.tipo = path === 'solicitudes' ? 'Solicitud' 
+                               : path === 'acuerdos' ? 'Acuerdo' 
+                               : 'Oficio';
+
+                // Filtrar por dependencia si no es admin
+                if (userRol !== 3 && !userDependencias.includes(documento.dependencia)) return;
+
+                if (!solicitudesValidadas.find(s => s.key === documento.key)) {
+                    solicitudesValidadas.push(documento);
+                }
+            });
             
-            // Validar datos requeridos
-            if (!solicitud.dependencia || !dependenciasMap[solicitud.dependencia]) return;
+            solicitudesValidadas.sort((a, b) => 
+                new Date(b.fechaAtencion) - new Date(a.fechaAtencion)
+            );
             
-            // Filtrar por dependencia si no es admin
-            if (userRol !== 3 && !userDependencias.includes(solicitud.dependencia)) return;
-            
-            solicitudesValidadas.push(solicitud);
+            aplicarFiltrosValidadas();
         });
-        
-        aplicarFiltrosValidadas();
     });
 }
 
@@ -224,7 +248,7 @@ function mostrarPaginaValidadas(data) {
     if (data.length === 0) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td colspan="5" class="text-center py-4">
+            <td colspan="6" class="text-center py-4">
                 <i class="fas fa-info-circle me-2"></i>
                 No hay solicitudes validadas para mostrar
             </td>
@@ -236,44 +260,40 @@ function mostrarPaginaValidadas(data) {
     
     const items = data.slice(start, end);
     
-    if (items.length === 0) {
-        currentPageValidadas = Math.max(1, currentPageValidadas - 1);
-        return mostrarPaginaValidadas(data);
-    }
-    
-    items.forEach(s => {
+    items.forEach(solicitud => { // Cambiar 'doc' por 'solicitud'
         const tr = document.createElement('tr');
         tr.innerHTML = `
-        <td>${s.key}</td>
-        <td>${s.asunto}</td>
-        <td>${dependenciasMap[s.dependencia] || 'Desconocida'}</td>
-        <td>${new Date(s.fechaAtencion).toLocaleDateString()}</td>
-        <td>
-        ${s.documentoInicial ? `
-            <button class="btn btn-sm btn-documento-inicial" 
-                    onclick="mostrarEvidenciaModal(
-                        '${s.key}',
-                        'Documento Inicial',
-                        '${s.documentoInicial}',
-                        '${dependenciasMap[s.dependencia]}'
-                    )">
-                <i class="fas fa-file-import me-2"></i> Documento Inicial
-            </button>
-            ` : ''}
-            
-            ${s.evidencias ? `
-            <button class="btn btn-sm btn-evidencia" 
-                    onclick="mostrarEvidenciaModal(
-                        '${s.key}',
-                        'Evidencia',
-                        '${s.evidencias}',
-                        '${dependenciasMap[s.dependencia]}'
-                    )">
-                <i class="fas fa-search me-2"></i> Ver Evidencia
-            </button>
-            ` : ''}
-        </td>
-    `;
+            <td>${solicitud.key}</td>
+            <td>${solicitud.tipo}</td>
+            <td>${solicitud.asunto}</td>
+            <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
+            <td>${new Date(solicitud.fechaAtencion).toLocaleDateString()}</td>
+            <td>
+                ${solicitud.documentoInicial ? `
+                <button class="btn btn-sm btn-documento-inicial" 
+                        onclick="mostrarEvidenciaModal(
+                            '${solicitud.key}',
+                            'Documento Inicial',
+                            '${solicitud.documentoInicial}',
+                            '${solicitud.tipo}'
+                        )">
+                    <i class="fas fa-file-import me-2"></i> Documento Inicial
+                </button>
+                ` : ''}
+                
+                ${solicitud.evidencias ? `
+                <button class="btn btn-sm btn-evidencia" 
+                        onclick="mostrarEvidenciaModal(
+                            '${solicitud.key}',
+                            'Evidencia',
+                            '${solicitud.evidencias}',
+                            '${solicitud.tipo}'
+                        )">
+                    <i class="fas fa-search me-2"></i> Documento Evidencia
+                </button>
+                ` : ''}
+            </td>
+        `;
         tabla.appendChild(tr);
     });
     
@@ -341,9 +361,9 @@ function aplicarFiltrosValidadas() {
     const busqueda = document.getElementById('busqueda-validadas').value.toLowerCase();
     const secretaria = document.getElementById('filtro-secretaria-validadas').value;
     
-    const filtradas = solicitudesValidadas.filter(s => {
-        const texto = `${s.key} ${s.asunto} ${dependenciasMap[s.dependencia]}`.toLowerCase();
-        const coincideSecretaria = !secretaria || s.dependencia === secretaria;
+    const filtradas = solicitudesValidadas.filter(doc => {
+        const texto = `${doc.key} ${doc.asunto} ${dependenciasMap[doc.dependencia]} ${doc.tipo}`.toLowerCase();
+        const coincideSecretaria = !secretaria || doc.dependencia === secretaria;
         return texto.includes(busqueda) && coincideSecretaria;
     });
     
@@ -603,36 +623,55 @@ function actualizarEstadisticas(solicitudes) {
     document.getElementById('stats-eficiencia').textContent = `${Math.round(eficiencia)}%`;
 }
 
+function actualizarTablaSeguimiento() {
+    const tabla = document.getElementById('lista-seguimiento');
+    const foliosUnicos = new Set();
+    
+    // Limpiar tabla completamente
+    tabla.innerHTML = '';
+
+    // Filtrar y mostrar solo última versión de cada registro
+    solicitudesSeguimiento.reverse().forEach(solicitud => {
+        if (!foliosUnicos.has(solicitud.key)) {
+            foliosUnicos.add(solicitud.key);
+            const fila = crearFilaSolicitud(solicitud);
+            tabla.appendChild(fila);
+        }
+    });
+
+    aplicarFiltrosSeguimiento();
+    actualizarEstadisticas(solicitudesSeguimiento);
+    actualizarGrafica(solicitudesSeguimiento);
+    iniciarActualizacionTiempo();
+    actualizarEstadisticas(solicitudesSeguimiento);
+    actualizarGraficas(solicitudesSeguimiento); // En lugar de actualizarGrafica()
+    iniciarActualizacionTiempo();
+}
+
 // Modificar la función cambiarEstado para hacerla global
 let accionActual = '';
 
 window.cambiarEstado = async function(folio, nuevoEstado) {
     try {
-        const paths = ['solicitudes', 'acuerdos', 'oficios'];
-        let docRef = null; // Inicializar como null
-        let tipoDocumento = 'Documento';
-
-        // Buscar documento en todas las colecciones
-        for (const path of paths) {
-            const refPath = ref(database, `${path}/${folio}`);
-            const snapshot = await get(refPath);
-            if (snapshot.exists()) {
-                docRef = refPath; // Asignar correctamente la referencia
-                tipoDocumento = path === 'solicitudes' ? 'Solicitud' 
-                             : path === 'acuerdos' ? 'Acuerdo' 
-                             : 'Oficio';
-                break;
-            }
+        // 1. Buscar en datos locales primero para optimizar
+        const solicitudExistente = solicitudesSeguimiento.find(s => s.key === folio);
+        
+        if (!solicitudExistente) {
+            throw new Error('Documento no encontrado en datos locales');
         }
 
-        if (!docRef) {
-            throw new Error('Documento no encontrado');
-        }
+        // 2. Determinar path directamente desde los datos locales
+        const path = solicitudExistente.tipoPath || 'solicitudes';
+        const docRef = ref(database, `${path}/${folio}`);
+        const tipoDocumento = path === 'solicitudes' ? 'Solicitud' 
+                           : path === 'acuerdos' ? 'Acuerdo' 
+                           : 'Oficio';
 
+        // 3. Obtener datos actualizados directamente de Firebase
         const snapshot = await get(docRef);
         const datos = snapshot.val();
 
-        // Manejo seguro de evidencias
+        // 4. Manejo de evidencias con validación mejorada
         if (nuevoEstado === 'pendiente' && datos.evidencias) {
             try {
                 const urlObj = new URL(datos.evidencias);
@@ -650,31 +689,43 @@ window.cambiarEstado = async function(folio, nuevoEstado) {
             }
         }
 
-        // Preparar actualización
+        // 5. Preparar actualización optimizada
         const actualizacion = {
             estado: nuevoEstado,
             ultimaActualizacion: new Date().toISOString(),
             evidencias: nuevoEstado === 'pendiente' ? null : datos.evidencias || null
         };
 
-        // Agregar fechas específicas
+        // 6. Agregar marcas de tiempo específicas
         if (nuevoEstado === 'atendida') {
             actualizacion.fechaAtencion = new Date().toISOString();
         } else if (nuevoEstado === 'verificacion') {
             actualizacion.fechaVerificacion = new Date().toISOString();
         }
 
-        // Actualizar documento
+        // 7. Actualización atómica en Firebase
         await update(docRef, actualizacion);
 
-        // Actualizar vistas relacionadas
-        await Promise.all([
-            cargarSeguimiento(),
-            cargarVerificacion(),
-            cargarValidadas()
-        ]);
+        // 8. Actualización local inmediata sin recargar toda la data
+        const index = solicitudesSeguimiento.findIndex(s => s.key === folio);
+        if (index !== -1) {
+            solicitudesSeguimiento[index] = {
+                ...solicitudesSeguimiento[index],
+                ...actualizacion
+            };
+            
+            // Actualizar UI específica
+            if (typeof actualizarTablaSeguimiento === 'function') {
+                actualizarTablaSeguimiento();
+            } else {
+                console.error('Función actualizarTablaSeguimiento no definida');
+            }
+            
+            cargarVerificacion(); // Solo necesario para tablas relacionadas
+            cargarValidadas();    // Solo necesario para tablas relacionadas
+        }
 
-        // Mensajes de éxito
+        // 9. Mensajes de éxito contextuales
         const mensajes = {
             'en_proceso': `${tipoDocumento} marcada en proceso`,
             'verificacion': `${tipoDocumento} enviada a verificación`,
@@ -695,7 +746,6 @@ window.cambiarEstado = async function(folio, nuevoEstado) {
                            : 'Error al actualizar el documento';
         
         mostrarError(mensajeError);
-        throw error;
     } finally {
         folioActual = '';
         accionActual = '';
@@ -880,19 +930,36 @@ function cargarVerificacion() {
     const paths = ['solicitudes', 'acuerdos', 'oficios'];
     solicitudesVerificacion = [];
 
+    const userRol = parseInt(getCookie('rol')) || 0;
+    const userDependencias = getCookie('dependencia') ? 
+        decodeURIComponent(getCookie('dependencia')).split(',') : [];
+
     paths.forEach(path => {
-        const refPath = query(
-            ref(database, path),
-            orderByChild('estado'),
-            equalTo('verificacion')
-        );
-        
-        onValue(refPath, (snapshot) => {
-            // Eliminar datos antiguos del mismo tipo
+        let q;
+        if (userRol === 3) {
+            q = query(
+                ref(database, path),
+                orderByChild('estado'),
+                equalTo('verificacion')
+            );
+        } else {
+            userDependencias.forEach(dependencia => {
+                q = query(
+                    ref(database, path),
+                    orderByChild('dependencia'),
+                    equalTo(dependencia)
+                );
+            });
+        }
+
+        onValue(q, (snapshot) => {
             solicitudesVerificacion = solicitudesVerificacion.filter(s => s.tipo !== path);
             
             snapshot.forEach(childSnapshot => {
                 const solicitud = childSnapshot.val();
+                if (userRol !== 3 && !userDependencias.includes(solicitud.dependencia)) return;
+                if (solicitud.estado !== 'verificacion') return;
+
                 solicitud.key = childSnapshot.key;
                 solicitud.tipo = path;
                 solicitud.folio = solicitud.folio || childSnapshot.key;
@@ -908,8 +975,21 @@ function mostrarPaginaVerificacion(data) {
     const tabla = document.getElementById('lista-verificacion');
     tabla.innerHTML = '';
 
+    // Mostrar mensaje si no hay registros
+    if (data.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td colspan="7" class="text-center py-4">
+                <i class="fas fa-info-circle me-2"></i>
+                No hay solicitudes por verificar
+            </td>
+        `;
+        tabla.appendChild(tr);
+        return;
+    }
+
+    // Crear filas si hay datos
     data.forEach(solicitud => {
-        // Corregir nombres de tipo
         const tipoDocumento = solicitud.tipo === 'solicitudes' ? 'Solicitud' :
                             solicitud.tipo === 'acuerdos' ? 'Acuerdo de Gabinete' : 
                             'Oficio';
@@ -931,7 +1011,7 @@ function mostrarPaginaVerificacion(data) {
                             '${solicitud.documentoInicial}',
                             '${tipoDocumento}'
                         )">
-                        <i class="fas fa-file-alt me-1"></i> Inicial
+                        <i class="fas fa-file-alt me-1"></i> Documento Inicial
                     </button>
                     ` : ''}
                     
@@ -943,23 +1023,23 @@ function mostrarPaginaVerificacion(data) {
                             '${solicitud.evidencias}',
                             '${tipoDocumento}'
                         )">
-                        <i class="fas fa-file-check me-1"></i> Evidencia
+                        <i class="fas fa-search me-2"></i> Documento Evidencia
                     </button>
                     ` : ''}
                 </div>
             </td>
             <td>
-                  <div class="d-flex gap-2">
-            <button class="btn btn-success btn-sm btn-aprobar" 
-                onclick="mostrarConfirmacion('${solicitud.folio}', 'aprobar', '${solicitud.tipo}')">
-                <i class="fas fa-check me-1"></i> Aprobar
-            </button>
-            
-            <button class="btn btn-danger btn-sm btn-rechazar" 
-                onclick="mostrarConfirmacion('${solicitud.folio}', 'rechazar', '${solicitud.tipo}')">
-                <i class="fas fa-times me-1"></i> Rechazar
-            </button>
-        </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-success btn-sm btn-aprobar" 
+                        onclick="mostrarConfirmacion('${solicitud.folio}', 'aprobar', '${solicitud.tipo}')">
+                        <i class="fas fa-check me-1"></i> Aprobar
+                    </button>
+                    
+                    <button class="btn btn-danger btn-sm btn-rechazar" 
+                        onclick="mostrarConfirmacion('${solicitud.folio}', 'rechazar', '${solicitud.tipo}')">
+                        <i class="fas fa-times me-1"></i> Rechazar
+                    </button>
+                </div>
             </td>
         `;
         tabla.appendChild(tr);
@@ -1064,7 +1144,7 @@ function crearFilaSolicitud(solicitud) {
                 ${solicitud.documentoInicial ? `
                     <button class="btn btn-sm btn-documento" 
                             onclick="mostrarDocumentoInicial('${solicitud.folio}', '${solicitud.nombreDocumento}', '${solicitud.documentoInicial}')">
-                        <i class="fas fa-file-alt me-1"></i>Ver Documento
+                        <i class="fas fa-file-alt me-1"></i>Documento Inicial
                     </button>
                 ` : ''}
                 <button class="btn btn-sm btn-proceso" 
@@ -1200,34 +1280,31 @@ async function obtenerNombreDependencia(dependenciaKey) {
 
 // Función actualizada para actualizar estados automáticos
 async function actualizarEstadosAutomaticos() {
-    const solicitudesRef = ref(database, 'solicitudes');
-    const snapshot = await get(solicitudesRef);
-    
-    const updates = {};
     const ahora = new Date();
-    
-    snapshot.forEach((childSnapshot) => {
-        const solicitud = childSnapshot.val();
-        if(['atendida', 'en_proceso'].includes(solicitud.estado)) return;
+    const updates = {};
+
+    solicitudesSeguimiento.forEach((solicitud, index) => {
+        if (['atendida', 'en_proceso'].includes(solicitud.estado)) return;
 
         const dias = calcularDiasRestantes(solicitud.fechaLimite);
         let nuevoEstado = solicitud.estado;
         
-        // Lógica mejorada para manejar cambios de estado
-        if(dias < 0) {
+        if (dias < 0) {
             nuevoEstado = 'atrasada';
-        } else if(dias <= 3) {
+        } else if (dias <= 3) {
             nuevoEstado = 'por_vencer';
         }
         
-        if(nuevoEstado !== solicitud.estado) {
-            updates[`solicitudes/${childSnapshot.key}/estado`] = nuevoEstado;
-            updates[`solicitudes/${childSnapshot.key}/ultimaActualizacion`] = ahora.toISOString();
+        if (nuevoEstado !== solicitud.estado) {
+            // Actualizar tanto en Firebase como localmente
+            updates[`${solicitud.tipoPath}/${solicitud.key}/estado`] = nuevoEstado;
+            solicitudesSeguimiento[index].estado = nuevoEstado;
         }
     });
     
-    if(Object.keys(updates).length > 0) {
+    if (Object.keys(updates).length > 0) {
         await update(ref(database), updates);
+        actualizarTablaSeguimiento();
     }
 }
 
@@ -1242,73 +1319,113 @@ function cargarSeguimiento() {
     const userDependencias = getCookie('dependencia') ? 
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
-    // Limpiar datos anteriores
-    solicitudesSeguimiento = [];
-    tabla.innerHTML = '';
-
-    // Cargar datos de todas las rutas
+    // Limpiar listeners anteriores
     paths.forEach(path => {
-        const solicitudesRef = query(
-            ref(database, path),
-            orderByChild('fechaCreacion')
-        );
-        
-        onValue(solicitudesRef, (snapshot) => {
-            // Procesar todo el snapshot de una vez
-            const nuevosDatos = [];
-            
-            snapshot.forEach((childSnapshot) => {
-                const solicitud = childSnapshot.val();
-                solicitud.key = childSnapshot.key;
-                solicitud.tipo = path === 'solicitudes' ? 
-                    solicitud.tiposolicitud : 
-                    path.slice(0, -1);
-
-                // Filtrar por dependencia si no es admin
-                if (userRol !== 3 && !userDependencias.includes(solicitud.dependencia)) return;
-
-                // Normalizar estructura
-                const solicitudNormalizada = {
-                    ...solicitud,
-                    tipo: path === 'solicitudes' ? 'solicitud' : path.slice(0, -1),
-                    documentoInicial: solicitud.documentoInicial || '',
-                    nombreDocumento: solicitud.nombreDocumento || 'Sin documento',
-                    evidencias: solicitud.evidencias || null,
-                    // Asegurar mismos campos que solicitudes
-                    fechaLimite: solicitud.fechaLimite || calcularFechaLimite(solicitud.fechaCreacion),
-                    estado: solicitud.estado || 'pendiente'
-                };
-                nuevosDatos.push(solicitudNormalizada);
-            });
-
-            // Eliminar datos antiguos de este path y agregar nuevos
-            solicitudesSeguimiento = solicitudesSeguimiento.filter(s => s.tipo !== path);
-            solicitudesSeguimiento.push(...nuevosDatos);
-
-            // Ordenar y actualizar UI una sola vez por carga
-            solicitudesSeguimiento.sort((a, b) => 
-                new Date(b.fechaCreacion) - new Date(a.fechaCreacion)
-            );
-            
-            actualizarTablaSeguimiento();
-        });
+        const refPath = ref(database, path);
+        onValue(refPath, () => {});
     });
 
-    function actualizarTablaSeguimiento() {
-        tabla.innerHTML = '';
-        const foliosUnicos = new Set();
-
-        solicitudesSeguimiento.forEach(solicitud => {
-            if (!foliosUnicos.has(solicitud.key)) {
-                foliosUnicos.add(solicitud.key);
-                tabla.appendChild(crearFilaSolicitud(solicitud));
-            }
+    if (userRol === 3) {
+        // Admin: cargar todas las solicitudes
+        Promise.all(paths.map(path => {
+            return new Promise((resolve) => {
+                const q = query(ref(database, path), orderByChild('fechaCreacion'));
+                onValue(q, (snapshot) => {
+                    const datos = [];
+                    snapshot.forEach(childSnapshot => {
+                        const solicitud = childSnapshot.val();
+                        solicitud.key = childSnapshot.key;
+                        solicitud.tipoPath = path;
+                        datos.push(solicitud);
+                    });
+                    resolve(datos);
+                }, { onlyOnce: true });
+            });
+        })).then(results => {
+            const mergedData = [].concat(...results).reduce((acc, current) => {
+                if (!acc.find(item => item.key === current.key)) {
+                    acc.push(current);
+                }
+                return acc;
+            }, []);
+            solicitudesSeguimiento = mergedData;
+            actualizarTablaSeguimiento();
         });
 
-        aplicarFiltrosSeguimiento();
-        actualizarEstadisticas(solicitudesSeguimiento);
-        actualizarGrafica(solicitudesSeguimiento);
-        iniciarActualizacionTiempo();
+        // Escuchar cambios en tiempo real
+        paths.forEach(path => {
+            const refPath = ref(database, path);
+            onValue(refPath, (snapshot) => {
+                snapshot.forEach(childSnapshot => {
+                    const nuevaSolicitud = childSnapshot.val();
+                    const index = solicitudesSeguimiento.findIndex(s => s.key === childSnapshot.key);
+                    if (index === -1) {
+                        solicitudesSeguimiento.push({ ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path });
+                    } else {
+                        solicitudesSeguimiento[index] = { ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path };
+                    }
+                });
+                actualizarTablaSeguimiento();
+            });
+        });
+    } else {
+        // No admin: cargar solo las dependencias del usuario
+        const allPromises = [];
+        paths.forEach(path => {
+            userDependencias.forEach(dependencia => {
+                const q = query(
+                    ref(database, path),
+                    orderByChild('dependencia'),
+                    equalTo(dependencia)
+                );
+                const promise = new Promise((resolve) => {
+                    onValue(q, (snapshot) => {
+                        const datos = [];
+                        snapshot.forEach(childSnapshot => {
+                            const solicitud = childSnapshot.val();
+                            solicitud.key = childSnapshot.key;
+                            solicitud.tipoPath = path;
+                            datos.push(solicitud);
+                        });
+                        resolve(datos);
+                    }, { onlyOnce: true });
+                });
+                allPromises.push(promise);
+            });
+        });
+        Promise.all(allPromises).then(results => {
+            const mergedData = [].concat(...results).reduce((acc, current) => {
+                if (!acc.find(item => item.key === current.key)) {
+                    acc.push(current);
+                }
+                return acc;
+            }, []);
+            solicitudesSeguimiento = mergedData;
+            actualizarTablaSeguimiento();
+        });
+
+        // Escuchar cambios en tiempo real para cada dependencia y path
+        paths.forEach(path => {
+            userDependencias.forEach(dependencia => {
+                const q = query(
+                    ref(database, path),
+                    orderByChild('dependencia'),
+                    equalTo(dependencia)
+                );
+                onValue(q, (snapshot) => {
+                    snapshot.forEach(childSnapshot => {
+                        const nuevaSolicitud = childSnapshot.val();
+                        const index = solicitudesSeguimiento.findIndex(s => s.key === childSnapshot.key);
+                        if (index === -1) {
+                            solicitudesSeguimiento.push({ ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path });
+                        } else {
+                            solicitudesSeguimiento[index] = { ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path };
+                        }
+                    });
+                    actualizarTablaSeguimiento();
+                });
+            });
+        });
     }
 }
 
@@ -1483,8 +1600,9 @@ function actualizarGrafica(solicitudes) {
 
     const ctx = document.getElementById('mainChart').getContext('2d');
     
-    if(myChart) {
-        myChart.destroy();
+    // Destruir gráfica anterior si existe
+    if(charts.mainChart) {
+        charts.mainChart.destroy();
     }
 
     // Actualizar colores según la paleta proporcionada
@@ -1497,7 +1615,7 @@ function actualizarGrafica(solicitudes) {
         verificacion: '#FFA500'
     };
 
-    myChart = new Chart(ctx, {
+    charts.mainChart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: tiposSolicitud,
@@ -2197,3 +2315,296 @@ function validarArchivoInput(input, tipoDocumento) {
     `;
     removeBtn?.classList.remove('d-none');
 }
+
+
+// Variables globales para las gráficas
+let mainChart, typeChart, trendChart, statusChart;
+
+function actualizarGraficas(solicitudes) {
+    actualizarGraficaPrincipal(solicitudes);
+    actualizarGraficaTipos(solicitudes);
+    actualizarGraficaTendencias(solicitudes);
+    actualizarGraficaEstatus(solicitudes);
+    actualizarEficienciaDepartamentos(solicitudes);
+    actualizarTiemposRespuesta(solicitudes);
+}
+
+function actualizarGraficaPrincipal(solicitudes) {
+    // Mantén tu código existente de actualizarGrafica
+}
+
+function actualizarGraficaTipos(solicitudes) {
+    const tipos = {
+        'Solicitud': 0,
+        'Acuerdo': 0,
+        'Oficio': 0
+    };
+
+    solicitudes.forEach(s => {
+        tipos[s.tipo] = (tipos[s.tipo] || 0) + 1;
+    });
+
+    if (charts.typeChart) charts.typeChart.destroy();
+    
+    const ctx = document.getElementById('typeChart').getContext('2d');
+    charts.typeChart = new Chart(ctx, { // <-- Usar charts.typeChart
+        type: 'pie',
+        data: {
+            labels: Object.keys(tipos),
+            datasets: [{
+                data: Object.values(tipos),
+                backgroundColor: [
+                    '#491F42',
+                    '#2E7D32',
+                    '#ae9074'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+function actualizarGraficaTendencias(solicitudes) {
+    const meses = Array.from({length: 12}, (_, i) => {
+        const date = new Date();
+        date.setMonth(i);
+        return date.toLocaleString('es-MX', {month: 'short'});
+    });
+
+    const datos = Array(12).fill(0);
+    
+    solicitudes.forEach(s => {
+        const mes = new Date(s.fechaCreacion).getMonth();
+        datos[mes]++;
+    });
+
+    if (charts.trendChart) charts.trendChart.destroy();
+    
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    charts.trendChart = new Chart(ctx, { // <-- Usar charts.trendChart
+        type: 'line',
+        data: {
+            labels: meses,
+            datasets: [{
+                label: 'Solicitudes por Mes',
+                data: datos,
+                borderColor: '#491F42',
+                tension: 0.3,
+                fill: true,
+                backgroundColor: 'rgba(73,31,66,0.05)'
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+function actualizarGraficaEstatus(solicitudes) {
+    const estatus = {
+        'pendiente': 0,
+        'en_proceso': 0,
+        'verificacion': 0,
+        'atendida': 0,
+        'atrasada': 0
+    };
+
+    solicitudes.forEach(s => estatus[s.estado]++);
+
+    if (charts.statusChart) charts.statusChart.destroy();
+    
+    const ctx = document.getElementById('statusChart').getContext('2d');
+    charts.statusChart = new Chart(ctx, { // <-- Usar charts.statusChart
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(estatus),
+            datasets: [{
+                data: Object.values(estatus),
+                backgroundColor: [
+                    '#491F42',
+                    '#720F36',
+                    '#FFA500',
+                    '#2E7D32',
+                    '#a90000'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+function actualizarEficienciaDepartamentos(solicitudes) {
+    const departamentos = {};
+    
+    solicitudes.forEach(s => {
+        const depto = dependenciasMap[s.dependencia] || 'Desconocido';
+        if (!departamentos[depto]) {
+            departamentos[depto] = {
+                total: 0,
+                atendidas: 0
+            };
+        }
+        departamentos[depto].total++;
+        if (s.estado === 'atendida') departamentos[depto].atendidas++;
+    });
+
+    const labels = Object.keys(departamentos);
+    const data = labels.map(depto => {
+        return (departamentos[depto].atendidas / departamentos[depto].total * 100).toFixed(1);
+    });
+
+    if (charts.departmentChart) charts.departmentChart.destroy();
+    
+    const ctx = document.getElementById('departmentChart').getContext('2d');
+    charts.departmentChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '% Eficiencia',
+                data: data,
+                backgroundColor: '#2E7D32',
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: value => `${value}%`
+                    }
+                }
+            }
+        }
+    });
+}
+
+function actualizarTiemposRespuesta(solicitudes) {
+    const tiempos = {
+        '1-3 días': 0,
+        '4-7 días': 0,
+        '8-15 días': 0,
+        '+15 días': 0
+    };
+
+    solicitudes.filter(s => s.estado === 'atendida').forEach(s => {
+        const inicio = new Date(s.fechaCreacion);
+        const fin = new Date(s.fechaAtencion);
+        const diff = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24));
+        
+        if (diff <= 3) tiempos['1-3 días']++;
+        else if (diff <= 7) tiempos['4-7 días']++;
+        else if (diff <= 15) tiempos['8-15 días']++;
+        else tiempos['+15 días']++;
+    });
+
+    if (charts.efficiencyChart) charts.efficiencyChart.destroy();
+    
+    const ctx = document.getElementById('efficiencyChart').getContext('2d');
+    charts.efficiencyChart = new Chart(ctx, {
+        type: 'polarArea',
+        data: {
+            labels: Object.keys(tiempos),
+            datasets: [{
+                data: Object.values(tiempos),
+                backgroundColor: [
+                    '#2E7D32',
+                    '#491F42',
+                    '#FFA500',
+                    '#a90000'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+// Función mejorada para exportación múltiple
+window.exportAllCharts = async () => {
+    try {
+        const zip = new JSZip();
+        const folder = zip.folder("graficas_sisges");
+        const date = new Date().toISOString().slice(0, 10);
+        
+        // Generar todas las gráficas
+        await Promise.all(Object.keys(charts).map(async (chartId) => {
+            const chart = charts[chartId];
+            if (!chart) return;
+            
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = chart.canvas.width;
+            tempCanvas.height = chart.canvas.height;
+            tempCtx.drawImage(chart.canvas, 0, 0);
+            
+            const blob = await new Promise(resolve => 
+                tempCanvas.toBlob(resolve, 'image/png', 1)
+            );
+            
+            folder.file(`${chartId}_${date}.png`, blob);
+        }));
+        
+        // Generar y descargar ZIP
+        const content = await zip.generateAsync({type: "blob"});
+        saveAs(content, `graficas_sisges_${date}.zip`);
+        
+    } catch (error) {
+        mostrarError(`Error al exportar gráficas: ${error.message}`);
+    }
+};
+
+// Modificar función de exportación individual para mejor calidad
+window.exportChart = (chartId, fileName = 'chart') => {
+    const chart = charts[chartId];
+    if (!chart) return;
+    
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    
+    // Aumentar resolución para exportación HD
+    const scale = 2;
+    tempCanvas.width = chart.canvas.width * scale;
+    tempCanvas.height = chart.canvas.height * scale;
+    tempCtx.scale(scale, scale);
+    tempCtx.drawImage(chart.canvas, 0, 0);
+    
+    const url = tempCanvas.toDataURL('image/png', 1);
+    const link = document.createElement('a');
+    link.download = `${fileName}_${new Date().toISOString().slice(0,10)}.png`;
+    link.href = url;
+    link.click();
+};
