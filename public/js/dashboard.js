@@ -1887,6 +1887,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         <option>Audiencias virtuales</option>
         <option>Recorridos</option>
         <option>Redes sociales</option>
+        <option>Llamada telefónica</option>
     `;
 
     // Menú móvil
