@@ -945,3 +945,10 @@ body {
     background: var(--primary-dark);
 }
 
+/* Agregar estilos para el motivo de rechazo */
+.motivo-rechazo {
+    border-left: 3px solid #dc3545;
+    padding-left: 0.5rem;
+    margin-top: 0.3rem;
+    font-size: 0.85em;
+}

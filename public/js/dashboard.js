@@ -752,19 +752,19 @@ window.cambiarEstado = async function(folio, nuevoEstado) {
     }
 };
 
-document.getElementById('confirmarAprobar').addEventListener('click', async () => {
-    if (folioActual) {
-        await cambiarEstado(folioActual, 'atendida');
-        bootstrap.Modal.getInstance('#confirmarAprobarModal').hide();
-    }
-});
+// document.getElementById('confirmarAprobar').addEventListener('click', async () => {
+//     if (folioActual) {
+//         await cambiarEstado(folioActual, 'atendida');
+//         bootstrap.Modal.getInstance('#confirmarAprobarModal').hide();
+//     }
+// });
 
-document.getElementById('confirmarRechazar').addEventListener('click', async () => {
-    if (folioActual) {
-        await cambiarEstado(folioActual, 'pendiente');
-        bootstrap.Modal.getInstance('#confirmarRechazarModal').hide();
-    }
-});
+// document.getElementById('confirmarRechazar').addEventListener('click', async () => {
+//     if (folioActual) {
+//         await cambiarEstado(folioActual, 'pendiente');
+//         bootstrap.Modal.getInstance('#confirmarRechazarModal').hide();
+//     }
+// });
 
 // // Configurar eventos para los modales
 // document.getElementById('confirmarAprobar').addEventListener('click', () => {
@@ -1928,6 +1928,21 @@ document.addEventListener('DOMContentLoaded', async function () {
             this.classList.add('active');
             switchTab(contentId);
         });
+    });
+
+    // Agregar event listeners para los botones de confirmación
+    document.getElementById('confirmarAprobar')?.addEventListener('click', async () => {
+        if (folioActual) {
+            await cambiarEstado(folioActual, 'atendida');
+            bootstrap.Modal.getInstance(document.querySelector('#confirmarAprobarModal')).hide();
+        }
+    });
+
+    document.getElementById('confirmarRechazar')?.addEventListener('click', async () => {
+        if (folioActual) {
+            await cambiarEstado(folioActual, 'pendiente');
+            bootstrap.Modal.getInstance(document.querySelector('#confirmarRechazarModal')).hide();
+        }
     });
 });
 
