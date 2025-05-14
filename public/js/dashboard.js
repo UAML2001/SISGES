@@ -91,7 +91,7 @@ function calcularFechaLimite(fechaCreacion) {
     const fechaBase = new Date(fechaCreacion);
     fechaBase.setMinutes(fechaBase.getMinutes() + fechaBase.getTimezoneOffset() + offsetMexico);
     const fechaLimite = new Date(fechaBase);
-    fechaLimite.setDate(fechaLimite.getDate() + 15);
+    fechaLimite.setDate(fechaLimite.getDate() + 5); // Cambiado de 15 a 5 días
     return fechaLimite.toISOString();
 }
 
