@@ -100,6 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.cookie = `rol=${encodeURIComponent(usuarioData.rol)}; expires=${expiresUTC}; path=/`;
                 document.cookie = `dependencia=${encodeURIComponent(usuarioData.dependencias)}; expires=${expiresUTC}; path=/`;
                 document.cookie = `expires=${expiresUTC}; expires=${expiresUTC}; path=/`;
+                document.cookie = `area=${encodeURIComponent(usuarioData.area)}; expires=${expiresUTC}; path=/`;
 
                 mostrarNotificacion(' Acceso autorizado', 'success');
                 setTimeout(() => window.location.href = 'dashboard.html', 1500);
