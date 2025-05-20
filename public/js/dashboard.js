@@ -196,13 +196,14 @@ function cargarValidadas() {
     paths.forEach(path => {
         let q;
         if (userRol === 3) {
+            // Admin: obtener todas las atendidas
             q = query(
                 ref(database, path),
                 orderByChild('estado'),
                 equalTo('atendida')
             );
         } else {
-            // Filtrar por cada dependencia del usuario
+            // No admin: filtrar por dependencia y estado
             userDependencias.forEach(dependencia => {
                 q = query(
                     ref(database, path),
@@ -215,12 +216,16 @@ function cargarValidadas() {
         onValue(q, (snapshot) => {
             snapshot.forEach((childSnapshot) => {
                 const documento = childSnapshot.val();
+                
+                // Filtro adicional para no administradores
+                if (userRol !== 3 && documento.estado !== 'atendida') return;
+                
                 documento.key = childSnapshot.key;
                 documento.tipo = path === 'solicitudes' ? 'Solicitud' 
                                : path === 'acuerdos' ? 'Acuerdo' 
                                : 'Oficio';
 
-                // Filtrar por dependencia si no es admin
+                // Validar dependencia para no admin
                 if (userRol !== 3 && !userDependencias.includes(documento.dependencia)) return;
 
                 if (!solicitudesValidadas.find(s => s.key === documento.key)) {
