@@ -96,12 +96,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const loginTime = new Date().toISOString();
                 document.cookie = `lastLogin=${loginTime}; expires=${expiresUTC}; path=/`;
                 document.cookie = `session=${usuarioData.uid}; expires=${expiresUTC}; path=/`;
+                document.cookie = `email=${usuarioData.email}; expires=${expiresUTC}; path=/`;
                 document.cookie = `nombre=${encodeURIComponent(usuarioData.nombre)}; expires=${expiresUTC}; path=/`;
                 document.cookie = `rol=${encodeURIComponent(usuarioData.rol)}; expires=${expiresUTC}; path=/`;
                 document.cookie = `dependencia=${encodeURIComponent(usuarioData.dependencias)}; expires=${expiresUTC}; path=/`;
-                document.cookie = `expires=${expiresUTC}; expires=${expiresUTC}; path=/`;
                 document.cookie = `area=${encodeURIComponent(usuarioData.area)}; expires=${expiresUTC}; path=/`;
-
+                document.cookie = `expires=${expiresUTC}; expires=${expiresUTC}; path=/`;
+                
                 mostrarNotificacion(' Acceso autorizado', 'success');
                 setTimeout(() => window.location.href = 'dashboard.html', 1500);
             } else {
@@ -225,4 +226,3 @@ document.addEventListener('mousemove', (e) => {
     }
   });
 });
-

@@ -166,44 +166,30 @@ async function generarFolio(tipo = 'solicitud') {
 
 // Función para cargar solicitudes validadas
 function cargarValidadas() {
-    const tabla = document.getElementById('lista-validadas');
-    const filtroSecretaria = document.getElementById('filtro-secretaria-validadas');
-    const paths = ['solicitudes', 'acuerdos', 'oficios'];
-    
     const userRol = parseInt(getCookie('rol')) || 0;
     const userDependencias = getCookie('dependencia') ? 
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
-    // Configurar filtro de secretarías
-    if (userRol === 3) {
-        filtroSecretaria.style.display = 'block';
-        filtroSecretaria.innerHTML = '<option value="">Todas las secretarías</option>';
-        
-        Object.entries(dependenciasMap).forEach(([key, nombre]) => {
-            if (nombre && nombre.trim() !== '') {
-                const option = document.createElement('option');
-                option.value = key;
-                option.textContent = nombre;
-                filtroSecretaria.appendChild(option);
-            }
-        });
-    } else {
-        filtroSecretaria.style.display = 'none';
-    }
-
     solicitudesValidadas = [];
+    const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
+    let paths = ['solicitudes', 'acuerdos', 'oficios'];
+    
+    if(esJefaturaGabinete) {
+        paths = ['acuerdos'];
+    } else if(esSecretariaParticular) {
+        paths = ['solicitudes', 'oficios'];
+    }
 
     paths.forEach(path => {
         let q;
-        if (userRol === 3) {
-            // Admin: obtener todas las atendidas
+        
+        if (userRol === 3) { // Admin ve todo
             q = query(
                 ref(database, path),
                 orderByChild('estado'),
                 equalTo('atendida')
             );
-        } else {
-            // No admin: filtrar por dependencia y estado
+        } else { // Usuarios normales
             userDependencias.forEach(dependencia => {
                 q = query(
                     ref(database, path),
@@ -217,16 +203,18 @@ function cargarValidadas() {
             snapshot.forEach((childSnapshot) => {
                 const documento = childSnapshot.val();
                 
-                // Filtro adicional para no administradores
-                if (userRol !== 3 && documento.estado !== 'atendida') return;
-                
+                // Filtrado adicional para no admin
+                if (userRol !== 3) {
+                    if (documento.estado !== 'atendida' || 
+                        !userDependencias.includes(documento.dependencia)) return;
+                } else {
+                    if (documento.estado !== 'atendida') return;
+                }
+
                 documento.key = childSnapshot.key;
                 documento.tipo = path === 'solicitudes' ? 'Solicitud' 
                                : path === 'acuerdos' ? 'Acuerdo' 
                                : 'Oficio';
-
-                // Validar dependencia para no admin
-                if (userRol !== 3 && !userDependencias.includes(documento.dependencia)) return;
 
                 if (!solicitudesValidadas.find(s => s.key === documento.key)) {
                     solicitudesValidadas.push(documento);
@@ -253,7 +241,7 @@ function mostrarPaginaValidadas(data) {
     if (data.length === 0) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td colspan="6" class="text-center py-4">
+            <td colspan="8" class="text-center py-4">
                 <i class="fas fa-info-circle me-2"></i>
                 No hay solicitudes validadas para mostrar
             </td>
@@ -265,35 +253,27 @@ function mostrarPaginaValidadas(data) {
     
     const items = data.slice(start, end);
     
-    items.forEach(solicitud => { // Cambiar 'doc' por 'solicitud'
+items.forEach(solicitud => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${solicitud.key}</td>
             <td>${solicitud.tipo}</td>
             <td>${solicitud.asunto}</td>
             <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
+            <td>${solicitud.solicitante?.nombre ? solicitud.solicitante.nombre : 'N/A'}</td>
+            <td>${solicitud.solicitante?.telefono ? solicitud.solicitante.telefono : 'N/A'}</td>
             <td>${new Date(solicitud.fechaAtencion).toLocaleDateString()}</td>
             <td>
                 ${solicitud.documentoInicial ? `
                 <button class="btn btn-sm btn-documento-inicial" 
-                        onclick="mostrarEvidenciaModal(
-                            '${solicitud.key}',
-                            'Documento Inicial',
-                            '${solicitud.documentoInicial}',
-                            '${solicitud.tipo}'
-                        )">
+                        onclick="mostrarEvidenciaModal('${solicitud.key}','Documento Inicial','${solicitud.documentoInicial}','${solicitud.tipo}')">
                     <i class="fas fa-file-import me-2"></i> Documento Inicial
                 </button>
                 ` : ''}
                 
                 ${solicitud.evidencias ? `
                 <button class="btn btn-sm btn-evidencia" 
-                        onclick="mostrarEvidenciaModal(
-                            '${solicitud.key}',
-                            'Evidencia',
-                            '${solicitud.evidencias}',
-                            '${solicitud.tipo}'
-                        )">
+                        onclick="mostrarEvidenciaModal('${solicitud.key}','Evidencia','${solicitud.evidencias}','${solicitud.tipo}')">
                     <i class="fas fa-search me-2"></i> Documento Evidencia
                 </button>
                 ` : ''}
@@ -365,8 +345,11 @@ function actualizarPaginacion(tipo, totalItems) {
 function aplicarFiltrosValidadas() {
     const busqueda = document.getElementById('busqueda-validadas').value.toLowerCase();
     const secretaria = document.getElementById('filtro-secretaria-validadas').value;
+      const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
     
     const filtradas = solicitudesValidadas.filter(doc => {
+        if(esJefaturaGabinete && doc.tipo !== 'Acuerdo') return false;
+        if(esSecretariaParticular && doc.tipo === 'Acuerdo') return false;
         const texto = `${doc.key} ${doc.asunto} ${dependenciasMap[doc.dependencia]} ${doc.tipo}`.toLowerCase();
         const coincideSecretaria = !secretaria || doc.dependencia === secretaria;
         return texto.includes(busqueda) && coincideSecretaria;
@@ -378,14 +361,18 @@ function aplicarFiltrosValidadas() {
 function aplicarFiltrosSeguimiento() {
     const busqueda = document.getElementById('busqueda-seguimiento').value.toLowerCase();
     const estado = document.getElementById('filtro-estado-seguimiento').value;
+    const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
     
     const filtradas = solicitudesSeguimiento.filter(s => {
+        if (esJefaturaGabinete && s.tipoPath !== 'acuerdos') return false;
+        if (esSecretariaParticular && s.tipoPath === 'acuerdos') return false;
         // Excluir atendidas y aplicar otros filtros
         if (s.estado === 'atendida') return false;
         
         const texto = `${s.key} ${s.asunto} ${dependenciasMap[s.dependencia]}`.toLowerCase();
         const coincideEstado = !estado || s.estado === estado;
         return texto.includes(busqueda) && coincideEstado;
+        
     });
     
     mostrarPaginaSeguimiento(filtradas);
@@ -932,7 +919,15 @@ function mostrarExito(mensaje) {
 }
 
 function cargarVerificacion() {
-    const paths = ['solicitudes', 'acuerdos', 'oficios'];
+    const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
+    let paths = ['solicitudes', 'acuerdos', 'oficios'];
+    
+    if(esJefaturaGabinete) {
+        paths = ['acuerdos'];
+    } else if(esSecretariaParticular) {
+        paths = ['solicitudes', 'oficios'];
+    }
+
     solicitudesVerificacion = [];
 
     const userRol = parseInt(getCookie('rol')) || 0;
@@ -980,11 +975,10 @@ function mostrarPaginaVerificacion(data) {
     const tabla = document.getElementById('lista-verificacion');
     tabla.innerHTML = '';
 
-    // Mostrar mensaje si no hay registros
     if (data.length === 0) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td colspan="7" class="text-center py-4">
+            <td colspan="9" class="text-center py-4">
                 <i class="fas fa-info-circle me-2"></i>
                 No hay solicitudes por verificar
             </td>
@@ -993,7 +987,6 @@ function mostrarPaginaVerificacion(data) {
         return;
     }
 
-    // Crear filas si hay datos
     data.forEach(solicitud => {
         const tipoDocumento = solicitud.tipo === 'solicitudes' ? 'Solicitud' :
                             solicitud.tipo === 'acuerdos' ? 'Acuerdo de Gabinete' : 
@@ -1005,6 +998,8 @@ function mostrarPaginaVerificacion(data) {
             <td>${solicitud.asunto}</td>
             <td>${tipoDocumento}</td>
             <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
+            <td>${solicitud.solicitante?.nombre ? solicitud.solicitante.nombre : 'N/A'}</td>
+            <td>${solicitud.solicitante?.telefono ? solicitud.solicitante.telefono : 'N/A'}</td>
             <td>${new Date(solicitud.fechaVerificacion).toLocaleDateString()}</td>
             <td class="documentos-cell">
                 <div class="documentos-container">
@@ -1118,7 +1113,6 @@ const estados = {
     'atrasada': {texto: 'Atrasada', color: '#a90000'}
 };
 
-// Modificar función crearFilaSolicitud
 function crearFilaSolicitud(solicitud) {
     const tr = document.createElement('tr');
     tr.dataset.fechaLimite = solicitud.fechaLimite;
@@ -1131,17 +1125,16 @@ function crearFilaSolicitud(solicitud) {
         'solicitud': 'Solicitud'
     };
 
-    // Modificar la línea donde se obtiene el estado
-    const estado = estados[solicitud.estado] || { texto: 'Desconocido', color: '#666' } 
+    const estado = estados[solicitud.estado] || { texto: 'Desconocido', color: '#666' };
     const dependenciaNombre = dependenciasMap[solicitud.dependencia] || 'Desconocida';
-    // Determinar si está en verificación
-    const enVerificacion = estadoActual === 'verificacion';
 
     tr.innerHTML = `
         <td>${solicitud.folio}</td>
         <td>${nombresTipos[solicitud.tipo] || solicitud.tipo}</td>
         <td>${solicitud.asunto}</td>
         <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
+        <td>${solicitud.solicitante?.nombre ? solicitud.solicitante.nombre : 'N/A'}</td>
+        <td>${solicitud.solicitante?.telefono ? solicitud.solicitante.telefono : 'N/A'}</td>
         <td><span class="status-badge" style="background:${estado.color}">${estado.texto}</span></td>
         <td>${solicitud.estado === 'atendida' ? 'Atendida' : calcularTiempoRestante(solicitud.fechaLimite)}</td>
         <td>
@@ -1166,7 +1159,6 @@ function crearFilaSolicitud(solicitud) {
             </div>
         </td>
     `;
-    // Añadir estilo visual para deshabilitado
     tr.querySelectorAll('button[disabled]').forEach(btn => {
         btn.style.opacity = '0.6';
         btn.style.cursor = 'not-allowed';
@@ -1318,8 +1310,14 @@ setInterval(actualizarEstadosAutomaticos, 3600000);
 document.addEventListener('DOMContentLoaded', actualizarEstadosAutomaticos);
 
 function cargarSeguimiento() {
+    const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
     const tabla = document.getElementById('lista-seguimiento');
-    const paths = ['solicitudes', 'acuerdos', 'oficios'];
+    let paths = ['solicitudes', 'acuerdos', 'oficios'];
+    if(esJefaturaGabinete) {
+        paths = ['acuerdos']; // Solo acuerdos
+    } else if(esSecretariaParticular) {
+        paths = ['solicitudes', 'oficios']; // Excluir acuerdos
+    }
     const userRol = parseInt(getCookie('rol')) || 0;
     const userDependencias = getCookie('dependencia') ? 
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
@@ -1793,6 +1791,7 @@ document.getElementById('busqueda-validadas').addEventListener('input', () => {
     aplicarFiltrosValidadas();
 });
 
+// En DOMContentLoaded, después de cargar dependencias:
 document.getElementById('filtro-secretaria-validadas').addEventListener('change', () => {
     currentPageValidadas = 1;
     aplicarFiltrosValidadas();
@@ -2629,3 +2628,12 @@ window.exportChart = (chartId, fileName = 'chart') => {
     link.href = url;
     link.click();
 };
+
+// Añadir esta función auxiliar al inicio
+function obtenerFiltroEspecial() {
+    const userEmail = getCookie('email');
+    return {
+        esJefaturaGabinete: userEmail === 'jefaturadegabinete@tizayuca.gob.mx',
+        esSecretariaParticular: userEmail === 'oficinadepresidencia@tizayuca.gob.mx'
+    };
+}
