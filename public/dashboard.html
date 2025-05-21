@@ -706,24 +706,54 @@
     </div>
   </div>
   
-  <!-- Modal Confirmar Rechazo -->
-  <div class="modal fade" id="confirmarRechazarModal">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header bg-danger text-white">
-          <h5 class="modal-title"><i class="fas fa-times-circle me-2"></i>Confirmar Rechazo</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          ¿Está seguro de rechazar esta solicitud? Se eliminará la evidencia subida.
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="button" class="btn btn-danger" id="confirmarRechazar">Rechazar</button>
-        </div>
+ <!-- Modal Confirmar Rechazo -->
+<div class="modal fade" id="confirmarRechazarModal">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title"><i class="fas fa-times-circle me-2"></i>Confirmar Rechazo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+    <div class="form-group">
+        <label class="form-label">Motivo de rechazo <span class="text-danger">*</span></label>
+        <textarea 
+            id="motivoRechazo" 
+            class="form-control" 
+            rows="4"
+            maxlength="500"
+            required
+            placeholder="Describa detalladamente el motivo del rechazo..."
+            oninput="this.classList.remove('is-invalid')"
+        ></textarea>
+        <small class="form-text text-muted">Mínimo 20 caracteres, máximo 500</small>
+    </div>
+</div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="confirmarRechazar">Rechazar</button>
       </div>
     </div>
   </div>
+</div>
+
+<!-- Modal para Visualizar Motivo -->
+<div class="modal fade" id="motivoModal">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title"><i class="fas fa-comment-dots me-2"></i>Motivo de Rechazo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="textoMotivo" class="lead"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Modal Confirmación Atendida -->
 <div class="modal fade" id="confirmarAtendidaModal" tabindex="-1">

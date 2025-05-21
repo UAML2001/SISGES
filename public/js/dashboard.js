@@ -643,7 +643,7 @@ function actualizarTablaSeguimiento() {
 // Modificar la función cambiarEstado para hacerla global
 let accionActual = '';
 
-window.cambiarEstado = async function(folio, nuevoEstado) {
+window.cambiarEstado = async function(folio, nuevoEstado, motivo = '') {
     try {
         // 1. Buscar en datos locales primero para optimizar
         const solicitudExistente = solicitudesSeguimiento.find(s => s.key === folio);
@@ -666,27 +666,38 @@ window.cambiarEstado = async function(folio, nuevoEstado) {
         // 4. Manejo de evidencias con validación mejorada
         if (nuevoEstado === 'pendiente' && datos.evidencias) {
             try {
-                const urlObj = new URL(datos.evidencias);
-                const pathStorage = decodeURIComponent(urlObj.pathname)
-                                  .split('/o/')[1]
-                                  .split('?')[0];
-                
+                // Extraer path desde la URL de descarga
+                const urlParts = datos.evidencias.split('/');
+                const index = urlParts.indexOf('o') + 1;
+                const pathStorage = decodeURIComponent(urlParts[index]).split('?')[0];
                 const evidenciaRef = storageRef(storage, pathStorage);
+
+                // Verificar existencia antes de eliminar
+                await getDownloadURL(evidenciaRef); // Lanza error si no existe
                 await deleteObject(evidenciaRef);
             } catch (error) {
-                console.error("Error eliminando evidencia:", error);
-                if (error.code !== 'storage/object-not-found') {
+                if (error.code === 'storage/object-not-found') {
+                    console.log('Archivo no encontrado, continuando...');
+                } else {
+                    console.error("Error manejando evidencia:", error);
                     throw new Error('Error al eliminar archivo adjunto');
                 }
             }
         }
 
+        if (nuevoEstado === 'pendiente' && !motivo) {
+        // mostrarError("Error crítico: Motivo requerido no proporcionado");
+        return;
+    }
         // 5. Preparar actualización optimizada
-        const actualizacion = {
-            estado: nuevoEstado,
-            ultimaActualizacion: new Date().toISOString(),
-            evidencias: nuevoEstado === 'pendiente' ? null : datos.evidencias || null
-        };
+const actualizacion = {
+    estado: nuevoEstado,
+    ultimaActualizacion: new Date().toISOString(),
+    evidencias: nuevoEstado === 'pendiente' ? null : datos.evidencias || null,
+    _actualizadoPor: getCookie('nombre') || 'Sistema',
+    motivoRechazo: nuevoEstado === 'pendiente' ? motivo : null, // Asegurar motivo
+    fechaRechazo: nuevoEstado === 'pendiente' ? new Date().toISOString() : null
+};
 
         // 6. Agregar marcas de tiempo específicas
         if (nuevoEstado === 'atendida') {
@@ -713,8 +724,8 @@ window.cambiarEstado = async function(folio, nuevoEstado) {
                 console.error('Función actualizarTablaSeguimiento no definida');
             }
             
-            cargarVerificacion(); // Solo necesario para tablas relacionadas
-            cargarValidadas();    // Solo necesario para tablas relacionadas
+            cargarVerificacion();
+            cargarValidadas();
         }
 
         // 9. Mensajes de éxito contextuales
@@ -722,25 +733,25 @@ window.cambiarEstado = async function(folio, nuevoEstado) {
             'en_proceso': `${tipoDocumento} marcada en proceso`,
             'verificacion': `${tipoDocumento} enviada a verificación`,
             'atendida': `${tipoDocumento} aprobada exitosamente`,
-            'pendiente': `${tipoDocumento} rechazada y reiniciada`
+            'pendiente': `${tipoDocumento} rechazada correctamente`
         };
 
         if (mensajes[nuevoEstado]) {
             mostrarExito(mensajes[nuevoEstado]);
         }
 
-    } catch (error) {
+   } catch (error) {
         console.error("Error completo:", error);
         const mensajeError = error.code === 'storage/object-not-found' 
                            ? 'El archivo adjunto no fue encontrado'
-                           : error.message.startsWith('Error al eliminar') 
-                           ? error.message 
                            : 'Error al actualizar el documento';
         
         mostrarError(mensajeError);
     } finally {
-        folioActual = '';
-        accionActual = '';
+        if (nuevoEstado !== 'pendiente' || (motivo && motivo.trim() !== '')) {
+            folioActual = '';
+            accionActual = '';
+        }
     }
 };
 
@@ -934,6 +945,12 @@ function cargarVerificacion() {
     const userDependencias = getCookie('dependencia') ? 
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
+    // Corregir: Validar si hay dependencias para no-admin
+    if(userRol !== 3 && userDependencias.length === 0) {
+        mostrarPaginaVerificacion([]);
+        return;
+    }
+
     paths.forEach(path => {
         let q;
         if (userRol === 3) {
@@ -943,6 +960,7 @@ function cargarVerificacion() {
                 equalTo('verificacion')
             );
         } else {
+            // Corregir: Crear query válida para no-admin
             userDependencias.forEach(dependencia => {
                 q = query(
                     ref(database, path),
@@ -950,6 +968,12 @@ function cargarVerificacion() {
                     equalTo(dependencia)
                 );
             });
+        }
+
+        // Añadir validación de query existente
+        if(!q) {
+            console.error('Query no definida para el path:', path);
+            return;
         }
 
         onValue(q, (snapshot) => {
@@ -1156,6 +1180,15 @@ function crearFilaSolicitud(solicitud) {
                     onclick="mostrarConfirmacionAtendida('${solicitud.folio}')">
                     <i class="fas fa-check-circle"></i> ${solicitud.estado === 'verificacion' ? 'En Verificación' : 'Mandar a Verificación'}
                 </button>
+
+${solicitud.estado === 'pendiente' ? `
+<button class="btn btn-sm btn-info" 
+        onclick="mostrarMotivo('${solicitud.motivoRechazo || 'Sin motivo registrado'}', '${solicitud._usuarioRechazo || 'Sistema'}', '${solicitud.fechaRechazo}')"
+        data-bs-toggle="tooltip" 
+        title="Ver detalles de rechazo">
+    <i class="fa-solid fa-message"></i>
+</button>
+` : ''}
             </div>
         </td>
     `;
@@ -1338,6 +1371,7 @@ function cargarSeguimiento() {
                     snapshot.forEach(childSnapshot => {
                         const solicitud = childSnapshot.val();
                         solicitud.key = childSnapshot.key;
+                        solicitud.motivoRechazo = solicitud.motivoRechazo || null; // Asegurar campo
                         solicitud.tipoPath = path;
                         datos.push(solicitud);
                     });
@@ -1388,6 +1422,7 @@ function cargarSeguimiento() {
                             const solicitud = childSnapshot.val();
                             solicitud.key = childSnapshot.key;
                             solicitud.tipoPath = path;
+                            solicitud.motivoRechazo = solicitud.motivoRechazo || null; // Asegurar campo
                             datos.push(solicitud);
                         });
                         resolve(datos);
@@ -2637,3 +2672,51 @@ function obtenerFiltroEspecial() {
         esSecretariaParticular: userEmail === 'oficinadepresidencia@tizayuca.gob.mx'
     };
 }
+
+// En el evento de clic del botón de confirmar rechazo
+document.getElementById('confirmarRechazar').addEventListener('click', async () => {
+    const motivoInput = document.getElementById('motivoRechazo');
+    const motivo = motivoInput.value.trim();
+    
+    // Validación robusta
+    if (!motivo || motivo.length > 500) {
+        mostrarError(motivo ? "¡El motivo no puede exceder 500 caracteres!" : "¡Debe ingresar un motivo de rechazo!");
+        motivoInput.classList.add('is-invalid');
+        return;
+    }
+    
+    try {
+        await cambiarEstado(folioActual, 'pendiente', motivo);
+        motivoInput.value = '';
+        bootstrap.Modal.getInstance('#confirmarRechazarModal').hide();
+    } catch (error) {
+        console.error('Error en rechazo:', error);
+        mostrarError("Error al procesar el rechazo");
+    }
+});
+
+// Limpiar el modal al cerrarse
+document.getElementById('confirmarRechazarModal').addEventListener('hidden.bs.modal', () => {
+    document.getElementById('motivoRechazo').value = '';
+});
+
+window.mostrarMotivo = function(motivo, usuario, fecha) {
+    const motivoContenido = document.getElementById('textoMotivo');
+    
+    if (!motivoContenido) {
+        console.error('Elemento textoMotivo no encontrado');
+        return;
+    }
+
+    // Construir contenido con formato seguro
+    const contenidoHTML = `
+        <div class="mb-3">
+        </div>
+        <div class="alert alert-warning mb-0">
+            ${motivo || 'No se especificó un motivo de rechazo'}
+        </div>
+    `;
+
+    motivoContenido.innerHTML = contenidoHTML;
+    new bootstrap.Modal(document.getElementById('motivoModal')).show();
+};
