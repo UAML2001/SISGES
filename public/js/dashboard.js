@@ -85,55 +85,68 @@ window.cambiarEstadoModal = function(nuevoEstado) {
     cambiarEstado(folio, nuevoEstado);
 };
 
-// Funciones utilitarias con zona horaria UTC-6 (México)
 function calcularFechaLimite(fechaCreacion) {
-    const offsetMexico = -6 * 60;
     const fechaBase = new Date(fechaCreacion);
-    fechaBase.setMinutes(fechaBase.getMinutes() + fechaBase.getTimezoneOffset() + offsetMexico);
-    const fechaLimite = new Date(fechaBase);
-    fechaLimite.setDate(fechaLimite.getDate() + 5); // Cambiado de 15 a 5 días
+    let diasAgregados = 0;
+    let fechaLimite = new Date(fechaBase);
+
+    while (diasAgregados < 5) {
+        fechaLimite.setDate(fechaLimite.getDate() + 1);
+        // Saltar sábado (6) y domingo (0)
+        if (fechaLimite.getDay() !== 0 && fechaLimite.getDate() !== 6) {
+            diasAgregados++;
+        }
+    }
+    
     return fechaLimite.toISOString();
 }
 
 function calcularDiasRestantes(fechaLimite) {
-    const offsetMexico = -6 * 60;
-    const ahora = new Date();
+    const ahora = ajustarHoraMexico(new Date());
+    const limite = ajustarHoraMexico(new Date(fechaLimite));
     
-    const ajustarHoraMexico = (fecha) => {
-        const nuevaFecha = new Date(fecha);
-        nuevaFecha.setMinutes(nuevaFecha.getMinutes() + nuevaFecha.getTimezoneOffset() + offsetMexico);
-        return nuevaFecha;
-    };
+    if (ahora >= limite) return 0;
 
-    const ahoraMexico = ajustarHoraMexico(ahora);
-    const limiteMexico = ajustarHoraMexico(new Date(fechaLimite));
-    const diferencia = limiteMexico - ahoraMexico;
+    let diasRestantes = 0;
+    const current = new Date(ahora);
+    
+    while (current < limite) {
+        current.setDate(current.getDate() + 1);
+        // Solo contar días hábiles (Lunes-Viernes)
+        if (current.getDay() !== 0 && current.getDay() !== 6) {
+            diasRestantes++;
+        }
+    }
 
-    return Math.floor(diferencia / (1000 * 60 * 60 * 24));
+    return diasRestantes;
 }
 
 function calcularTiempoRestante(fechaLimite) {
-    const offsetMexico = -6 * 60;
-    const ahora = new Date();
-    
-    const ajustarHoraMexico = (fecha) => {
-        const nuevaFecha = new Date(fecha);
-        nuevaFecha.setMinutes(nuevaFecha.getMinutes() + nuevaFecha.getTimezoneOffset() + offsetMexico);
-        return nuevaFecha;
-    };
+    const ahora = ajustarHoraMexico(new Date());
+    const limite = ajustarHoraMexico(new Date(fechaLimite));
 
-    const ahoraMexico = ajustarHoraMexico(ahora);
-    const limiteMexico = ajustarHoraMexico(new Date(fechaLimite));
-    const diferencia = limiteMexico - ahoraMexico;
+    if (ahora >= limite) return 'Expirado';
 
-    if (diferencia < 0) return 'Expirado';
+    let tiempoRestante = limite - ahora;
 
-    const segundos = Math.floor(diferencia / 1000);
+    // Restar tiempo de fines de semana
+    let current = new Date(ahora);
+    while (current < limite) {
+        // Si es fin de semana, restar 24 horas
+        if (current.getDay() === 0 || current.getDay() === 6) {
+            tiempoRestante -= 86400000; // 24h en milisegundos
+        }
+        current.setDate(current.getDate() + 1);
+    }
+
+    if (tiempoRestante <= 0) return 'Expirado';
+
+    const segundos = Math.floor(tiempoRestante / 1000);
     const minutos = Math.floor(segundos / 60) % 60;
     const horas = Math.floor(segundos / 3600) % 24;
     const dias = Math.floor(segundos / 86400);
 
-    return `${dias} días ${horas} hrs ${minutos.toString().padStart(2, '0')} min`;
+    return `${dias} días hábiles ${horas} hrs ${minutos.toString().padStart(2, '0')} min`;
 }
 
 function obtenerFechaHoy() {
@@ -141,6 +154,13 @@ function obtenerFechaHoy() {
     const offsetMexico = -6 * 60;
     ahora.setMinutes(ahora.getMinutes() + ahora.getTimezoneOffset() + offsetMexico);
     return ahora.toISOString().split('T')[0];
+}
+
+function ajustarHoraMexico(fecha) {
+    const offsetMexico = -6 * 60; // UTC-6
+    const nuevaFecha = new Date(fecha);
+    nuevaFecha.setMinutes(nuevaFecha.getMinutes() + nuevaFecha.getTimezoneOffset() + offsetMexico);
+    return nuevaFecha;
 }
 
 // Funciones de Firebase
@@ -1313,8 +1333,9 @@ async function actualizarEstadosAutomaticos() {
     const ahora = new Date();
     const updates = {};
 
-    solicitudesSeguimiento.forEach((solicitud, index) => {
-        if (['atendida', 'en_proceso'].includes(solicitud.estado)) return;
+    for (const [index, solicitud] of solicitudesSeguimiento.entries()) {
+        // Excluir estados que no deben cambiar automáticamente
+        if (['atendida', 'en_proceso', 'verificacion'].includes(solicitud.estado)) continue;
 
         const dias = calcularDiasRestantes(solicitud.fechaLimite);
         let nuevoEstado = solicitud.estado;
@@ -1326,11 +1347,10 @@ async function actualizarEstadosAutomaticos() {
         }
         
         if (nuevoEstado !== solicitud.estado) {
-            // Actualizar tanto en Firebase como localmente
             updates[`${solicitud.tipoPath}/${solicitud.key}/estado`] = nuevoEstado;
             solicitudesSeguimiento[index].estado = nuevoEstado;
         }
-    });
+    }
     
     if (Object.keys(updates).length > 0) {
         await update(ref(database), updates);
