@@ -571,13 +571,16 @@ async function cargarDependencias() {
 
 let intervaloActualizacion;
 
-function iniciarActualizacionTiempo() {
-    if (intervaloActualizacion) clearInterval(intervaloActualizacion);
-    
+function iniciarActualizacionTiempo() {    
     intervaloActualizacion = setInterval(() => {
         document.querySelectorAll('#lista-seguimiento tr').forEach(fila => {
             const estado = fila.dataset.estado;
             const celdaTiempo = fila.cells[4];
+
+            if (estado === 'verificacion') {
+                celdaTiempo.textContent = 'En Verificación'; // Mostrar texto estático
+                return;
+            }
             
             if(estado === 'atendida') {
                 celdaTiempo.textContent = 'Atendida';
@@ -586,7 +589,7 @@ function iniciarActualizacionTiempo() {
                 celdaTiempo.textContent = calcularTiempoRestante(fechaLimite);
             }
         });
-    }, 60000);
+    }, 3600000);
 }
 
 function actualizarEstadisticas(solicitudes) {
@@ -1155,7 +1158,7 @@ const estados = {
     'pendiente': {texto: 'Pendiente', color: '#491F42'},
     'por_vencer': {texto: 'Por Vencer', color: '#720F36'},
     'en_proceso': {texto: 'En Proceso', color: '#ae9074'},
-    'verificacion': { texto: 'En Verificación', color: '#FFA500' }, // Añadir esta línea
+    'verificacion': {texto: 'En Verificación', color: '#FFA500'},
     'atendida': {texto: 'Atendida', color: '#2E7D32'},
     'atrasada': {texto: 'Atrasada', color: '#a90000'}
 };
@@ -1183,7 +1186,7 @@ function crearFilaSolicitud(solicitud) {
         <td>${solicitud.solicitante?.nombre ? solicitud.solicitante.nombre : 'N/A'}</td>
         <td>${solicitud.solicitante?.telefono ? solicitud.solicitante.telefono : 'N/A'}</td>
         <td><span class="status-badge" style="background:${estado.color}">${estado.texto}</span></td>
-        <td>${solicitud.estado === 'atendida' ? 'Atendida' : calcularTiempoRestante(solicitud.fechaLimite)}</td>
+        <td>${solicitud.estado === 'atendida' ? 'Atendida' : solicitud.estado === 'verificacion' ? 'En Verificación' : calcularTiempoRestante(solicitud.fechaLimite)}</td>
         <td>
             <div class="d-flex gap-2">
                 ${solicitud.documentoInicial ? `
@@ -1198,11 +1201,11 @@ function crearFilaSolicitud(solicitud) {
                     <i class="fas fa-sync-alt"></i> ${solicitud.estado === 'en_proceso' ? 'En Proceso' : 'Marcar Proceso'}
                 </button>
                 
-                <button class="btn btn-sm btn-verificacion" 
-                    ${solicitud.estado === 'verificacion' ? 'disabled' : ''}
-                    onclick="mostrarConfirmacionAtendida('${solicitud.folio}')">
-                    <i class="fas fa-check-circle"></i> ${solicitud.estado === 'verificacion' ? 'En Verificación' : 'Mandar a Verificación'}
-                </button>
+<button class="btn btn-sm btn-verificacion" 
+    ${solicitud.estado === 'verificacion' ? 'disabled' : ''}
+    onclick="mostrarConfirmacionAtendida('${solicitud.folio}')">
+    <i class="fas fa-check-circle"></i> ${solicitud.estado === 'verificacion' ? 'En Verificación' : 'Mandar a Verificación'}
+</button>
 
 ${solicitud.estado === 'pendiente' ? `
 <button class="btn btn-sm btn-info" 
@@ -1338,7 +1341,13 @@ async function actualizarEstadosAutomaticos() {
 
     for (const solicitud of solicitudesSeguimiento) {
         // Solo procesar solicitudes pendientes o por vencer
-        if (solicitud.estado !== 'pendiente' && solicitud.estado !== 'por_vencer') continue;
+        if (solicitud.estado !== 'pendiente' && solicitud.estado !== 'por_vencer') continue; // Excluir verificacion y otros
+
+        if (
+            solicitud.estado === 'verificacion' ||
+            solicitud.estado === 'atendida' ||
+            solicitud.estado === 'atrasada'
+        ) continue;
 
         const dias = calcularDiasRestantes(solicitud.fechaLimite);
         let nuevoEstado;
@@ -1346,10 +1355,8 @@ async function actualizarEstadosAutomaticos() {
         // Lógica actualizada
         if (dias <= 0) {
             nuevoEstado = 'atrasada';
-        } else if (dias <= 1) {
+        } else if (dias < 1) {
             nuevoEstado = 'por_vencer';
-        } else { // Si hay más de 1 día hábil
-            nuevoEstado = 'pendiente';
         }
 
         if (nuevoEstado !== solicitud.estado) {
@@ -1363,9 +1370,9 @@ async function actualizarEstadosAutomaticos() {
     }
 }
 
-// // Ejecutar cada hora y al cargar la página
-// setInterval(actualizarEstadosAutomaticos, 60000);
-// document.addEventListener('DOMContentLoaded', actualizarEstadosAutomaticos);
+// Ejecutar cada hora y al cargar la página
+setInterval(actualizarEstadosAutomaticos, 300000);
+document.addEventListener('DOMContentLoaded', actualizarEstadosAutomaticos);
 
 function cargarSeguimiento() {
     const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
