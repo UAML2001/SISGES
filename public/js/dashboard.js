@@ -1363,9 +1363,9 @@ async function actualizarEstadosAutomaticos() {
     }
 }
 
-// Ejecutar cada hora y al cargar la página
-setInterval(actualizarEstadosAutomaticos, 6000);
-document.addEventListener('DOMContentLoaded', actualizarEstadosAutomaticos);
+// // Ejecutar cada hora y al cargar la página
+// setInterval(actualizarEstadosAutomaticos, 60000);
+// document.addEventListener('DOMContentLoaded', actualizarEstadosAutomaticos);
 
 function cargarSeguimiento() {
     const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
