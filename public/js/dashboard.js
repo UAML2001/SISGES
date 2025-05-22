@@ -105,15 +105,19 @@ function calcularDiasRestantes(fechaLimite) {
     const ahora = ajustarHoraMexico(new Date());
     const limite = ajustarHoraMexico(new Date(fechaLimite));
     
-    if (ahora >= limite) return 0;
+    // Si ya expiró, retornar valor negativo
+    if (ahora >= limite) {
+        const diffMs = ahora - limite;
+        return Math.floor(diffMs / (1000 * 60 * 60 * 24)) * -1; // Días expirados como negativo
+    }
 
     let diasRestantes = 0;
     const current = new Date(ahora);
     
+    // Calcular días hábiles restantes
     while (current < limite) {
         current.setDate(current.getDate() + 1);
-        // Solo contar días hábiles (Lunes-Viernes)
-        if (current.getDay() !== 0 && current.getDay() !== 6) {
+        if (current.getDay() !== 0 && current.getDay() !== 6) { // Excluir fines de semana
             diasRestantes++;
         }
     }
@@ -588,9 +592,9 @@ function iniciarActualizacionTiempo() {
 function actualizarEstadisticas(solicitudes) {
     const stats = {
         pendientes: 0,
-        porVencer: 0,
+        porVencer: 0,  // <- Contador directo (no derivado de pendientes)
         enProceso: 0,
-        verificacion: 0, // Asegurar que esta propiedad existe
+        verificacion: 0,
         atendidas: 0,
         atrasadas: 0,
         total: 0
@@ -598,20 +602,19 @@ function actualizarEstadisticas(solicitudes) {
 
     solicitudes.forEach(s => {
         stats.total++;
-        const fechaCreacion = new Date(s.fechaCreacion);
-        
-        // Calcular días restantes para estados relevantes
-        const diasRest = calcularDiasRestantes(s.fechaLimite);
-        
-        switch(s.estado) {
+        const estado = s.estado;  // Usar el estado real de la solicitud
+
+        switch(estado) {
             case 'pendiente':
                 stats.pendientes++;
-                if(diasRest <= 3) stats.porVencer++;
+                break;
+            case 'por_vencer':  // <- Caso explícito
+                stats.porVencer++;
                 break;
             case 'en_proceso':
                 stats.enProceso++;
                 break;
-            case 'verificacion': // Nuevo caso
+            case 'verificacion':
                 stats.verificacion++;
                 break;
             case 'atendida':
@@ -625,9 +628,9 @@ function actualizarEstadisticas(solicitudes) {
 
     // Actualizar DOM
     document.getElementById('stats-pendientes').textContent = stats.pendientes;
-    document.getElementById('stats-vencer').textContent = stats.porVencer;
+    document.getElementById('stats-vencer').textContent = stats.porVencer; // <- Valor directo
     document.getElementById('stats-en-proceso').textContent = stats.enProceso;
-    document.getElementById('stats-verificacion').textContent = stats.verificacion; // Asegurar este elemento
+    document.getElementById('stats-verificacion').textContent = stats.verificacion;
     document.getElementById('stats-atendidas').textContent = stats.atendidas;
     document.getElementById('stats-atrasadas').textContent = stats.atrasadas;
     
@@ -1329,37 +1332,39 @@ async function obtenerNombreDependencia(dependenciaKey) {
 }
 
 // Función actualizada para actualizar estados automáticos
+// FUNCIÓN CORREGIDA - Estados automáticos solo para pendientes
 async function actualizarEstadosAutomaticos() {
-    const ahora = new Date();
     const updates = {};
 
-    for (const [index, solicitud] of solicitudesSeguimiento.entries()) {
-        // Excluir estados que no deben cambiar automáticamente
-        if (['atendida', 'en_proceso', 'verificacion'].includes(solicitud.estado)) continue;
+    for (const solicitud of solicitudesSeguimiento) {
+        // Solo procesar solicitudes pendientes o por vencer
+        if (solicitud.estado !== 'pendiente' && solicitud.estado !== 'por_vencer') continue;
 
         const dias = calcularDiasRestantes(solicitud.fechaLimite);
-        let nuevoEstado = solicitud.estado;
-        
-        if (dias < 0) {
+        let nuevoEstado;
+
+        // Lógica actualizada
+        if (dias <= 0) {
             nuevoEstado = 'atrasada';
-        } else if (dias <= 3) {
+        } else if (dias <= 1) {
             nuevoEstado = 'por_vencer';
+        } else { // Si hay más de 1 día hábil
+            nuevoEstado = 'pendiente';
         }
-        
+
         if (nuevoEstado !== solicitud.estado) {
             updates[`${solicitud.tipoPath}/${solicitud.key}/estado`] = nuevoEstado;
-            solicitudesSeguimiento[index].estado = nuevoEstado;
         }
     }
-    
+
     if (Object.keys(updates).length > 0) {
         await update(ref(database), updates);
-        actualizarTablaSeguimiento();
+        cargarSeguimiento();
     }
 }
 
 // Ejecutar cada hora y al cargar la página
-setInterval(actualizarEstadosAutomaticos, 3600000);
+setInterval(actualizarEstadosAutomaticos, 6000);
 document.addEventListener('DOMContentLoaded', actualizarEstadosAutomaticos);
 
 function cargarSeguimiento() {
