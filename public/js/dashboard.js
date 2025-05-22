@@ -569,28 +569,30 @@ async function cargarDependencias() {
     });
 }
 
-let intervaloActualizacion;
+// 1. Variable para controlar el intervalo
+let intervaloActualizacionGlobal = null;
 
 function iniciarActualizacionTiempo() {    
     intervaloActualizacion = setInterval(() => {
         document.querySelectorAll('#lista-seguimiento tr').forEach(fila => {
             const estado = fila.dataset.estado;
             const celdaTiempo = fila.cells[4];
-
-            if (estado === 'verificacion') {
-                celdaTiempo.textContent = 'En Verificación'; // Mostrar texto estático
+            
+            // Congelar visualización para estos estados
+            if (['verificacion', 'atendida'].includes(estado)) {
+                celdaTiempo.textContent = estado === 'verificacion' 
+                    ? 'En Verificación' 
+                    : 'Atendida';
                 return;
             }
             
-            if(estado === 'atendida') {
-                celdaTiempo.textContent = 'Atendida';
-            } else {
-                const fechaLimite = fila.dataset.fechaLimite;
-                celdaTiempo.textContent = calcularTiempoRestante(fechaLimite);
-            }
+            // Actualizar solo la visualización del tiempo
+            const fechaLimite = fila.dataset.fechaLimite;
+            celdaTiempo.textContent = calcularTiempoRestante(fechaLimite);
         });
-    }, 3600000);
+    }, 60000); // Actualizar cada minuto solo el texto
 }
+
 
 function actualizarEstadisticas(solicitudes) {
     const stats = {
@@ -657,6 +659,7 @@ function actualizarTablaSeguimiento() {
         }
     });
 
+    iniciarActualizacionTiempo(); // ← ¡Aquí debe llamarse la función!
     aplicarFiltrosSeguimiento();
     actualizarEstadisticas(solicitudesSeguimiento);
     actualizarGrafica(solicitudesSeguimiento);
@@ -1167,7 +1170,7 @@ function crearFilaSolicitud(solicitud) {
     const tr = document.createElement('tr');
     tr.dataset.fechaLimite = solicitud.fechaLimite;
     tr.dataset.estado = solicitud.estado;
-    const estadoActual = solicitud.estado;
+    tr.dataset.estado = solicitud.estado; // ← Asegurar este atributo
 
     const nombresTipos = {
         'acuerdo': 'Acuerdo de Gabinete',
@@ -1336,42 +1339,109 @@ async function obtenerNombreDependencia(dependenciaKey) {
 
 // Función actualizada para actualizar estados automáticos
 // FUNCIÓN CORREGIDA - Estados automáticos solo para pendientes
+// async function actualizarEstadosAutomaticos() {
+//     const updates = {};
+//     const hoy = new Date().toISOString().split('T')[0]; // Fecha actual en YYYY-MM-DD
+
+//     for (const solicitud of solicitudesSeguimiento) {
+//         // Solo procesar solicitudes pendientes o por vencer
+//         if (solicitud.estado !== 'pendiente' && solicitud.estado !== 'por_vencer') continue; // Excluir verificacion y otros
+
+//         if (
+//             solicitud.estado === 'verificacion' ||
+//             solicitud.estado === 'atendida' ||
+//             solicitud.estado === 'atrasada'
+//         ) continue;
+
+//         const dias = calcularDiasRestantes(solicitud.fechaLimite);
+//         let nuevoEstado;
+
+//         // Lógica actualizada
+//         if (dias <= 0) {
+//             nuevoEstado = 'atrasada';
+//         } else if (dias < 1) {
+//             nuevoEstado = 'por_vencer';
+//         }
+
+//         if (nuevoEstado !== solicitud.estado) {
+//             updates[`${solicitud.tipoPath}/${solicitud.key}/estado`] = nuevoEstado;
+//         }
+//     }
+
+//     if (Object.keys(updates).length > 0) {
+//         await update(ref(database), updates);
+//         cargarSeguimiento();
+//     }
+// }
+
 async function actualizarEstadosAutomaticos() {
     const updates = {};
+    const ahora = ajustarHoraMexico(new Date());
+    const fechaActual = ahora.toISOString();
 
-    for (const solicitud of solicitudesSeguimiento) {
-        // Solo procesar solicitudes pendientes o por vencer
-        if (solicitud.estado !== 'pendiente' && solicitud.estado !== 'por_vencer') continue; // Excluir verificacion y otros
+    try {
+        // 1. Obtener datos frescos desde Firebase
+        const paths = ['solicitudes', 'acuerdos', 'oficios'];
+        const allDocs = await Promise.all(paths.map(async (path) => {
+            const snapshot = await get(query(ref(database, path)));
+            return snapshot.val() || {};
+        }));
 
-        if (
-            solicitud.estado === 'verificacion' ||
-            solicitud.estado === 'atendida' ||
-            solicitud.estado === 'atrasada'
-        ) continue;
+        // 2. Procesar documentos
+        for (const [index, path] of paths.entries()) {
+            const docs = allDocs[index];
+            for (const [key, doc] of Object.entries(docs)) {
+                // 3. Filtrar documentos relevantes
+                if (!['pendiente', 'por_vencer'].includes(doc.estado)) continue;
 
-        const dias = calcularDiasRestantes(solicitud.fechaLimite);
-        let nuevoEstado;
+                // 4. Calcular días restantes
+                const dias = calcularDiasRestantes(doc.fechaLimite);
+                let nuevoEstado = doc.estado;
 
-        // Lógica actualizada
-        if (dias <= 0) {
-            nuevoEstado = 'atrasada';
-        } else if (dias < 1) {
-            nuevoEstado = 'por_vencer';
+                // 5. Lógica de transición de estados
+                if (dias <= 0) {
+                    nuevoEstado = 'atrasada';
+                } else if (dias === 1) {
+                    nuevoEstado = 'por_vencer';
+                } else if (doc.estado === 'por_vencer' && dias > 1) {
+                    nuevoEstado = 'pendiente';
+                }
+
+                // 6. Preparar actualización si hay cambio
+                if (nuevoEstado !== doc.estado) {
+                    const docPath = `${path}/${key}`;
+                    updates[`${docPath}/estado`] = nuevoEstado;
+                    updates[`${docPath}/ultimaActualizacion`] = fechaActual;
+                }
+            }
         }
 
-        if (nuevoEstado !== solicitud.estado) {
-            updates[`${solicitud.tipoPath}/${solicitud.key}/estado`] = nuevoEstado;
+        // 7. Ejecutar actualizaciones atómicas
+        if (Object.keys(updates).length > 0) {
+            await update(ref(database), updates);
+            
+            // 8. Actualizar datos locales selectivamente
+            Object.entries(updates).forEach(([path, value]) => {
+                const [collection, key, field] = path.split('/');
+                const solicitud = solicitudesSeguimiento.find(s => 
+                    s.tipoPath === collection && s.key === key
+                );
+                if (solicitud && field === 'estado') {
+                    solicitud.estado = value;
+                }
+            });
+            
+            actualizarTablaSeguimiento();
         }
-    }
 
-    if (Object.keys(updates).length > 0) {
-        await update(ref(database), updates);
-        cargarSeguimiento();
+    } catch (error) {
+        console.error('Error en actualización automática:', error);
+        mostrarError('Error técnico al actualizar estados');
     }
 }
 
-// Ejecutar cada hora y al cargar la página
-setInterval(actualizarEstadosAutomaticos, 300000);
+// Ejecutar cada 15 minutos y al cargar
+setInterval(actualizarEstadosAutomaticos, 900000); // 15 min
 document.addEventListener('DOMContentLoaded', actualizarEstadosAutomaticos);
 
 function cargarSeguimiento() {
