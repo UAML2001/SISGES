@@ -1341,111 +1341,94 @@ async function obtenerNombreDependencia(dependenciaKey) {
     return snapshot.val()?.nombre || 'Desconocida';
 }
 
-// Función actualizada para actualizar estados automáticos
-// FUNCIÓN CORREGIDA - Estados automáticos solo para pendientes
-// async function actualizarEstadosAutomaticos() {
-//     const updates = {};
-//     const hoy = new Date().toISOString().split('T')[0]; // Fecha actual en YYYY-MM-DD
+// 1. Variables de control
+let actualizacionEnCurso = false;
+const DIAS_ADVERTENCIA = 1; // Días previos para marcar como "por vencer"
 
-//     for (const solicitud of solicitudesSeguimiento) {
-//         // Solo procesar solicitudes pendientes o por vencer
-//         if (solicitud.estado !== 'pendiente' && solicitud.estado !== 'por_vencer') continue; // Excluir verificacion y otros
-
-//         if (
-//             solicitud.estado === 'verificacion' ||
-//             solicitud.estado === 'atendida' ||
-//             solicitud.estado === 'atrasada'
-//         ) continue;
-
-//         const dias = calcularDiasRestantes(solicitud.fechaLimite);
-//         let nuevoEstado;
-
-//         // Lógica actualizada
-//         if (dias <= 0) {
-//             nuevoEstado = 'atrasada';
-//         } else if (dias < 1) {
-//             nuevoEstado = 'por_vencer';
-//         }
-
-//         if (nuevoEstado !== solicitud.estado) {
-//             updates[`${solicitud.tipoPath}/${solicitud.key}/estado`] = nuevoEstado;
-//         }
-//     }
-
-//     if (Object.keys(updates).length > 0) {
-//         await update(ref(database), updates);
-//         cargarSeguimiento();
-//     }
-// }
-
+// 2. Función optimizada para actualización de estados
 async function actualizarEstadosAutomaticos() {
-    const updates = {};
-    const ahora = ajustarHoraMexico(new Date());
-    const fechaActual = ahora.toISOString();
-
+    if (actualizacionEnCurso) return;
+    actualizacionEnCurso = true;
+    
     try {
-        // 1. Obtener datos frescos desde Firebase
+        const ahora = ajustarHoraMexico(new Date());
+        const updates = {};
         const paths = ['solicitudes', 'acuerdos', 'oficios'];
+        
+        // Obtener datos directamente de Firebase
         const allDocs = await Promise.all(paths.map(async (path) => {
             const snapshot = await get(query(ref(database, path)));
             return snapshot.val() || {};
         }));
-
-        // 2. Procesar documentos
-        for (const [index, path] of paths.entries()) {
+        
+        // Procesar cada documento
+        paths.forEach((path, index) => {
             const docs = allDocs[index];
-            for (const [key, doc] of Object.entries(docs)) {
-                // 3. Filtrar documentos relevantes
-                if (!['pendiente', 'por_vencer'].includes(doc.estado)) continue;
-
-                // 4. Calcular días restantes
-                const dias = calcularDiasRestantes(doc.fechaLimite);
+            Object.entries(docs).forEach(([key, doc]) => {
+                if (!['pendiente', 'por_vencer'].includes(doc.estado)) return;
+                
+                const fechaLimite = ajustarHoraMexico(new Date(doc.fechaLimite));
+                const diasRestantes = calcularDiasHabilesRestantes(ahora, fechaLimite);
+                
                 let nuevoEstado = doc.estado;
-
-                // 5. Lógica de transición de estados
-                if (dias <= 0) {
+                
+                // Lógica mejorada de transición de estados
+                if (diasRestantes === 0) {
                     nuevoEstado = 'atrasada';
-                } else if (dias === 1) {
+                } else if (diasRestantes <= DIAS_ADVERTENCIA && doc.estado === 'pendiente') {
                     nuevoEstado = 'por_vencer';
-                } else if (doc.estado === 'por_vencer' && dias > 1) {
+                } else if (diasRestantes > DIAS_ADVERTENCIA && doc.estado === 'por_vencer') {
                     nuevoEstado = 'pendiente';
                 }
-
-                // 6. Preparar actualización si hay cambio
+                
                 if (nuevoEstado !== doc.estado) {
-                    const docPath = `${path}/${key}`;
-                    updates[`${docPath}/estado`] = nuevoEstado;
-                    updates[`${docPath}/ultimaActualizacion`] = fechaActual;
+                    updates[`${path}/${key}/estado`] = nuevoEstado;
+                    updates[`${path}/${key}/ultimaActualizacion`] = ahora.toISOString();
                 }
-            }
-        }
-
-        // 7. Ejecutar actualizaciones atómicas
+            });
+        });
+        
+        // Ejecutar actualizaciones si hay cambios
         if (Object.keys(updates).length > 0) {
             await update(ref(database), updates);
             
-            // 8. Actualizar datos locales selectivamente
+            // Actualizar datos locales sin recargar toda la lista
             Object.entries(updates).forEach(([path, value]) => {
                 const [collection, key, field] = path.split('/');
-                const solicitud = solicitudesSeguimiento.find(s => 
+                const index = solicitudesSeguimiento.findIndex(s => 
                     s.tipoPath === collection && s.key === key
                 );
-                if (solicitud && field === 'estado') {
-                    solicitud.estado = value;
+                if (index > -1 && field === 'estado') {
+                    solicitudesSeguimiento[index].estado = value;
                 }
             });
-            
-            actualizarTablaSeguimiento();
         }
-
+        
     } catch (error) {
         console.error('Error en actualización automática:', error);
         mostrarError('Error técnico al actualizar estados');
+    } finally {
+        actualizacionEnCurso = false;
     }
 }
 
-// Ejecutar cada 15 minutos y al cargar
-setInterval(actualizarEstadosAutomaticos, 900000); // 15 min
+// 3. Función mejorada para cálculo de días hábiles
+function calcularDiasHabilesRestantes(fechaInicio, fechaLimite) {
+    let dias = 0;
+    const fechaActual = new Date(fechaInicio);
+    
+    while (fechaActual < fechaLimite) {
+        fechaActual.setDate(fechaActual.getDate() + 1);
+        if (fechaActual.getDay() !== 0 && fechaActual.getDay() !== 6) {
+            dias++;
+        }
+    }
+    
+    return dias;
+}
+
+// 4. Configurar intervalo de actualización (cada 12 horas)
+setInterval(actualizarEstadosAutomaticos, 43200000); // 12 horas 43200000
 document.addEventListener('DOMContentLoaded', actualizarEstadosAutomaticos);
 
 function cargarSeguimiento() {
