@@ -572,8 +572,12 @@ async function cargarDependencias() {
 // 1. Variable para controlar el intervalo
 let intervaloActualizacionGlobal = null;
 
-function iniciarActualizacionTiempo() {    
-    intervaloActualizacion = setInterval(() => {
+// 2. Función de actualización de tiempos (¡NUEVA!)
+// Función para actualización visual de tiempos (sin afectar estados reales)
+function iniciarActualizacionTiempo() {
+    if (intervaloActualizacionGlobal) clearInterval(intervaloActualizacionGlobal);
+    
+    intervaloActualizacionGlobal = setInterval(() => {
         document.querySelectorAll('#lista-seguimiento tr').forEach(fila => {
             const estado = fila.dataset.estado;
             const celdaTiempo = fila.cells[4];
