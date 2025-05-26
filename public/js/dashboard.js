@@ -55,7 +55,7 @@ let solicitudesVerificacion = [];
 const itemsPerPage = 5;
 let currentPageSeguimiento = 1;
 let currentPageValidadas = 1;
-let currentVerificacion = [];
+let currentPageVerificacion = 1; // ← Añadir esta línea con las demás variables de paginación
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
@@ -1023,12 +1023,58 @@ function cargarVerificacion() {
                 solicitudesVerificacion.push(solicitud);
             });
             
-            mostrarPaginaVerificacion(solicitudesVerificacion);
+            aplicarFiltrosVerificacion();
         });
     });
 }
 
+document.getElementById('busqueda-verificacion').addEventListener('input', () => {
+    currentPageVerificacion = 1;
+    aplicarFiltrosVerificacion();
+});
+
+function aplicarFiltrosVerificacion() {
+    const busqueda = document.getElementById('busqueda-verificacion').value.toLowerCase();
+    const filtradas = solicitudesVerificacion.filter(s =>
+        s.folio.toLowerCase().includes(busqueda) ||
+        s.asunto.toLowerCase().includes(busqueda)
+    );
+    mostrarPaginaVerificacion(filtradas);
+}
+
+function actualizarPaginacionVerificacion(totalItems) {
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const container = document.querySelector('.paginacion-verificacion');
+    container.innerHTML = '';
+
+    if (totalItems === 0 || totalPages === 0) return;
+
+    container.innerHTML = `
+        <div class="paginacion-contenedor">
+            <button class="btn-pag anterior" ${currentPageVerificacion === 1 ? 'disabled' : ''}>
+                Anterior
+            </button>
+            <span class="info-pagina">Página ${currentPageVerificacion} de ${totalPages}</span>
+            <button class="btn-pag siguiente" ${currentPageVerificacion === totalPages ? 'disabled' : ''}>
+                Siguiente
+            </button>
+        </div>
+    `;
+
+    container.querySelector('.anterior')?.addEventListener('click', () => {
+        currentPageVerificacion = Math.max(1, currentPageVerificacion - 1);
+        aplicarFiltrosVerificacion();
+    });
+
+    container.querySelector('.siguiente')?.addEventListener('click', () => {
+        currentPageVerificacion = Math.min(totalPages, currentPageVerificacion + 1);
+        aplicarFiltrosVerificacion();
+    });
+}
+
 function mostrarPaginaVerificacion(data) {
+    const start = (currentPageVerificacion - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
     const tabla = document.getElementById('lista-verificacion');
     tabla.innerHTML = '';
 
@@ -1041,10 +1087,13 @@ function mostrarPaginaVerificacion(data) {
             </td>
         `;
         tabla.appendChild(tr);
+        actualizarPaginacionVerificacion(0);
         return;
     }
 
-    data.forEach(solicitud => {
+    const items = data.slice(start, end);
+
+    items.forEach(solicitud => {
         const tipoDocumento = solicitud.tipo === 'solicitudes' ? 'Solicitud' :
                             solicitud.tipo === 'acuerdos' ? 'Acuerdo de Gabinete' : 
                             'Oficio';
@@ -1101,6 +1150,7 @@ function mostrarPaginaVerificacion(data) {
         `;
         tabla.appendChild(tr);
     });
+    actualizarPaginacionVerificacion(data.length);
 }
 
 window.mostrarConfirmacion = function(folio, accion, tipo) {
@@ -1661,16 +1711,6 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
         console.error("Error al guardar:", error);
         mostrarError(`Error al crear la solicitud: ${error.message}`);
     }
-});
-
-// Buscador en Verificación
-document.getElementById('busqueda-verificacion').addEventListener('input', function () {
-    const termino = this.value.toLowerCase();
-    const filtradas = solicitudesVerificacion.filter(s =>
-        s.key.toLowerCase().includes(termino) ||
-        s.asunto.toLowerCase().includes(termino)
-    );
-    mostrarPaginaVerificacion(filtradas);
 });
 
 // Añadir al inicio con las constantes
