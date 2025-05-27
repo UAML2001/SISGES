@@ -52,19 +52,19 @@
                 <li class="nav-item">
                     <a class="nav-link" href="#seguimiento" data-content="seguimiento">
                         <i class="fas fa-search"></i>
-                        Seguimiento
+                        Seguimiento de Solicitudes
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="#verificacion" data-content="verificacion">
                         <i class="fas fa-clipboard-check"></i>
-                        Verificación
+                        Solicitudes en Verificación
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="#validadas" data-content="validadas">
                         <i class="fa-solid fa-check-double"></i>
-                        Validada
+                        Solicitudes Atendidas
                     </a>
                 </li>
             </ul>
@@ -256,7 +256,7 @@
                 <tr>
                     <th>Folio</th>
                     <th>Asunto</th>
-                    <th>Tipo</th>
+                    <th>Canal</th>
                     <th>Secretaría</th>
                     <th>Nombre de Peticionario</th>
                     <th>Telefono</th>
@@ -577,11 +577,11 @@
                 </div>
                 <select id="filtro-estado-seguimiento" class="form-select">
                     <option value="">Todos los estados</option>
-                    <option value="pendiente">Pendiente</option>
+                    <option value="pendiente">Pendientes</option>
                     <option value="por_vencer">Por Vencer</option>
                     <option value="en_proceso">En Proceso</option>
-                    <option value="atrasada">Atrasada</option>
-                    <option value="atendida">Atendida</option>
+                    <option value="verificacion">En Verificación</option> <!-- Nueva opción -->
+                    <option value="atrasada">Atrasadas</option>
                 </select>
             </div>
             <div class="custom-table">
@@ -589,7 +589,7 @@
                     <thead>
                         <tr>
                             <th>Folio</th>
-                            <th>Tipo de Solicitud</th> <!-- Nueva columna -->
+                            <th>Canal</th> <!-- Nueva columna -->
                             <th>Asunto</th>
                             <th>Secretaría</th>
                             <th>Nombre de Peticionario</th>
@@ -611,7 +611,7 @@
         <div id="validadas-content" class="content-section" style="display: none;">
             <h2 class="section-title">
                 <i class="fa-solid fa-check-double"></i>
-                Solicitudes Validadas
+                Solicitudes Atendidas
             </h2>
             <div class="filtros-container mb-4">
                 <div class="input-group">
@@ -630,7 +630,7 @@
                     <thead>
                         <tr>
                             <th>Folio</th>
-                            <th>Tipo</th>
+                            <th>Canal</th>
                             <th>Asunto</th>
                             <th>Secretaría</th>
                             <th>Nombre de Peticionario</th>

@@ -236,9 +236,7 @@ function cargarValidadas() {
                 }
 
                 documento.key = childSnapshot.key;
-                documento.tipo = path === 'solicitudes' ? 'Solicitud' 
-                               : path === 'acuerdos' ? 'Acuerdo' 
-                               : 'Oficio';
+                documento.tipo = documento.tipo || 'No especificado'; // Usar campo "tipo" de Firebase
 
                 if (!solicitudesValidadas.find(s => s.key === documento.key)) {
                     solicitudesValidadas.push(documento);
@@ -281,7 +279,7 @@ items.forEach(solicitud => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${solicitud.key}</td>
-            <td>${solicitud.tipo}</td>
+            <td>${solicitud.tipo || 'N/A'}</td>
             <td>${solicitud.asunto}</td>
             <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
             <td>${solicitud.solicitante?.nombre ? solicitud.solicitante.nombre : 'N/A'}</td>
@@ -441,7 +439,7 @@ function mostrarPaginaSeguimiento(data) {
 async function cargarSecretarias() {
     const secretariasRef = ref(database, 'dependencias');
     const snapshot = await get(secretariasRef);
-    const selects = ['secretaria', 'secretariaAcuerdo', 'secretariaOficio'];
+    const selects = ['secretaria', 'secretariaAcuerdo', 'secretariaOficio', 'filtro-secretaria-validadas'];
     
     // Obtener datos del usuario
     const userRol = parseInt(getCookie('rol')) || 0;
@@ -1018,7 +1016,7 @@ function cargarVerificacion() {
                 if (solicitud.estado !== 'verificacion') return;
 
                 solicitud.key = childSnapshot.key;
-                solicitud.tipo = path;
+                solicitud.tipo = solicitud.tipo || path; // Priorizar campo "tipo" del documento
                 solicitud.folio = solicitud.folio || childSnapshot.key;
                 solicitudesVerificacion.push(solicitud);
             });
@@ -1094,9 +1092,7 @@ function mostrarPaginaVerificacion(data) {
     const items = data.slice(start, end);
 
     items.forEach(solicitud => {
-        const tipoDocumento = solicitud.tipo === 'solicitudes' ? 'Solicitud' :
-                            solicitud.tipo === 'acuerdos' ? 'Acuerdo de Gabinete' : 
-                            'Oficio';
+        const tipoDocumento = solicitud.tipo;
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -1264,9 +1260,9 @@ function crearFilaSolicitud(solicitud) {
     <i class="fas fa-check-circle"></i> ${solicitud.estado === 'verificacion' ? 'En Verificación' : 'Mandar a Verificación'}
 </button>
 
-${solicitud.estado === 'pendiente' ? `
+${solicitud.motivoRechazo ? `
 <button class="btn btn-sm btn-info" 
-        onclick="mostrarMotivo('${solicitud.motivoRechazo || 'Sin motivo registrado'}', '${solicitud._usuarioRechazo || 'Sistema'}', '${solicitud.fechaRechazo}')"
+        onclick="mostrarMotivo('${solicitud.motivoRechazo}', '${solicitud._usuarioRechazo || 'Sistema'}', '${solicitud.fechaRechazo || 'Fecha no disponible'}')"
         data-bs-toggle="tooltip" 
         title="Ver detalles de rechazo">
     <i class="fa-solid fa-message"></i>
