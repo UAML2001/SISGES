@@ -578,7 +578,7 @@ function iniciarActualizacionTiempo() {
     intervaloActualizacionGlobal = setInterval(() => {
         document.querySelectorAll('#lista-seguimiento tr').forEach(fila => {
             const estado = fila.dataset.estado;
-            const celdaTiempo = fila.cells[4];
+            const celdaTiempo = fila.cells[7];
             
             // Congelar visualización para estos estados
             if (['verificacion', 'atendida'].includes(estado)) {
@@ -2289,7 +2289,12 @@ document.getElementById('formNuevoOficio').addEventListener('submit', async (e) 
             documentoInicial: docUrl,
             nombreDocumento: docFile.name,
             estado: 'pendiente',
-            folio: folio
+            folio: folio,
+            // NUEVOS CAMPOS AQUÍ
+            solicitante: {
+                nombre: document.getElementById('peticionarioOficio').value,
+                telefono: document.getElementById('telefonoOficio').value
+            }
         };
 
         await set(ref(database, `oficios/${folio}`), nuevoOficio);
@@ -2355,8 +2360,13 @@ function limpiarFormulario(tipo) {
     
     // Restablecer fecha
     document.getElementById(`fecha${prefix}`).value = obtenerFechaHoy();
+    
+    // Limpiar nuevos campos específicos para oficio
+    if (tipo === 'oficio') {
+        document.getElementById('peticionarioOficio').value = '';
+        document.getElementById('telefonoOficio').value = '';
+    }
 }
-
 // Configurar eventos para los documentos
 ['Acuerdo', 'Oficio'].forEach(tipo => {
     const docInput = document.getElementById(`documento${tipo}`);

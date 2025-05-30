@@ -499,6 +499,18 @@
             </div>
 
             <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label for="peticionarioOficio" class="form-label">Institución o nombre del peticionario</label>
+                    <input type="text" class="form-control" id="peticionarioOficio" required>
+                </div>
+                
+                <div class="col-md-6">
+                    <label for="telefonoOficio" class="form-label">Teléfono</label>
+                    <input type="tel" class="form-control" id="telefonoOficio" pattern="[0-9]{10}" required>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
                 <div class="col-12">
                     <label for="descripcionOficio" class="form-label">Descripción del Oficio</label>
                     <textarea class="form-control" id="descripcionOficio" rows="3" required></textarea>
