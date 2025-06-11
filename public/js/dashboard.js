@@ -208,30 +208,32 @@ function cargarValidadas() {
         let q;
         
         if (userRol === 3) { // Admin ve todo
+        q = query(
+            ref(database, path),
+            orderByChild('estado'),
+            equalTo('atendida')
+        );
+    } else { 
+        userDependencias.forEach(dependencia => {
+            // AÑADIR FILTRO EXPLÍCITO PARA ACUERDOS ATENDIDOS
             q = query(
                 ref(database, path),
-                orderByChild('estado'),
-                equalTo('atendida')
+                orderByChild('dependencia'),
+                equalTo(dependencia)
             );
-        } else { // Usuarios normales
-            userDependencias.forEach(dependencia => {
-                q = query(
-                    ref(database, path),
-                    orderByChild('dependencia'),
-                    equalTo(dependencia)
-                );
-            });
-        }
+        });
+    }
 
         onValue(q, (snapshot) => {
             snapshot.forEach((childSnapshot) => {
                 const documento = childSnapshot.val();
-                
-                // Filtrado adicional para no admin
-                if (userRol !== 3) {
-                    if (documento.estado !== 'atendida' || 
-                        !userDependencias.includes(documento.dependencia)) return;
-                } else {
+                 // Permitir acuerdos atendidos independientemente del rol
+            const esAcuerdoAtendido = (path === 'Acuerdos' && documento.estado === 'atendida');
+            
+            if (userRol !== 3 && !esAcuerdoAtendido) {
+                if (documento.estado !== 'atendida' || 
+                    !userDependencias.includes(documento.dependencia)) return;
+            } else {
                     if (documento.estado !== 'atendida') return;
                 }
 
@@ -367,11 +369,17 @@ function actualizarPaginacion(tipo, totalItems) {
 function aplicarFiltrosValidadas() {
     const busqueda = document.getElementById('busqueda-validadas').value.toLowerCase();
     const secretaria = document.getElementById('filtro-secretaria-validadas').value;
-      const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
+    const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
     
     const filtradas = solicitudesValidadas.filter(doc => {
-        if(esJefaturaGabinete && doc.tipo !== 'Acuerdo') return false;
-        if(esSecretariaParticular && doc.tipo === 'Acuerdo') return false;
+    const esAcuerdoAtendido = (doc.tipo === 'Acuerdo' && doc.estado === 'atendida');
+        
+        if(esJefaturaGabinete && !esAcuerdoAtendido && doc.tipo !== 'acuerdo') 
+            return false
+        
+        if(esSecretariaParticular && !esAcuerdoAtendido && doc.tipo === 'acuerdo') 
+            return false;
+
         const texto = `${doc.key} ${doc.asunto} ${dependenciasMap[doc.dependencia]} ${doc.tipo}`.toLowerCase();
         const coincideSecretaria = !secretaria || doc.dependencia === secretaria;
         return texto.includes(busqueda) && coincideSecretaria;
@@ -2804,7 +2812,9 @@ function obtenerFiltroEspecial() {
     const userEmail = getCookie('email');
     return {
         esJefaturaGabinete: userEmail === 'jefaturadegabinete@tizayuca.gob.mx',
-        esSecretariaParticular: userEmail === 'oficinadepresidencia@tizayuca.gob.mx'
+        esSecretariaParticular: userEmail === 'oficinadepresidencia@tizayuca.gob.mx',
+        // AÑADIR EXCEPCIÓN PARA ACUERDOS ATENDIDOS
+        mostrarAcuerdosAtendidos: true // Nueva propiedad
     };
 }
 
