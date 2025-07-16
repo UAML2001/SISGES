@@ -596,12 +596,12 @@
                     <option value="atrasada">Atrasadas</option>
                 </select>
             </div>
-            <div class="custom-table">
+           <div class="custom-table">
                 <table class="table">
                     <thead>
                         <tr>
                             <th>Folio</th>
-                            <th>Canal</th> <!-- Nueva columna -->
+                            <th>Canal</th>
                             <th>Asunto</th>
                             <th>Secretaría</th>
                             <th>Nombre de Peticionario</th>
@@ -681,24 +681,53 @@
 
 <!-- Modal Confirmación En Proceso -->
 <div class="modal fade" id="confirmarProcesoModal">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Confirmar cambio a En Proceso</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        ¿Está seguro de marcar esta solicitud como "En Proceso"?
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="button" class="btn btn-warning" onclick="confirmarCambioEstado('en_proceso')">
-          Confirmar
-        </button>
-      </div>
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirmar cambio a En Proceso</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="justificacionProceso" class="form-label">Justificación:</label>
+                    <textarea class="form-control" id="justificacionProceso" rows="3"
+                        placeholder="Ingrese la justificación para marcar como 'En Proceso'" required></textarea>
+                    <div class="invalid-feedback">Por favor ingrese una justificación válida (mínimo 20 caracteres).
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" onclick="confirmarCambioEstado('en_proceso')">
+                    Confirmar
+                </button>
+            </div>
+        </div>
     </div>
-  </div>
 </div>
+
+<!-- Nuevo Modal para Visualizar Justificación -->
+        <div class="modal fade modal-justificacion" id="justificacionModal">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-file-alt me-2"></i>Justificación de Estatus 'En Proceso'</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+              </div>
+              <div class="modal-body">
+                <div>
+                  <label class="form-label">Justificación:</label>
+                  <div class="justificacion-content" id="textoJustificacion">
+                    No se ha proporcionado una justificación.
+                  </div>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+              </div>
+            </div>
+          </div>
+        </div>
 
 <!-- Modal Confirmar Aprobación -->
 <div class="modal fade" id="confirmarAprobarModal">

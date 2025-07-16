@@ -682,7 +682,7 @@ function actualizarTablaSeguimiento() {
 // Modificar la función cambiarEstado para hacerla global
 let accionActual = '';
 
-window.cambiarEstado = async function(folio, nuevoEstado, motivo = '') {
+window.cambiarEstado = async function(folio, nuevoEstado, motivo = '', justificacion = '') {
     try {
         // 1. Buscar en datos locales primero para optimizar
         const solicitudExistente = solicitudesSeguimiento.find(s => s.key === folio);
@@ -735,7 +735,8 @@ const actualizacion = {
     evidencias: nuevoEstado === 'pendiente' ? null : datos.evidencias || null,
     _actualizadoPor: getCookie('nombre') || 'Sistema',
     motivoRechazo: nuevoEstado === 'pendiente' ? motivo : null, // Asegurar motivo
-    fechaRechazo: nuevoEstado === 'pendiente' ? new Date().toISOString() : null
+    fechaRechazo: nuevoEstado === 'pendiente' ? new Date().toISOString() : null,
+    justificacionProceso: nuevoEstado === 'en_proceso' ? justificacion : null
 };
 
         // 6. Agregar marcas de tiempo específicas
@@ -1276,9 +1277,18 @@ ${solicitud.motivoRechazo ? `
     <i class="fa-solid fa-message"></i>
 </button>
 ` : ''}
+
+${solicitud.justificacionProceso ? `
+<button class="btn btn-sm btn-proceso"
+                    onclick="mostrarJustificacion('${solicitud.folio}', '${solicitud.justificacionProceso}')">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                ` : ''}
+
             </div>
         </td>
     `;
+
     tr.querySelectorAll('button[disabled]').forEach(btn => {
         btn.style.opacity = '0.6';
         btn.style.cursor = 'not-allowed';
@@ -2865,3 +2875,27 @@ window.mostrarMotivo = function(motivo, usuario, fecha) {
     motivoContenido.innerHTML = contenidoHTML;
     new bootstrap.Modal(document.getElementById('motivoModal')).show();
 };
+
+     window.mostrarJustificacion = function(folio, justificacion) {
+            document.getElementById('textoJustificacion').textContent = 
+                justificacion || 'No se ha proporcionado una justificación.';
+            
+            new bootstrap.Modal('#justificacionModal').show();
+        };
+        
+        // Función modificada para confirmar cambio de estado
+        window.confirmarCambioEstado = function (nuevoEstado) {
+            const justificacion = document.getElementById('justificacionProceso').value.trim();
+
+            // Validar la justificación
+            if (!justificacion || justificacion.length < 20) {
+                document.getElementById('justificacionProceso').classList.add('is-invalid');
+                return;
+            }
+
+            // CORRECCIÓN: Pasar la justificación como cuarto parámetro
+            cambiarEstado(folioActual, nuevoEstado, '', justificacion);
+
+            // Cerrar modal
+            bootstrap.Modal.getInstance('#confirmarProcesoModal').hide();
+        };
