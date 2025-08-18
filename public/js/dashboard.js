@@ -172,13 +172,15 @@ async function generarFolio(tipo = 'solicitud') {
     const tipoFolio = {
         'acuerdo': 'ultimoFolioAcuerdo',
         'oficio': 'ultimoFolioOficio',
-        'solicitud': 'ultimoFolio'
+        'solicitud': 'ultimoFolio',
+        'institucional': 'ultimoFolioInstitucional',
     };
     
     const prefijos = {
         'acuerdo': 'AG-',
         'oficio': 'OF-',
-        'solicitud': 'SO-'
+        'solicitud': 'SO-',
+        'institucional': 'SI-',
     };
     
     const folioRef = ref(database, `configuracion/${tipoFolio[tipo]}`);
@@ -194,59 +196,66 @@ function cargarValidadas() {
     const userDependencias = getCookie('dependencia') ? 
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
-    solicitudesValidadas = [];
-    const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
-    let paths = ['solicitudes', 'acuerdos', 'oficios'];
+    const { esJefaturaGabinete, esSecretariaParticular, esOficialMayor, esPresidentaMunicipal } = obtenerFiltroEspecial();
+    let paths = ['solicitudes', 'acuerdos', 'oficios', 'solicitudes_institucionales'];
     
     if(esJefaturaGabinete) {
         paths = ['acuerdos'];
     } else if(esSecretariaParticular) {
         paths = ['solicitudes', 'oficios'];
+    } else if(esOficialMayor) {
+        paths = ['solicitudes_institucionales'];
     }
 
+    solicitudesValidadas = [];
+
+    // Obtener datos de Firebase usando onValue para cada path
     paths.forEach(path => {
         let q;
-        
-        if (userRol === 3) { // Admin ve todo
-        q = query(
-            ref(database, path),
-            orderByChild('estado'),
-            equalTo('atendida')
-        );
-    } else { 
-        userDependencias.forEach(dependencia => {
-            // AÑADIR FILTRO EXPLÍCITO PARA ACUERDOS ATENDIDOS
+        if (userRol === 3 || userRol === 4) { // Admin o presidenta ven todo
             q = query(
                 ref(database, path),
-                orderByChild('dependencia'),
-                equalTo(dependencia)
+                orderByChild('estado'),
+                equalTo('atendida')
             );
-        });
-    }
+        } else {
+            // Para otros roles, filtrar por dependencias
+            q = query(
+                ref(database, path),
+                orderByChild('estado'),
+                equalTo('atendida')
+            );
+        }
 
         onValue(q, (snapshot) => {
-            snapshot.forEach((childSnapshot) => {
-                const documento = childSnapshot.val();
-                 // Permitir acuerdos atendidos independientemente del rol
-            const esAcuerdoAtendido = (path === 'Acuerdos' && documento.estado === 'atendida');
+            // Limpiar solicitudes anteriores de esta ruta
+            solicitudesValidadas = solicitudesValidadas.filter(s => s.tipoPath !== path);
             
-            if (userRol !== 3 && !esAcuerdoAtendido) {
-                if (documento.estado !== 'atendida' || 
-                    !userDependencias.includes(documento.dependencia)) return;
-            } else {
-                    if (documento.estado !== 'atendida') return;
-                }
+            snapshot.forEach(childSnapshot => {
+                const doc = childSnapshot.val();
+                
+                // Filtrar por dependencia si no es admin ni presidenta
+                if (userRol !== 3 && userRol !== 4 && !userDependencias.includes(doc.dependencia)) return;
+                
+                // Solo agregar atendidas
+                if (doc.estado !== 'atendida') return;
 
-                documento.key = childSnapshot.key;
-                documento.tipo = documento.tipo || 'No especificado'; // Usar campo "tipo" de Firebase
+                // Asegurar datos mínimos
+                const solicitud = {
+                    key: childSnapshot.key,
+                    tipoPath: path,
+                    ...doc
+                };
 
-                if (!solicitudesValidadas.find(s => s.key === documento.key)) {
-                    solicitudesValidadas.push(documento);
+                // Asegurar que no esté duplicada
+                if (!solicitudesValidadas.some(s => s.key === solicitud.key)) {
+                    solicitudesValidadas.push(solicitud);
                 }
             });
             
+            // Ordenar por fecha de atención
             solicitudesValidadas.sort((a, b) => 
-                new Date(b.fechaAtencion) - new Date(a.fechaAtencion)
+                new Date(b.fechaAtencion || b.fechaCreacion) - new Date(a.fechaAtencion || a.fechaCreacion)
             );
             
             aplicarFiltrosValidadas();
@@ -278,26 +287,32 @@ function mostrarPaginaValidadas(data) {
     const items = data.slice(start, end);
     
 items.forEach(solicitud => {
+        // Determinar tipo basado en la colección
+        let tipoDocumento = 'Solicitud';
+        if (solicitud.tipoPath === 'acuerdos') tipoDocumento = 'Acuerdo';
+        if (solicitud.tipoPath === 'oficios') tipoDocumento = 'Oficio';
+        if (solicitud.tipoPath === 'solicitudes_institucionales') tipoDocumento = 'Institucional';
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${solicitud.key}</td>
-            <td>${solicitud.tipo || 'N/A'}</td>
+            <td>${tipoDocumento}</td>
             <td>${solicitud.asunto}</td>
             <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
-            <td>${solicitud.solicitante?.nombre ? solicitud.solicitante.nombre : 'N/A'}</td>
-            <td>${solicitud.solicitante?.telefono ? solicitud.solicitante.telefono : 'N/A'}</td>
+            <td>${solicitud.solicitante?.nombre || solicitud.contacto || 'N/A'}</td>
+            <td>${solicitud.solicitante?.telefono || solicitud.telefono || 'N/A'}</td>
             <td>${new Date(solicitud.fechaAtencion).toLocaleDateString()}</td>
             <td>
                 ${solicitud.documentoInicial ? `
                 <button class="btn btn-sm btn-documento-inicial" 
-                        onclick="mostrarEvidenciaModal('${solicitud.key}','Documento Inicial','${solicitud.documentoInicial}','${solicitud.tipo}')">
+                        onclick="mostrarEvidenciaModal('${solicitud.key}','Documento Inicial','${solicitud.documentoInicial}','${tipoDocumento}')">
                     <i class="fas fa-file-import me-2"></i> Documento Inicial
                 </button>
                 ` : ''}
                 
                 ${solicitud.evidencias ? `
                 <button class="btn btn-sm btn-evidencia" 
-                        onclick="mostrarEvidenciaModal('${solicitud.key}','Evidencia','${solicitud.evidencias}','${solicitud.tipo}')">
+                        onclick="mostrarEvidenciaModal('${solicitud.key}','Evidencia','${solicitud.evidencias}','${tipoDocumento}')">
                     <i class="fas fa-search me-2"></i> Documento Evidencia
                 </button>
                 ` : ''}
@@ -447,7 +462,7 @@ function mostrarPaginaSeguimiento(data) {
 async function cargarSecretarias() {
     const secretariasRef = ref(database, 'dependencias');
     const snapshot = await get(secretariasRef);
-    const selects = ['secretaria', 'secretariaAcuerdo', 'secretariaOficio', 'filtro-secretaria-validadas'];
+    const selects = ['secretaria', 'secretariaAcuerdo', 'secretariaOficio', 'filtro-secretaria-validadas', 'secretariaInstitucional'];
     
     // Obtener datos del usuario
     const userRol = parseInt(getCookie('rol')) || 0;
@@ -691,12 +706,19 @@ window.cambiarEstado = async function(folio, nuevoEstado, motivo = '', justifica
             throw new Error('Documento no encontrado en datos locales');
         }
 
-        // 2. Determinar path directamente desde los datos locales
-        const path = solicitudExistente.tipoPath || 'solicitudes';
+        // 2. Determinar path CORRECTAMENTE - SOLUCIÓN PARA INSTITUCIONALES
+        let path = solicitudExistente.tipoPath || 'solicitudes';
+        
+        // Si es institucional pero no tiene tipoPath, determinar por folio
+        if (path === 'solicitudes' && folio.startsWith('SI-')) {
+            path = 'solicitudes_institucionales';
+        }
+        
         const docRef = ref(database, `${path}/${folio}`);
-        const tipoDocumento = path === 'solicitudes' ? 'Solicitud' 
-                           : path === 'acuerdos' ? 'Acuerdo' 
-                           : 'Oficio';
+        const tipoDocumento = path === 'solicitudes' ? 'Solicitud' : 
+                           path === 'acuerdos' ? 'Acuerdo' : 
+                           path === 'oficios' ? 'Oficio' : 
+                           path === 'solicitudes_institucionales' ? 'Institucional' : 'Documento';
 
         // 3. Obtener datos actualizados directamente de Firebase
         const snapshot = await get(docRef);
@@ -754,7 +776,8 @@ const actualizacion = {
         if (index !== -1) {
             solicitudesSeguimiento[index] = {
                 ...solicitudesSeguimiento[index],
-                ...actualizacion
+                ...actualizacion,
+                tipoPath: path // Asegurar que mantenga el tipoPath correcto
             };
             
             // Actualizar UI específica
@@ -794,35 +817,6 @@ const actualizacion = {
         }
     }
 };
-
-// document.getElementById('confirmarAprobar').addEventListener('click', async () => {
-//     if (folioActual) {
-//         await cambiarEstado(folioActual, 'atendida');
-//         bootstrap.Modal.getInstance('#confirmarAprobarModal').hide();
-//     }
-// });
-
-// document.getElementById('confirmarRechazar').addEventListener('click', async () => {
-//     if (folioActual) {
-//         await cambiarEstado(folioActual, 'pendiente');
-//         bootstrap.Modal.getInstance('#confirmarRechazarModal').hide();
-//     }
-// });
-
-// // Configurar eventos para los modales
-// document.getElementById('confirmarAprobar').addEventListener('click', () => {
-//     if(folioActual && accionActual === 'aprobar') {
-//         cambiarEstado(folioActual, 'atendida');
-//         bootstrap.Modal.getInstance('#confirmarAprobarModal').hide();
-//     }
-// });
-
-// document.getElementById('confirmarRechazar').addEventListener('click', () => {
-//     if(folioActual && accionActual === 'rechazar') {
-//         cambiarEstado(folioActual, 'pendiente');
-//         bootstrap.Modal.getInstance('#confirmarRechazarModal').hide();
-//     }
-// });
 
 // Modifica el event listener del input de archivo
 document.getElementById('evidenciaFile').addEventListener('change', function(e) {
@@ -896,8 +890,10 @@ fileDropArea.addEventListener('drop', (e) => {
 window.subirEvidenciaYCambiarEstado = async function() {
     const fileInput = document.getElementById('evidenciaFile');
     const file = fileInput.files[0];
-    const tipo = folioActual.startsWith('AG-') ? 'acuerdos' : 
-                folioActual.startsWith('OF-') ? 'oficios' : 'solicitudes';
+     let tipo = 'solicitudes';
+    if (folioActual.startsWith('AG-')) tipo = 'acuerdos';
+    else if (folioActual.startsWith('OF-')) tipo = 'oficios';
+    else if (folioActual.startsWith('SI-')) tipo = 'solicitudes_institucionales';
     
     if (!file) {
         mostrarError("Debes seleccionar un archivo primero");
@@ -970,13 +966,15 @@ function mostrarExito(mensaje) {
 }
 
 function cargarVerificacion() {
-    const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
-    let paths = ['solicitudes', 'acuerdos', 'oficios'];
+    const { esJefaturaGabinete, esSecretariaParticular, esOficialMayor, esPresidentaMunicipal } = obtenerFiltroEspecial();
+    let paths = ['solicitudes', 'acuerdos', 'oficios', 'solicitudes_institucionales'];
     
     if(esJefaturaGabinete) {
         paths = ['acuerdos'];
     } else if(esSecretariaParticular) {
         paths = ['solicitudes', 'oficios'];
+    } else if(esOficialMayor) {
+        paths = ['solicitudes_institucionales']; // Solo institucionales
     }
 
     solicitudesVerificacion = [];
@@ -993,7 +991,7 @@ function cargarVerificacion() {
 
     paths.forEach(path => {
         let q;
-        if (userRol === 3) {
+        if (userRol === 3 || userRol === 4) { // Admin o presidenta ven todo
             q = query(
                 ref(database, path),
                 orderByChild('estado'),
@@ -1017,15 +1015,15 @@ function cargarVerificacion() {
         }
 
         onValue(q, (snapshot) => {
-            solicitudesVerificacion = solicitudesVerificacion.filter(s => s.tipo !== path);
+            solicitudesVerificacion = solicitudesVerificacion.filter(s => s.tipoPath !== path);
             
             snapshot.forEach(childSnapshot => {
                 const solicitud = childSnapshot.val();
-                if (userRol !== 3 && !userDependencias.includes(solicitud.dependencia)) return;
+                if (userRol !== 3 && userRol !== 4 && !userDependencias.includes(solicitud.dependencia)) return;
                 if (solicitud.estado !== 'verificacion') return;
 
                 solicitud.key = childSnapshot.key;
-                solicitud.tipo = solicitud.tipo || path; // Priorizar campo "tipo" del documento
+                solicitud.tipoPath = path; // Guardar el tipo de colección
                 solicitud.folio = solicitud.folio || childSnapshot.key;
                 solicitudesVerificacion.push(solicitud);
             });
@@ -1101,7 +1099,11 @@ function mostrarPaginaVerificacion(data) {
     const items = data.slice(start, end);
 
     items.forEach(solicitud => {
-        const tipoDocumento = solicitud.tipo;
+        // Determinar tipoDocumento basado en la colección
+        let tipoDocumento = 'Solicitud';
+        if (solicitud.tipoPath === 'acuerdos') tipoDocumento = 'Acuerdo';
+        if (solicitud.tipoPath === 'oficios') tipoDocumento = 'Oficio';
+        if (solicitud.tipoPath === 'solicitudes_institucionales') tipoDocumento = 'Institucional';
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -1109,8 +1111,8 @@ function mostrarPaginaVerificacion(data) {
             <td>${solicitud.asunto}</td>
             <td>${tipoDocumento}</td>
             <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
-            <td>${solicitud.solicitante?.nombre ? solicitud.solicitante.nombre : 'N/A'}</td>
-            <td>${solicitud.solicitante?.telefono ? solicitud.solicitante.telefono : 'N/A'}</td>
+            <td>${solicitud.solicitante?.nombre || solicitud.contacto || 'N/A'}</td>
+            <td>${solicitud.solicitante?.telefono || solicitud.telefono || 'N/A'}</td>
             <td>${new Date(solicitud.fechaVerificacion).toLocaleDateString()}</td>
             <td class="documentos-cell">
                 <div class="documentos-container">
@@ -1142,12 +1144,12 @@ function mostrarPaginaVerificacion(data) {
             <td>
                 <div class="d-flex gap-2">
                     <button class="btn btn-success btn-sm btn-aprobar" 
-                        onclick="mostrarConfirmacion('${solicitud.folio}', 'aprobar', '${solicitud.tipo}')">
+                        onclick="mostrarConfirmacion('${solicitud.folio}', 'aprobar', '${tipoDocumento}')">
                         <i class="fas fa-check me-1"></i> Aprobar
                     </button>
                     
                     <button class="btn btn-danger btn-sm btn-rechazar" 
-                        onclick="mostrarConfirmacion('${solicitud.folio}', 'rechazar', '${solicitud.tipo}')">
+                        onclick="mostrarConfirmacion('${solicitud.folio}', 'rechazar', '${tipoDocumento}')">
                         <i class="fas fa-times me-1"></i> Rechazar
                     </button>
                 </div>
@@ -1234,19 +1236,25 @@ function crearFilaSolicitud(solicitud) {
     const nombresTipos = {
         'acuerdo': 'Acuerdo de Gabinete',
         'oficio': 'Oficio',
-        'solicitud': 'Solicitud'
+        'solicitud': 'Solicitud',
+        'institucional': 'Solicitud Institucional' // Nuevo tipo
     };
 
     const estado = estados[solicitud.estado] || { texto: 'Desconocido', color: '#666' };
     const dependenciaNombre = dependenciasMap[solicitud.dependencia] || 'Desconocida';
+
+    // SOLUCIÓN: Deshabilitar botones cuando está en verificación
+    const enVerificacion = solicitud.estado === 'verificacion';
+    const atendida = solicitud.estado === 'atendida';
+    const deshabilitarBotones = enVerificacion || atendida;
 
     tr.innerHTML = `
         <td>${solicitud.folio}</td>
         <td>${nombresTipos[solicitud.tipo] || solicitud.tipo}</td>
         <td>${solicitud.asunto}</td>
         <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
-        <td>${solicitud.solicitante?.nombre ? solicitud.solicitante.nombre : 'N/A'}</td>
-        <td>${solicitud.solicitante?.telefono ? solicitud.solicitante.telefono : 'N/A'}</td>
+        <td>${solicitud.solicitante?.nombre || solicitud.contacto || 'N/A'}</td>
+        <td>${solicitud.solicitante?.telefono || solicitud.telefono || 'N/A'}</td>
         <td><span class="status-badge" style="background:${estado.color}">${estado.texto}</span></td>
         <td>${solicitud.estado === 'atendida' ? 'Atendida' : solicitud.estado === 'verificacion' ? 'En Verificación' : calcularTiempoRestante(solicitud.fechaLimite)}</td>
         <td>
@@ -1258,14 +1266,14 @@ function crearFilaSolicitud(solicitud) {
                     </button>
                 ` : ''}
                 <button class="btn btn-sm btn-proceso" 
-                    ${solicitud.estado === 'verificacion' ? 'disabled' : ''}
-                    onclick="mostrarConfirmacionProceso('${solicitud.folio}')">
+                    ${solicitud.estado === 'verificacion' || solicitud.estado === 'atendida' ? 'disabled' : ''}
+                    onclick="${solicitud.estado !== 'verificacion' && solicitud.estado !== 'atendida' ? `mostrarConfirmacionProceso('${solicitud.folio}')` : ''}">
                     <i class="fas fa-sync-alt"></i> ${solicitud.estado === 'en_proceso' ? 'En Proceso' : 'Marcar Proceso'}
                 </button>
                 
 <button class="btn btn-sm btn-verificacion" 
-    ${solicitud.estado === 'verificacion' ? 'disabled' : ''}
-    onclick="mostrarConfirmacionAtendida('${solicitud.folio}')">
+    ${solicitud.estado === 'verificacion' || solicitud.estado === 'atendida' ? 'disabled' : ''}
+    onclick="${solicitud.estado !== 'verificacion' && solicitud.estado !== 'atendida' ? `mostrarConfirmacionAtendida('${solicitud.folio}')` : ''}">
     <i class="fas fa-check-circle"></i> ${solicitud.estado === 'verificacion' ? 'En Verificación' : 'Mandar a Verificación'}
 </button>
 
@@ -1496,14 +1504,24 @@ setInterval(actualizarEstadosAutomaticos, 43200000); // 12 horas 43200000
 document.addEventListener('DOMContentLoaded', actualizarEstadosAutomaticos);
 
 function cargarSeguimiento() {
-    const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
+     const { 
+        esJefaturaGabinete, 
+        esSecretariaParticular,
+        esOficialMayor,
+        esPresidentaMunicipal
+    } = obtenerFiltroEspecial();
     const tabla = document.getElementById('lista-seguimiento');
-    let paths = ['solicitudes', 'acuerdos', 'oficios'];
-    if(esJefaturaGabinete) {
-        paths = ['acuerdos']; // Solo acuerdos
-    } else if(esSecretariaParticular) {
-        paths = ['solicitudes', 'oficios']; // Excluir acuerdos
+    let paths = ['solicitudes', 'acuerdos', 'oficios', 'solicitudes_institucionales'];
+    if (esOficialMayor) {
+        paths = ['solicitudes_institucionales'];
+    } else if (esPresidentaMunicipal) {
+        // Mostrar todo - no cambiar paths
+    } else if (esJefaturaGabinete) {
+        paths = ['acuerdos'];
+    } else if (esSecretariaParticular) {
+        paths = ['solicitudes', 'oficios'];
     }
+    
     const userRol = parseInt(getCookie('rol')) || 0;
     const userDependencias = getCookie('dependencia') ? 
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
@@ -2423,6 +2441,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (role === 3) {
         document.getElementById('navAcuerdo').style.display = 'block';
         document.getElementById('navOficio').style.display = 'block';
+        document.getElementById('navInstitucional').style.display = 'block';
+    }
+    else {
+        document.getElementById('navAcuerdo').style.display = 'none';
+        document.getElementById('navOficio').style.display = 'none';
+        document.getElementById('navInstitucional').style.display = 'none';
     }
 });
 
@@ -2823,7 +2847,8 @@ function obtenerFiltroEspecial() {
     return {
         esJefaturaGabinete: userEmail === 'jefaturadegabinete@tizayuca.gob.mx',
         esSecretariaParticular: userEmail === 'oficinadepresidencia@tizayuca.gob.mx',
-        // AÑADIR EXCEPCIÓN PARA ACUERDOS ATENDIDOS
+        esOficialMayor: userEmail === 'oficialia.mayor@tizayuca.gob.mx',
+        esPresidentaMunicipal: userEmail === 'pdta.gretchen@tizayuca.gob.mx',
         mostrarAcuerdosAtendidos: true // Nueva propiedad
     };
 }
@@ -2899,3 +2924,155 @@ window.mostrarMotivo = function(motivo, usuario, fecha) {
             // Cerrar modal
             bootstrap.Modal.getInstance('#confirmarProcesoModal').hide();
         };
+
+        // Manejo del formulario institucional
+document.getElementById('formNuevaInstitucional').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    try {
+        // Validar campos requeridos
+        const camposRequeridos = [
+            'asuntoInstitucional', 
+            'institucionInstitucional',
+            'contactoInstitucional',
+            'telefonoInstitucional',
+            'emailInstitucional',
+            'descripcionInstitucional',
+            'fechaLimiteInstitucional',
+            'secretariaInstitucional',
+            'documentoInstitucional'
+        ];
+        
+        let validado = true;
+        camposRequeridos.forEach(id => {
+            const campo = document.getElementById(id);
+            if (!campo || !campo.value.trim()) {
+                validado = false;
+                mostrarError(`El campo ${campo.previousElementSibling?.textContent || 'requerido'} es obligatorio`);
+                campo.classList.add('is-invalid');
+            }
+        });
+
+        // Validar formato de teléfono
+        const telefono = document.getElementById('telefonoInstitucional');
+        if (!/^\d{10}$/.test(telefono.value)) {
+            validado = false;
+            mostrarError("El teléfono debe tener 10 dígitos");
+            telefono.classList.add('is-invalid');
+        }
+
+        // Validar formato de email
+        const email = document.getElementById('emailInstitucional');
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email.value)) {
+            validado = false;
+            mostrarError("Formato de email inválido");
+            email.classList.add('is-invalid');
+        }
+
+        if (!validado) return;
+
+        // Obtener archivo
+        const docInput = document.getElementById('documentoInstitucional');
+        const docFile = docInput.files[0];
+        
+        // Validar archivo
+        if (!docFile) {
+            mostrarError("Debes subir un documento inicial");
+            return;
+        }
+
+        const extension = docFile.name.split('.').pop().toLowerCase();
+        const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
+        if (!allowedExtensions.includes(extension)) {
+            mostrarError(`Formato no permitido: .${extension}`);
+            return;
+        }
+
+        const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+        if (docFile.size > MAX_SIZE) {
+            mostrarError(`El archivo excede el tamaño máximo de 10MB`);
+            return;
+        }
+
+        // Generar folio
+        const folio = await generarFolio('institucional');
+        
+        // Subir documento
+        const storagePath = `${folio}/Documento Institucional/${docFile.name}`;
+        const docRef = storageRef(storage, storagePath);
+        await uploadBytes(docRef, docFile);
+        const docUrl = await getDownloadURL(docRef);
+
+        // Crear objeto solicitud
+        const nuevaSolicitud = {
+            tipo: 'institucional',
+            fechaCreacion: new Date().toISOString(),
+            asunto: document.getElementById('asuntoInstitucional').value,
+            institucion: document.getElementById('institucionInstitucional').value,
+            contacto: document.getElementById('contactoInstitucional').value,
+            telefono: document.getElementById('telefonoInstitucional').value,
+            email: document.getElementById('emailInstitucional').value,
+            descripcion: document.getElementById('descripcionInstitucional').value,
+            fechaLimite: document.getElementById('fechaLimiteInstitucional').value,
+            dependencia: document.getElementById('secretariaInstitucional').value,
+            documentoInicial: docUrl,
+            nombreDocumento: docFile.name,
+            estado: 'pendiente',
+            folio: folio,
+            // Campos específicos para seguimiento
+            solicitante: {
+                nombre: document.getElementById('contactoInstitucional').value,
+                telefono: document.getElementById('telefonoInstitucional').value
+            }
+        };
+
+        // Guardar en Firebase (en nueva colección)
+        await set(ref(database, `solicitudes_institucionales/${folio}`), nuevaSolicitud);
+        
+        // Limpiar formulario
+        document.getElementById('formNuevaInstitucional').reset();
+        // Restablecer fecha actual
+        document.getElementById('fechaInstitucional').value = obtenerFechaHoy();
+        // Limpiar archivo
+        docInput.value = '';
+        document.getElementById('docInstitucionalInfo').textContent = 
+            'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
+        document.getElementById('removeDocInstitucional').classList.add('d-none');
+        
+        mostrarExito("Solicitud institucional creada exitosamente!");
+
+    } catch (error) {
+        console.error("Error al crear solicitud institucional:", error);
+        mostrarError(`Error al crear solicitud institucional: ${error.message}`);
+    }
+});
+
+// Evento para el botón de remover archivo
+document.getElementById('removeDocInstitucional').addEventListener('click', () => {
+    const fileInput = document.getElementById('documentoInstitucional');
+    fileInput.value = '';
+    fileInput.dispatchEvent(new Event('change'));
+});
+
+// Evento para mostrar información del archivo
+document.getElementById('documentoInstitucional').addEventListener('change', function(e) {
+    const fileInfo = document.getElementById('docInstitucionalInfo');
+    const removeBtn = document.getElementById('removeDocInstitucional');
+    
+    if(this.files.length > 0) {
+        const file = this.files[0];
+        fileInfo.innerHTML = `
+            <span class="text-success">
+                <i class="fas fa-file me-2"></i>${file.name}
+            </span>
+            <br><small>${(file.size / 1024 / 1024).toFixed(2)} MB</small>`;
+        removeBtn.classList.remove('d-none');
+    } else {
+        fileInfo.textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
+        removeBtn.classList.add('d-none');
+    }
+});
+
+// Inicializar fecha actual
+document.getElementById('fechaInstitucional').value = obtenerFechaHoy();
