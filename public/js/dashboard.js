@@ -1,21 +1,21 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-import { 
-    getDatabase, 
-    ref, 
-    get, 
-    set, 
+import {
+    getDatabase,
+    ref,
+    get,
+    set,
     update,
     onValue,
     query,
     orderByChild,
     equalTo // ← Agregar esta importación
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
-import { 
-    getStorage, 
-    ref as storageRef, 
-    uploadBytes, 
+import {
+    getStorage,
+    ref as storageRef,
+    uploadBytes,
     getDownloadURL,
-    deleteObject  
+    deleteObject
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-analytics.js";
 
@@ -75,12 +75,12 @@ const contentSections = document.querySelectorAll('.content-section');
 
 let suppressFileInputEvents = false;
 
-window.mostrarModalEstado = function(folio) {
+window.mostrarModalEstado = function (folio) {
     document.getElementById('modalFolio').textContent = folio;
     new bootstrap.Modal('#statusModal').show();
 };
 
-window.cambiarEstadoModal = function(nuevoEstado) {
+window.cambiarEstadoModal = function (nuevoEstado) {
     const folio = document.getElementById('modalFolio').textContent;
     cambiarEstado(folio, nuevoEstado);
 };
@@ -97,14 +97,14 @@ function calcularFechaLimite(fechaCreacion) {
             diasAgregados++;
         }
     }
-    
+
     return fechaLimite.toISOString();
 }
 
 function calcularDiasRestantes(fechaLimite) {
     const ahora = ajustarHoraMexico(new Date());
     const limite = ajustarHoraMexico(new Date(fechaLimite));
-    
+
     // Si ya expiró, retornar valor negativo
     if (ahora >= limite) {
         const diffMs = ahora - limite;
@@ -113,7 +113,7 @@ function calcularDiasRestantes(fechaLimite) {
 
     let diasRestantes = 0;
     const current = new Date(ahora);
-    
+
     // Calcular días hábiles restantes
     while (current < limite) {
         current.setDate(current.getDate() + 1);
@@ -175,14 +175,14 @@ async function generarFolio(tipo = 'solicitud') {
         'solicitud': 'ultimoFolio',
         'institucional': 'ultimoFolioInstitucional',
     };
-    
+
     const prefijos = {
         'acuerdo': 'AG-',
         'oficio': 'OF-',
         'solicitud': 'SO-',
         'institucional': 'SI-',
     };
-    
+
     const folioRef = ref(database, `configuracion/${tipoFolio[tipo]}`);
     const snapshot = await get(folioRef);
     const nuevoFolio = (snapshot.val() || 0) + 1;
@@ -193,17 +193,17 @@ async function generarFolio(tipo = 'solicitud') {
 // Función para cargar solicitudes validadas
 function cargarValidadas() {
     const userRol = parseInt(getCookie('rol')) || 0;
-    const userDependencias = getCookie('dependencia') ? 
+    const userDependencias = getCookie('dependencia') ?
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
     const { esJefaturaGabinete, esSecretariaParticular, esOficialMayor, esPresidentaMunicipal } = obtenerFiltroEspecial();
     let paths = ['solicitudes', 'acuerdos', 'oficios', 'solicitudes_institucionales'];
-    
-    if(esJefaturaGabinete) {
+
+    if (esJefaturaGabinete) {
         paths = ['acuerdos'];
-    } else if(esSecretariaParticular) {
+    } else if (esSecretariaParticular) {
         paths = ['solicitudes', 'oficios'];
-    } else if(esOficialMayor) {
+    } else if (esOficialMayor) {
         paths = ['solicitudes_institucionales'];
     }
 
@@ -230,13 +230,13 @@ function cargarValidadas() {
         onValue(q, (snapshot) => {
             // Limpiar solicitudes anteriores de esta ruta
             solicitudesValidadas = solicitudesValidadas.filter(s => s.tipoPath !== path);
-            
+
             snapshot.forEach(childSnapshot => {
                 const doc = childSnapshot.val();
-                
+
                 // Filtrar por dependencia si no es admin ni presidenta
                 if (userRol !== 3 && userRol !== 4 && !userDependencias.includes(doc.dependencia)) return;
-                
+
                 // Solo agregar atendidas
                 if (doc.estado !== 'atendida') return;
 
@@ -252,12 +252,12 @@ function cargarValidadas() {
                     solicitudesValidadas.push(solicitud);
                 }
             });
-            
+
             // Ordenar por fecha de atención
-            solicitudesValidadas.sort((a, b) => 
+            solicitudesValidadas.sort((a, b) =>
                 new Date(b.fechaAtencion || b.fechaCreacion) - new Date(a.fechaAtencion || a.fechaCreacion)
             );
-            
+
             aplicarFiltrosValidadas();
         });
     });
@@ -268,9 +268,9 @@ function mostrarPaginaValidadas(data) {
     const start = (currentPageValidadas - 1) * itemsPerPage;
     const end = start + itemsPerPage;
     const tabla = document.getElementById('lista-validadas');
-    
+
     tabla.innerHTML = '';
-    
+
     if (data.length === 0) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -283,10 +283,10 @@ function mostrarPaginaValidadas(data) {
         actualizarPaginacion('validadas', 0);
         return;
     }
-    
+
     const items = data.slice(start, end);
-    
-items.forEach(solicitud => {
+
+    items.forEach(solicitud => {
         // Determinar tipo basado en la colección
         let tipoDocumento = 'Solicitud';
         if (solicitud.tipoPath === 'acuerdos') tipoDocumento = 'Acuerdo';
@@ -320,7 +320,7 @@ items.forEach(solicitud => {
         `;
         tabla.appendChild(tr);
     });
-    
+
     actualizarPaginacion('validadas', data.length);
 }
 
@@ -385,21 +385,21 @@ function aplicarFiltrosValidadas() {
     const busqueda = document.getElementById('busqueda-validadas').value.toLowerCase();
     const secretaria = document.getElementById('filtro-secretaria-validadas').value;
     const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
-    
+
     const filtradas = solicitudesValidadas.filter(doc => {
-    const esAcuerdoAtendido = (doc.tipo === 'Acuerdo' && doc.estado === 'atendida');
-        
-        if(esJefaturaGabinete && !esAcuerdoAtendido && doc.tipo !== 'acuerdo') 
+        const esAcuerdoAtendido = (doc.tipo === 'Acuerdo' && doc.estado === 'atendida');
+
+        if (esJefaturaGabinete && !esAcuerdoAtendido && doc.tipo !== 'acuerdo')
             return false
-        
-        if(esSecretariaParticular && !esAcuerdoAtendido && doc.tipo === 'acuerdo') 
+
+        if (esSecretariaParticular && !esAcuerdoAtendido && doc.tipo === 'acuerdo')
             return false;
 
         const texto = `${doc.key} ${doc.asunto} ${dependenciasMap[doc.dependencia]} ${doc.tipo}`.toLowerCase();
         const coincideSecretaria = !secretaria || doc.dependencia === secretaria;
         return texto.includes(busqueda) && coincideSecretaria;
     });
-    
+
     mostrarPaginaValidadas(filtradas);
 }
 
@@ -407,19 +407,19 @@ function aplicarFiltrosSeguimiento() {
     const busqueda = document.getElementById('busqueda-seguimiento').value.toLowerCase();
     const estado = document.getElementById('filtro-estado-seguimiento').value;
     const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
-    
+
     const filtradas = solicitudesSeguimiento.filter(s => {
         if (esJefaturaGabinete && s.tipoPath !== 'acuerdos') return false;
         if (esSecretariaParticular && s.tipoPath === 'acuerdos') return false;
         // Excluir atendidas y aplicar otros filtros
         if (s.estado === 'atendida') return false;
-        
+
         const texto = `${s.key} ${s.asunto} ${dependenciasMap[s.dependencia]}`.toLowerCase();
         const coincideEstado = !estado || s.estado === estado;
         return texto.includes(busqueda) && coincideEstado;
-        
+
     });
-    
+
     mostrarPaginaSeguimiento(filtradas);
 }
 
@@ -428,9 +428,9 @@ function mostrarPaginaSeguimiento(data) {
     const start = (currentPageSeguimiento - 1) * itemsPerPage;
     const end = start + itemsPerPage;
     const tabla = document.getElementById('lista-seguimiento');
-    
+
     tabla.innerHTML = '';
-    
+
     if (data.length === 0) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -443,18 +443,18 @@ function mostrarPaginaSeguimiento(data) {
         actualizarPaginacion('seguimiento', 0);
         return;
     }
-    
+
     const items = data.slice(start, end);
-    
+
     if (items.length === 0) {
         currentPageSeguimiento = Math.max(1, currentPageSeguimiento - 1);
         return mostrarPaginaSeguimiento(data);
     }
-    
+
     items.forEach(solicitud => {
         tabla.appendChild(crearFilaSolicitud(solicitud));
     });
-    
+
     actualizarPaginacion('seguimiento', data.length);
 }
 
@@ -463,40 +463,40 @@ async function cargarSecretarias() {
     const secretariasRef = ref(database, 'dependencias');
     const snapshot = await get(secretariasRef);
     const selects = ['secretaria', 'secretariaAcuerdo', 'secretariaOficio', 'filtro-secretaria-validadas', 'secretariaInstitucional'];
-    
+
     // Obtener datos del usuario
     const userRol = parseInt(getCookie('rol')) || 0;
-    const userDependencias = getCookie('dependencia') ? 
+    const userDependencias = getCookie('dependencia') ?
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
-    
-        selects.forEach(selectId => {
-            const select = document.getElementById(selectId);
-            select.innerHTML = '<option value="" disabled selected>Seleccione una secretaría</option>';
 
-    snapshot.forEach((childSnapshot) => {
-        const dependencia = childSnapshot.val();
-        const dependenciaKey = childSnapshot.key;
-        
-        // Validar existencia de la dependencia y su nombre
-        if (!dependencia || typeof dependencia.nombre !== 'string') return;
-        
-        // Filtrar por rol
-        if (userRol !== 3 && !userDependencias.includes(dependenciaKey)) return;
-        
-        // Validar nombre no vacío
-        const nombre = dependencia.nombre.trim();
-        if (!nombre) return;
-        
-        // Crear opción válida
-        const option = document.createElement('option');
-        option.value = dependenciaKey;
-        option.textContent = nombre;
-        select.appendChild(option);
+    selects.forEach(selectId => {
+        const select = document.getElementById(selectId);
+        select.innerHTML = '<option value="" disabled selected>Seleccione una secretaría</option>';
+
+        snapshot.forEach((childSnapshot) => {
+            const dependencia = childSnapshot.val();
+            const dependenciaKey = childSnapshot.key;
+
+            // Validar existencia de la dependencia y su nombre
+            if (!dependencia || typeof dependencia.nombre !== 'string') return;
+
+            // Filtrar por rol
+            if (userRol !== 3 && !userDependencias.includes(dependenciaKey)) return;
+
+            // Validar nombre no vacío
+            const nombre = dependencia.nombre.trim();
+            if (!nombre) return;
+
+            // Crear opción válida
+            const option = document.createElement('option');
+            option.value = dependenciaKey;
+            option.textContent = nombre;
+            select.appendChild(option);
+        });
     });
-});
 }
 
-window.mostrarEvidenciaModal = function(folio, tipoDocumento, urlDocumento, secretaria = '') {
+window.mostrarEvidenciaModal = function (folio, tipoDocumento, urlDocumento, secretaria = '') {
     const modal = new bootstrap.Modal(document.getElementById('evidenciaModal'));
     const loading = document.getElementById('loadingPreview');
     const pdfContainer = document.getElementById('pdfContainer');
@@ -512,12 +512,12 @@ window.mostrarEvidenciaModal = function(folio, tipoDocumento, urlDocumento, secr
     // Extraer nombre de archivo
     let nombreArchivo = 'Sin documento';
     let extension = '';
-    
-    if(urlDocumento) {
+
+    if (urlDocumento) {
         try {
             nombreArchivo = decodeURIComponent(urlDocumento.split('/').pop().split('?')[0]);
             extension = nombreArchivo.split('.').pop().toLowerCase();
-        } catch(error) {
+        } catch (error) {
             console.error('Error procesando URL:', error);
         }
     }
@@ -532,26 +532,26 @@ window.mostrarEvidenciaModal = function(folio, tipoDocumento, urlDocumento, secr
     setTimeout(() => {
         loading.classList.add('d-none');
 
-        if(!urlDocumento) {
+        if (!urlDocumento) {
             visorNoSoportado.classList.remove('d-none');
             document.getElementById('tipoArchivo').textContent = 'Documento no disponible';
             return;
         }
 
-        if(['pdf'].includes(extension)) {
+        if (['pdf'].includes(extension)) {
             pdfContainer.classList.remove('d-none');
             pdfViewer.src = `${urlDocumento}#view=FitH&toolbar=0`;
             document.getElementById('pdfMeta').textContent = `${nombreArchivo} | ${tipoDocumento}`;
-        } 
-        else if(['jpg', 'jpeg', 'png'].includes(extension)) {
+        }
+        else if (['jpg', 'jpeg', 'png'].includes(extension)) {
             imagenContainer.classList.remove('d-none');
             const img = document.getElementById('visorImagen');
             img.src = urlDocumento;
             img.onload = () => {
-                document.getElementById('imagenDimensions').textContent = 
+                document.getElementById('imagenDimensions').textContent =
                     `${img.naturalWidth}px × ${img.naturalHeight}px`;
             };
-        } 
+        }
         else {
             visorNoSoportado.classList.remove('d-none');
             document.getElementById('tipoArchivo').textContent = `.${extension}`;
@@ -571,7 +571,7 @@ let dependenciasMap = {};
 async function cargarDependencias() {
     const dependenciasRef = ref(database, 'dependencias');
     const snapshot = await get(dependenciasRef);
-    
+
     // Mapeo de claves a nombres oficiales
     const mapeoOficial = {
         'presidencia-municipal-constitucional': 'Presidencia Municipal Constitucional',
@@ -597,20 +597,20 @@ let intervaloActualizacionGlobal = null;
 // Función para actualización visual de tiempos (sin afectar estados reales)
 function iniciarActualizacionTiempo() {
     if (intervaloActualizacionGlobal) clearInterval(intervaloActualizacionGlobal);
-    
+
     intervaloActualizacionGlobal = setInterval(() => {
         document.querySelectorAll('#lista-seguimiento tr').forEach(fila => {
             const estado = fila.dataset.estado;
             const celdaTiempo = fila.cells[7];
-            
+
             // Congelar visualización para estos estados
             if (['verificacion', 'atendida'].includes(estado)) {
-                celdaTiempo.textContent = estado === 'verificacion' 
-                    ? 'En Verificación' 
+                celdaTiempo.textContent = estado === 'verificacion'
+                    ? 'En Verificación'
                     : 'Atendida';
                 return;
             }
-            
+
             // Actualizar solo la visualización del tiempo
             const fechaLimite = fila.dataset.fechaLimite;
             celdaTiempo.textContent = calcularTiempoRestante(fechaLimite);
@@ -634,7 +634,7 @@ function actualizarEstadisticas(solicitudes) {
         stats.total++;
         const estado = s.estado;  // Usar el estado real de la solicitud
 
-        switch(estado) {
+        switch (estado) {
             case 'pendiente':
                 stats.pendientes++;
                 break;
@@ -663,7 +663,7 @@ function actualizarEstadisticas(solicitudes) {
     document.getElementById('stats-verificacion').textContent = stats.verificacion;
     document.getElementById('stats-atendidas').textContent = stats.atendidas;
     document.getElementById('stats-atrasadas').textContent = stats.atrasadas;
-    
+
     const eficiencia = (stats.atendidas / (stats.total || 1)) * 100;
     document.getElementById('stats-eficiencia').textContent = `${Math.round(eficiencia)}%`;
 }
@@ -671,7 +671,7 @@ function actualizarEstadisticas(solicitudes) {
 function actualizarTablaSeguimiento() {
     const tabla = document.getElementById('lista-seguimiento');
     const foliosUnicos = new Set();
-    
+
     // Limpiar tabla completamente
     tabla.innerHTML = '';
 
@@ -697,28 +697,28 @@ function actualizarTablaSeguimiento() {
 // Modificar la función cambiarEstado para hacerla global
 let accionActual = '';
 
-window.cambiarEstado = async function(folio, nuevoEstado, motivo = '', justificacion = '') {
+window.cambiarEstado = async function (folio, nuevoEstado, motivo = '', justificacion = '') {
     try {
         // 1. Buscar en datos locales primero para optimizar
         const solicitudExistente = solicitudesSeguimiento.find(s => s.key === folio);
-        
+
         if (!solicitudExistente) {
             throw new Error('Documento no encontrado en datos locales');
         }
 
         // 2. Determinar path CORRECTAMENTE - SOLUCIÓN PARA INSTITUCIONALES
         let path = solicitudExistente.tipoPath || 'solicitudes';
-        
+
         // Si es institucional pero no tiene tipoPath, determinar por folio
         if (path === 'solicitudes' && folio.startsWith('SI-')) {
             path = 'solicitudes_institucionales';
         }
-        
+
         const docRef = ref(database, `${path}/${folio}`);
-        const tipoDocumento = path === 'solicitudes' ? 'Solicitud' : 
-                           path === 'acuerdos' ? 'Acuerdo' : 
-                           path === 'oficios' ? 'Oficio' : 
-                           path === 'solicitudes_institucionales' ? 'Institucional' : 'Documento';
+        const tipoDocumento = path === 'solicitudes' ? 'Solicitud' :
+            path === 'acuerdos' ? 'Acuerdo' :
+                path === 'oficios' ? 'Oficio' :
+                    path === 'solicitudes_institucionales' ? 'Institucional' : 'Documento';
 
         // 3. Obtener datos actualizados directamente de Firebase
         const snapshot = await get(docRef);
@@ -747,19 +747,19 @@ window.cambiarEstado = async function(folio, nuevoEstado, motivo = '', justifica
         }
 
         if (nuevoEstado === 'pendiente' && !motivo) {
-        // mostrarError("Error crítico: Motivo requerido no proporcionado");
-        return;
-    }
+            // mostrarError("Error crítico: Motivo requerido no proporcionado");
+            return;
+        }
         // 5. Preparar actualización optimizada
-const actualizacion = {
-    estado: nuevoEstado,
-    ultimaActualizacion: new Date().toISOString(),
-    evidencias: nuevoEstado === 'pendiente' ? null : datos.evidencias || null,
-    _actualizadoPor: getCookie('nombre') || 'Sistema',
-    motivoRechazo: nuevoEstado === 'pendiente' ? motivo : null, // Asegurar motivo
-    fechaRechazo: nuevoEstado === 'pendiente' ? new Date().toISOString() : null,
-    justificacionProceso: nuevoEstado === 'en_proceso' ? justificacion : null
-};
+        const actualizacion = {
+            estado: nuevoEstado,
+            ultimaActualizacion: new Date().toISOString(),
+            evidencias: nuevoEstado === 'pendiente' ? null : datos.evidencias || null,
+            _actualizadoPor: getCookie('nombre') || 'Sistema',
+            motivoRechazo: nuevoEstado === 'pendiente' ? motivo : null, // Asegurar motivo
+            fechaRechazo: nuevoEstado === 'pendiente' ? new Date().toISOString() : null,
+            justificacionProceso: nuevoEstado === 'en_proceso' ? justificacion : null
+        };
 
         // 6. Agregar marcas de tiempo específicas
         if (nuevoEstado === 'atendida') {
@@ -779,14 +779,14 @@ const actualizacion = {
                 ...actualizacion,
                 tipoPath: path // Asegurar que mantenga el tipoPath correcto
             };
-            
+
             // Actualizar UI específica
             if (typeof actualizarTablaSeguimiento === 'function') {
                 actualizarTablaSeguimiento();
             } else {
                 console.error('Función actualizarTablaSeguimiento no definida');
             }
-            
+
             cargarVerificacion();
             cargarValidadas();
         }
@@ -803,12 +803,12 @@ const actualizacion = {
             mostrarExito(mensajes[nuevoEstado]);
         }
 
-   } catch (error) {
+    } catch (error) {
         console.error("Error completo:", error);
-        const mensajeError = error.code === 'storage/object-not-found' 
-                           ? 'El archivo adjunto no fue encontrado'
-                           : 'Error al actualizar el documento';
-        
+        const mensajeError = error.code === 'storage/object-not-found'
+            ? 'El archivo adjunto no fue encontrado'
+            : 'Error al actualizar el documento';
+
         mostrarError(mensajeError);
     } finally {
         if (nuevoEstado !== 'pendiente' || (motivo && motivo.trim() !== '')) {
@@ -819,32 +819,32 @@ const actualizacion = {
 };
 
 // Modifica el event listener del input de archivo
-document.getElementById('evidenciaFile').addEventListener('change', function(e) {
+document.getElementById('evidenciaFile').addEventListener('change', function (e) {
     const fileInfo = document.getElementById('fileInfo');
     const removeBtn = document.getElementById('removeFile');
-    
-    if(this.files.length > 0) {
+
+    if (this.files.length > 0) {
         const file = this.files[0];
         const extension = file.name.split('.').pop().toLowerCase();
-        
+
         // Validar extensión
-        if(!ALLOWED_EXTENSIONS.includes(extension)) {
+        if (!ALLOWED_EXTENSIONS.includes(extension)) {
             mostrarError(`Formato no permitido: .${extension}`);
             this.value = '';
             fileInfo.textContent = 'Formatos permitidos: .pdf, .jpg, .jpeg, .png, .zip, .rar (Máx. 10MB)';
             removeBtn.classList.add('d-none');
             return;
         }
-        
+
         // Validar tamaño
-        if(file.size > MAX_FILE_SIZE_BYTES) {
+        if (file.size > MAX_FILE_SIZE_BYTES) {
             mostrarError(`El archivo excede el tamaño máximo de ${MAX_FILE_SIZE_MB}MB`);
             this.value = '';
             fileInfo.textContent = 'Formatos permitidos: .pdf, .jpg, .jpeg, .png, .zip, .rar (Máx. 10MB)';
             removeBtn.classList.add('d-none');
             return;
         }
-        
+
         removeBtn.classList.remove('d-none');
         fileInfo.innerHTML = `
             <span class="text-success">
@@ -887,14 +887,14 @@ fileDropArea.addEventListener('drop', (e) => {
 });
 
 // Función para subir evidencia y cambiar estado
-window.subirEvidenciaYCambiarEstado = async function() {
+window.subirEvidenciaYCambiarEstado = async function () {
     const fileInput = document.getElementById('evidenciaFile');
     const file = fileInput.files[0];
-     let tipo = 'solicitudes';
+    let tipo = 'solicitudes';
     if (folioActual.startsWith('AG-')) tipo = 'acuerdos';
     else if (folioActual.startsWith('OF-')) tipo = 'oficios';
     else if (folioActual.startsWith('SI-')) tipo = 'solicitudes_institucionales';
-    
+
     if (!file) {
         mostrarError("Debes seleccionar un archivo primero");
         return;
@@ -902,7 +902,7 @@ window.subirEvidenciaYCambiarEstado = async function() {
 
     // Validar extensión nuevamente (por si el usuario modificó el input)
     const extension = file.name.split('.').pop().toLowerCase();
-    if(!ALLOWED_EXTENSIONS.includes(extension)) {
+    if (!ALLOWED_EXTENSIONS.includes(extension)) {
         mostrarError(`Formato no permitido: .${extension}`);
         return;
     }
@@ -940,7 +940,7 @@ window.subirEvidenciaYCambiarEstado = async function() {
         fileInput.value = '';
         bootstrap.Modal.getInstance('#confirmarAtendidaModal').hide();
         mostrarExito("Evidencia subida correctamente");
-        
+
     } catch (error) {
         console.error("Error completo:", error);
         mostrarError(`Error técnico: ${error.code} - ${error.message}`);
@@ -968,23 +968,23 @@ function mostrarExito(mensaje) {
 function cargarVerificacion() {
     const { esJefaturaGabinete, esSecretariaParticular, esOficialMayor, esPresidentaMunicipal } = obtenerFiltroEspecial();
     let paths = ['solicitudes', 'acuerdos', 'oficios', 'solicitudes_institucionales'];
-    
-    if(esJefaturaGabinete) {
+
+    if (esJefaturaGabinete) {
         paths = ['acuerdos'];
-    } else if(esSecretariaParticular) {
+    } else if (esSecretariaParticular) {
         paths = ['solicitudes', 'oficios'];
-    } else if(esOficialMayor) {
+    } else if (esOficialMayor) {
         paths = ['solicitudes_institucionales']; // Solo institucionales
     }
 
     solicitudesVerificacion = [];
 
     const userRol = parseInt(getCookie('rol')) || 0;
-    const userDependencias = getCookie('dependencia') ? 
+    const userDependencias = getCookie('dependencia') ?
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
     // Corregir: Validar si hay dependencias para no-admin
-    if(userRol !== 3 && userDependencias.length === 0) {
+    if (userRol !== 3 && userDependencias.length === 0) {
         mostrarPaginaVerificacion([]);
         return;
     }
@@ -1009,14 +1009,14 @@ function cargarVerificacion() {
         }
 
         // Añadir validación de query existente
-        if(!q) {
+        if (!q) {
             console.error('Query no definida para el path:', path);
             return;
         }
 
         onValue(q, (snapshot) => {
             solicitudesVerificacion = solicitudesVerificacion.filter(s => s.tipoPath !== path);
-            
+
             snapshot.forEach(childSnapshot => {
                 const solicitud = childSnapshot.val();
                 if (userRol !== 3 && userRol !== 4 && !userDependencias.includes(solicitud.dependencia)) return;
@@ -1027,7 +1027,7 @@ function cargarVerificacion() {
                 solicitud.folio = solicitud.folio || childSnapshot.key;
                 solicitudesVerificacion.push(solicitud);
             });
-            
+
             aplicarFiltrosVerificacion();
         });
     });
@@ -1160,45 +1160,45 @@ function mostrarPaginaVerificacion(data) {
     actualizarPaginacionVerificacion(data.length);
 }
 
-window.mostrarConfirmacion = function(folio, accion, tipo) {
+window.mostrarConfirmacion = function (folio, accion, tipo) {
     folioActual = folio;
     accionActual = accion;
     tipoActual = tipo;
-    
-    const modalId = accion === 'aprobar' 
-        ? '#confirmarAprobarModal' 
+
+    const modalId = accion === 'aprobar'
+        ? '#confirmarAprobarModal'
         : '#confirmarRechazarModal';
-    
+
     new bootstrap.Modal(document.querySelector(modalId)).show();
 };
 
 // Evento modificado para cambio de archivo
-document.getElementById('documentoInicial').addEventListener('change', function(e) {
+document.getElementById('documentoInicial').addEventListener('change', function (e) {
     if (suppressFileInputEvents) return;
-    
+
     const fileInfo = document.getElementById('docInicialInfo');
     const removeBtn = document.getElementById('removeDocInicial');
-    
-    if(this.files.length > 0) {
+
+    if (this.files.length > 0) {
         const file = this.files[0];
         const extension = file.name.split('.').pop().toLowerCase();
-        
-        if(!ALLOWED_INITIAL_EXTENSIONS.includes(extension)) {
+
+        if (!ALLOWED_INITIAL_EXTENSIONS.includes(extension)) {
             mostrarError(`Formato no permitido: .${extension}`);
             this.value = '';
             fileInfo.textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
             removeBtn.classList.add('d-none');
             return;
         }
-        
-        if(file.size > MAX_INITIAL_FILE_SIZE_BYTES) {
+
+        if (file.size > MAX_INITIAL_FILE_SIZE_BYTES) {
             mostrarError(`El archivo excede el tamaño máximo de ${MAX_INITIAL_FILE_SIZE_MB}MB`);
             this.value = '';
             fileInfo.textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
             removeBtn.classList.add('d-none');
             return;
         }
-        
+
         removeBtn.classList.remove('d-none');
         fileInfo.innerHTML = `
             <span class="text-success">
@@ -1219,12 +1219,12 @@ document.getElementById('removeDocInicial').addEventListener('click', () => {
 });
 
 const estados = {
-    'pendiente': {texto: 'Pendiente', color: '#491F42'},
-    'por_vencer': {texto: 'Por Vencer', color: '#720F36'},
-    'en_proceso': {texto: 'En Proceso', color: '#ae9074'},
-    'verificacion': {texto: 'En Verificación', color: '#FFA500'},
-    'atendida': {texto: 'Atendida', color: '#2E7D32'},
-    'atrasada': {texto: 'Atrasada', color: '#a90000'}
+    'pendiente': { texto: 'Pendiente', color: '#491F42' },
+    'por_vencer': { texto: 'Por Vencer', color: '#720F36' },
+    'en_proceso': { texto: 'En Proceso', color: '#ae9074' },
+    'verificacion': { texto: 'En Verificación', color: '#FFA500' },
+    'atendida': { texto: 'Atendida', color: '#2E7D32' },
+    'atrasada': { texto: 'Atrasada', color: '#a90000' }
 };
 
 function crearFilaSolicitud(solicitud) {
@@ -1301,11 +1301,11 @@ ${solicitud.justificacionProceso ? `
         btn.style.opacity = '0.6';
         btn.style.cursor = 'not-allowed';
     });
-    
+
     return tr;
 }
 
-window.mostrarDocumentoInicial = function(folio, nombreArchivo, url, secretariaOrigen) {
+window.mostrarDocumentoInicial = function (folio, nombreArchivo, url, secretariaOrigen) {
     const modal = new bootstrap.Modal(document.getElementById('evidenciaModal'));
     const loading = document.getElementById('loadingPreview');
     const pdfContainer = document.getElementById('pdfContainer');
@@ -1348,7 +1348,7 @@ window.mostrarDocumentoInicial = function(folio, nombreArchivo, url, secretariaO
         if (pdfViewer.dataset.tempSrc) {
             const container = pdfViewer.parentElement;
             pdfViewer.style.height = `${container.clientHeight}px`;
-            
+
             setTimeout(() => {
                 pdfViewer.src = pdfViewer.dataset.tempSrc;
                 delete pdfViewer.dataset.tempSrc;
@@ -1367,13 +1367,13 @@ window.mostrarDocumentoInicial = function(folio, nombreArchivo, url, secretariaO
     // Configurar visores
     setTimeout(() => {
         loading.classList.add('d-none');
-        
+
         if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExt)) {
             imagenContainer.classList.remove('d-none');
             const img = document.getElementById('visorImagen');
             img.src = url;
             img.onload = () => {
-                document.getElementById('imagenDimensions').textContent = 
+                document.getElementById('imagenDimensions').textContent =
                     `${img.naturalWidth}px × ${img.naturalHeight}px`;
             };
         } else if (fileExt === 'pdf') {
@@ -1392,7 +1392,7 @@ window.mostrarDocumentoInicial = function(folio, nombreArchivo, url, secretariaO
     }, 300);
 
     // Evento de zoom para imágenes
-    document.getElementById('visorImagen').onclick = function() {
+    document.getElementById('visorImagen').onclick = function () {
         this.classList.toggle('img-zoom');
     };
 
@@ -1421,29 +1421,29 @@ const DIAS_ADVERTENCIA = 1; // Días previos para marcar como "por vencer"
 async function actualizarEstadosAutomaticos() {
     if (actualizacionEnCurso) return;
     actualizacionEnCurso = true;
-    
+
     try {
         const ahora = ajustarHoraMexico(new Date());
         const updates = {};
         const paths = ['solicitudes', 'acuerdos', 'oficios'];
-        
+
         // Obtener datos directamente de Firebase
         const allDocs = await Promise.all(paths.map(async (path) => {
             const snapshot = await get(query(ref(database, path)));
             return snapshot.val() || {};
         }));
-        
+
         // Procesar cada documento
         paths.forEach((path, index) => {
             const docs = allDocs[index];
             Object.entries(docs).forEach(([key, doc]) => {
                 if (!['pendiente', 'por_vencer'].includes(doc.estado)) return;
-                
+
                 const fechaLimite = ajustarHoraMexico(new Date(doc.fechaLimite));
                 const diasRestantes = calcularDiasHabilesRestantes(ahora, fechaLimite);
-                
+
                 let nuevoEstado = doc.estado;
-                
+
                 // Lógica mejorada de transición de estados
                 if (diasRestantes === 0) {
                     nuevoEstado = 'atrasada';
@@ -1452,22 +1452,22 @@ async function actualizarEstadosAutomaticos() {
                 } else if (diasRestantes > DIAS_ADVERTENCIA && doc.estado === 'por_vencer') {
                     nuevoEstado = 'pendiente';
                 }
-                
+
                 if (nuevoEstado !== doc.estado) {
                     updates[`${path}/${key}/estado`] = nuevoEstado;
                     updates[`${path}/${key}/ultimaActualizacion`] = ahora.toISOString();
                 }
             });
         });
-        
+
         // Ejecutar actualizaciones si hay cambios
         if (Object.keys(updates).length > 0) {
             await update(ref(database), updates);
-            
+
             // Actualizar datos locales sin recargar toda la lista
             Object.entries(updates).forEach(([path, value]) => {
                 const [collection, key, field] = path.split('/');
-                const index = solicitudesSeguimiento.findIndex(s => 
+                const index = solicitudesSeguimiento.findIndex(s =>
                     s.tipoPath === collection && s.key === key
                 );
                 if (index > -1 && field === 'estado') {
@@ -1475,7 +1475,7 @@ async function actualizarEstadosAutomaticos() {
                 }
             });
         }
-        
+
     } catch (error) {
         console.error('Error en actualización automática:', error);
         mostrarError('Error técnico al actualizar estados');
@@ -1488,14 +1488,14 @@ async function actualizarEstadosAutomaticos() {
 function calcularDiasHabilesRestantes(fechaInicio, fechaLimite) {
     let dias = 0;
     const fechaActual = new Date(fechaInicio);
-    
+
     while (fechaActual < fechaLimite) {
         fechaActual.setDate(fechaActual.getDate() + 1);
         if (fechaActual.getDay() !== 0 && fechaActual.getDay() !== 6) {
             dias++;
         }
     }
-    
+
     return dias;
 }
 
@@ -1504,8 +1504,8 @@ setInterval(actualizarEstadosAutomaticos, 43200000); // 12 horas 43200000
 document.addEventListener('DOMContentLoaded', actualizarEstadosAutomaticos);
 
 function cargarSeguimiento() {
-     const { 
-        esJefaturaGabinete, 
+    const {
+        esJefaturaGabinete,
         esSecretariaParticular,
         esOficialMayor,
         esPresidentaMunicipal
@@ -1521,15 +1521,15 @@ function cargarSeguimiento() {
     } else if (esSecretariaParticular) {
         paths = ['solicitudes', 'oficios'];
     }
-    
+
     const userRol = parseInt(getCookie('rol')) || 0;
-    const userDependencias = getCookie('dependencia') ? 
+    const userDependencias = getCookie('dependencia') ?
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
     // Limpiar listeners anteriores
     paths.forEach(path => {
         const refPath = ref(database, path);
-        onValue(refPath, () => {});
+        onValue(refPath, () => { });
     });
 
     if (userRol === 3) {
@@ -1642,16 +1642,16 @@ function cargarSeguimiento() {
 document.getElementById('formNuevaSolicitud').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
-    
+
     // Validación de campos
     const camposRequeridos = [
-        'receptor', 'canal', 'nombre', 
-        'colonia', 'telefono', 'asunto', 
+        'receptor', 'canal', 'nombre',
+        'colonia', 'telefono', 'asunto',
         'secretaria', 'documentoInicial'
     ];
-    
+
     let validado = true;
-    
+
     // Validar campos requeridos
     camposRequeridos.forEach(id => {
         const campo = document.getElementById(id);
@@ -1673,11 +1673,11 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
     try {
         // Generar folio primero
         const folio = await generarFolio();
-        
+
         // Manejar documento inicial
         const docInicialInput = document.getElementById('documentoInicial');
         const docInicialFile = docInicialInput.files[0];
-        
+
         // Validar archivo
         if (!docInicialFile) {
             mostrarError("Debes subir un documento inicial");
@@ -1696,7 +1696,7 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
         }
 
         // Subir documento a Storage
-       const storagePath = `${folio}/Documento Inicial/${docInicialFile.name}`;
+        const storagePath = `${folio}/Documento Inicial/${docInicialFile.name}`;
         const docRef = storageRef(storage, storagePath);
         await uploadBytes(docRef, docInicialFile);
         const docUrl = await getDownloadURL(docRef);
@@ -1724,21 +1724,21 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
 
         // Guardar en la base de datos
         await set(ref(database, `solicitudes/${folio}`), nuevaSolicitud);
-        
+
         // Limpiar formulario sin triggerear alertas
         suppressFileInputEvents = true;
         form.reset();
         document.getElementById('fecha').value = obtenerFechaHoy();
         docInicialInput.value = '';
-        
+
         // Restaurar UI manualmente
-        document.getElementById('docInicialInfo').textContent = 
+        document.getElementById('docInicialInfo').textContent =
             'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
         document.getElementById('removeDocInicial').classList.add('d-none');
         suppressFileInputEvents = false;
-        
+
         mostrarExito("Solicitud creada exitosamente!");
-        
+
     } catch (error) {
         console.error("Error al guardar:", error);
         mostrarError(`Error al crear la solicitud: ${error.message}`);
@@ -1752,7 +1752,7 @@ const coloresEstatus = {
     en_progreso: '#ae9074',
     atendida: '#2E7D32',
     atrasado: '#a90000',
-    verificacion : '#FFA500'
+    verificacion: '#FFA500'
 };
 
 // Paleta de énfasis visual
@@ -1769,14 +1769,14 @@ let myChart = null;
 function obtenerTiposSolicitud(solicitudes) {
     const tiposUnicos = new Set();
     solicitudes.forEach(solicitud => {
-        if(solicitud.tipo) tiposUnicos.add(solicitud.tipo);
+        if (solicitud.tipo) tiposUnicos.add(solicitud.tipo);
     });
     return Array.from(tiposUnicos);
 }
 
 function actualizarGrafica(solicitudes) {
     const tiposSolicitud = obtenerTiposSolicitud(solicitudes);
-    
+
     // Corregir estructura de datos para coincidir con los estados reales
     const datos = {
         pendiente: new Array(tiposSolicitud.length).fill(0),
@@ -1784,23 +1784,23 @@ function actualizarGrafica(solicitudes) {
         en_proceso: new Array(tiposSolicitud.length).fill(0),
         atrasada: new Array(tiposSolicitud.length).fill(0),
         atendida: new Array(tiposSolicitud.length).fill(0),
-        verificacion : new Array(tiposSolicitud.length).fill(0)
+        verificacion: new Array(tiposSolicitud.length).fill(0)
     };
 
     solicitudes.forEach(solicitud => {
         const index = tiposSolicitud.indexOf(solicitud.tipo);
-        if(index === -1) return;
+        if (index === -1) return;
 
         // Usar directamente el estado de la solicitud
-        if(datos.hasOwnProperty(solicitud.estado)) {
+        if (datos.hasOwnProperty(solicitud.estado)) {
             datos[solicitud.estado][index]++;
         }
     });
 
     const ctx = document.getElementById('mainChart').getContext('2d');
-    
+
     // Destruir gráfica anterior si existe
-    if(charts.mainChart) {
+    if (charts.mainChart) {
         charts.mainChart.destroy();
     }
 
@@ -2004,10 +2004,10 @@ document.addEventListener('DOMContentLoaded', async function () {
     checkSession();
     showUserInfo();
     setupLogout();
-    
+
     // Cargar primero las dependencias
     await cargarDependencias();
-    
+
     // Luego cargar otros componentes
     cargarSecretarias();
     cargarSeguimiento();
@@ -2016,8 +2016,8 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // Obtener rol del usuario
     const role = parseInt(getCookie('rol')) || 0;
-    const userDependencias = getCookie('dependencia') ? 
-    decodeURIComponent(getCookie('dependencia')).split(',') : [];
+    const userDependencias = getCookie('dependencia') ?
+        decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
     // Ocultar/mostrar pestañas según rol
     const nuevaLi = document.querySelector('a[data-content="nueva"]').parentElement;
@@ -2056,7 +2056,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     // Validar pestaña activa guardada
     const savedTab = localStorage.getItem('activeTab');
     const allowedTabs = ['dashboard'];
-    
+
     switch (role) {
         case 1:
             allowedTabs.push('nueva');
@@ -2118,10 +2118,10 @@ document.addEventListener('DOMContentLoaded', async function () {
             activeSection.style.display = 'block';
         }
     }
-    
+
     // Event listeners para los navLinks
     navLinks.forEach(link => {
-        link.addEventListener('click', function(e) {
+        link.addEventListener('click', function (e) {
             e.preventDefault();
             const contentId = this.getAttribute('data-content');
             navLinks.forEach(n => n.classList.remove('active'));
@@ -2198,19 +2198,19 @@ function setupLogout() {
 
 let folioActual = '';
 
-window.mostrarConfirmacionProceso = function(folio) {
+window.mostrarConfirmacionProceso = function (folio) {
     folioActual = folio;
     new bootstrap.Modal('#confirmarProcesoModal').show();
 };
 
-window.mostrarConfirmacionAtendida = function(folio) {
+window.mostrarConfirmacionAtendida = function (folio) {
     folioActual = folio;
     new bootstrap.Modal('#confirmarAtendidaModal').show();
 };
 
-window.confirmarCambioEstado = function(nuevoEstado) {
+window.confirmarCambioEstado = function (nuevoEstado) {
     cambiarEstado(folioActual, nuevoEstado);
-    
+
     // Cerrar ambos modales de confirmación
     ['#confirmarProcesoModal', '#confirmarAtendidaModal'].forEach(modalId => {
         const modal = bootstrap.Modal.getInstance(document.querySelector(modalId));
@@ -2221,20 +2221,20 @@ window.confirmarCambioEstado = function(nuevoEstado) {
 // Configurar formulario Acuerdo
 document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     try {
         // Obtener elementos del DOM
         const docInput = document.getElementById('documentoAcuerdo');
         const docFile = docInput.files[0];
         const prefix = 'Acuerdo';
-        
+
         // Validar campos requeridos
         const camposRequeridos = [
-            'asuntoAcuerdo', 
-            'descripcionAcuerdo', 
+            'asuntoAcuerdo',
+            'descripcionAcuerdo',
             'secretariaAcuerdo'
         ];
-        
+
         let valido = true;
         camposRequeridos.forEach(id => {
             const campo = document.getElementById(id);
@@ -2255,7 +2255,7 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
                 mostrarError(`Formato no permitido para Acuerdo: .${extension}`);
                 valido = false;
             }
-            
+
             if (docFile.size > MAX_INITIAL_FILE_SIZE_BYTES) {
                 mostrarError(`El archivo excede el tamaño máximo de ${MAX_INITIAL_FILE_SIZE_MB}MB para Acuerdos`);
                 valido = false;
@@ -2288,7 +2288,7 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
 
         // Guardar en Firebase
         await set(ref(database, `acuerdos/${folio}`), nuevoAcuerdo);
-        
+
         // Limpiar formulario
         limpiarFormulario('acuerdo');
         mostrarExito("Acuerdo creado exitosamente!");
@@ -2302,12 +2302,12 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
 // Configurar formulario Oficio (similar a Acuerdo)
 document.getElementById('formNuevoOficio').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     try {
         const folio = await generarFolio('oficio');
         const docFile = document.getElementById('documentoOficio').files[0];
-        
-       if (!validarDocumento(docFile, true)) return;
+
+        if (!validarDocumento(docFile, true)) return;
 
         const storagePath = `${folio}/Documento Inicial Oficio/${docFile.name}`;
         const docRef = storageRef(storage, storagePath);
@@ -2356,9 +2356,9 @@ function validarCampos(campos) {
 }
 
 function validarDocumento(file, tipoDocumento) {
-    const ALLOWED_EXT = ['pdf','jpg', 'jpeg', 'png', 'zip', 'rar'];
+    const ALLOWED_EXT = ['pdf', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
     const MAX_SIZE_MB = 10;
-    
+
     if (!file) {
         mostrarError(`Debes subir un documento para ${tipoDocumento}`);
         return false;
@@ -2381,22 +2381,22 @@ function validarDocumento(file, tipoDocumento) {
 function limpiarFormulario(tipo) {
     const prefix = tipo.charAt(0).toUpperCase() + tipo.slice(1);
     const form = document.getElementById(`formNuevo${prefix}`);
-    
+
     // Resetear campos
     form.reset();
-    
+
     // Limpiar file input y UI
     const fileInput = document.getElementById(`documento${prefix}`);
     const fileInfo = document.getElementById(`doc${prefix}Info`);
     const removeBtn = document.getElementById(`removeDoc${prefix}`);
-    
+
     fileInput.value = '';
     fileInfo.textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
     removeBtn.classList.add('d-none');
-    
+
     // Restablecer fecha
     document.getElementById(`fecha${prefix}`).value = obtenerFechaHoy();
-    
+
     // Limpiar nuevos campos específicos para oficio
     if (tipo === 'oficio') {
         document.getElementById('peticionarioOficio').value = '';
@@ -2409,7 +2409,7 @@ function limpiarFormulario(tipo) {
     const removeBtn = document.getElementById(`removeDoc${tipo}`);
     const docInfo = document.getElementById(`doc${tipo}Info`);
 
-    docInput.addEventListener('change', function(e) {
+    docInput.addEventListener('change', function (e) {
         if (this.files.length > 0) {
             const file = this.files[0];
             docInfo.innerHTML = `
@@ -2435,7 +2435,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Configurar fechas
     document.getElementById('fechaAcuerdo').value = obtenerFechaHoy();
     document.getElementById('fechaOficio').value = obtenerFechaHoy();
-    
+
     // Mostrar módulos solo para rol 3
     const role = parseInt(getCookie('rol'));
     if (role === 3) {
@@ -2471,19 +2471,19 @@ function validarFormulario(tipo) {
     // Validar archivo
     const fileInput = document.getElementById(`documento${prefix}`);
     const file = fileInput.files[0];
-    
+
     if (!file) {
         mostrarError(`Debe adjuntar un documento para ${prefix}`);
         valido = false;
     } else {
         const extension = file.name.split('.').pop().toLowerCase();
         const allowedExtensions = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
-        
+
         if (!allowedExtensions.includes(extension)) {
             mostrarError(`Formato no permitido para ${prefix}: .${extension}`);
             valido = false;
         }
-        
+
         if (file.size > 10 * 1024 * 1024) { // 10MB
             mostrarError(`El archivo excede el tamaño máximo de 10MB para ${prefix}`);
             valido = false;
@@ -2494,12 +2494,12 @@ function validarFormulario(tipo) {
 }
 
 // Configurar validación en tiempo real para Acuerdos
-document.getElementById('documentoAcuerdo').addEventListener('change', function(e) {
+document.getElementById('documentoAcuerdo').addEventListener('change', function (e) {
     validarArchivoInput(this, 'Acuerdo');
 });
 
 // Configurar validación en tiempo real para Oficios
-document.getElementById('documentoOficio').addEventListener('change', function(e) {
+document.getElementById('documentoOficio').addEventListener('change', function (e) {
     validarArchivoInput(this, 'Oficio');
 });
 
@@ -2512,7 +2512,7 @@ function validarArchivoInput(input, tipoDocumento) {
     // Resetear estado
     input.classList.remove('is-invalid');
     fileInfo.classList.remove('text-danger');
-    
+
     if (!file) {
         fileInfo.textContent = `Formatos permitidos: ${ALLOWED_INITIAL_EXTENSIONS.join(', ')} (Máx. ${MAX_INITIAL_FILE_SIZE_MB}MB)`;
         removeBtn?.classList.add('d-none');
@@ -2577,7 +2577,7 @@ function actualizarGraficaTipos(solicitudes) {
     });
 
     if (charts.typeChart) charts.typeChart.destroy();
-    
+
     const ctx = document.getElementById('typeChart').getContext('2d');
     charts.typeChart = new Chart(ctx, { // <-- Usar charts.typeChart
         type: 'pie',
@@ -2605,21 +2605,21 @@ function actualizarGraficaTipos(solicitudes) {
 }
 
 function actualizarGraficaTendencias(solicitudes) {
-    const meses = Array.from({length: 12}, (_, i) => {
+    const meses = Array.from({ length: 12 }, (_, i) => {
         const date = new Date();
         date.setMonth(i);
-        return date.toLocaleString('es-MX', {month: 'short'});
+        return date.toLocaleString('es-MX', { month: 'short' });
     });
 
     const datos = Array(12).fill(0);
-    
+
     solicitudes.forEach(s => {
         const mes = new Date(s.fechaCreacion).getMonth();
         datos[mes]++;
     });
 
     if (charts.trendChart) charts.trendChart.destroy();
-    
+
     const ctx = document.getElementById('trendChart').getContext('2d');
     charts.trendChart = new Chart(ctx, { // <-- Usar charts.trendChart
         type: 'line',
@@ -2660,7 +2660,7 @@ function actualizarGraficaEstatus(solicitudes) {
     solicitudes.forEach(s => estatus[s.estado]++);
 
     if (charts.statusChart) charts.statusChart.destroy();
-    
+
     const ctx = document.getElementById('statusChart').getContext('2d');
     charts.statusChart = new Chart(ctx, { // <-- Usar charts.statusChart
         type: 'doughnut',
@@ -2691,7 +2691,7 @@ function actualizarGraficaEstatus(solicitudes) {
 
 function actualizarEficienciaDepartamentos(solicitudes) {
     const departamentos = {};
-    
+
     solicitudes.forEach(s => {
         const depto = dependenciasMap[s.dependencia] || 'Desconocido';
         if (!departamentos[depto]) {
@@ -2710,7 +2710,7 @@ function actualizarEficienciaDepartamentos(solicitudes) {
     });
 
     if (charts.departmentChart) charts.departmentChart.destroy();
-    
+
     const ctx = document.getElementById('departmentChart').getContext('2d');
     charts.departmentChart = new Chart(ctx, {
         type: 'bar',
@@ -2750,7 +2750,7 @@ function actualizarTiemposRespuesta(solicitudes) {
         const inicio = new Date(s.fechaCreacion);
         const fin = new Date(s.fechaAtencion);
         const diff = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24));
-        
+
         if (diff <= 3) tiempos['1-3 días']++;
         else if (diff <= 7) tiempos['4-7 días']++;
         else if (diff <= 15) tiempos['8-15 días']++;
@@ -2758,7 +2758,7 @@ function actualizarTiemposRespuesta(solicitudes) {
     });
 
     if (charts.efficiencyChart) charts.efficiencyChart.destroy();
-    
+
     const ctx = document.getElementById('efficiencyChart').getContext('2d');
     charts.efficiencyChart = new Chart(ctx, {
         type: 'polarArea',
@@ -2791,29 +2791,29 @@ window.exportAllCharts = async () => {
         const zip = new JSZip();
         const folder = zip.folder("graficas_sisges");
         const date = new Date().toISOString().slice(0, 10);
-        
+
         // Generar todas las gráficas
         await Promise.all(Object.keys(charts).map(async (chartId) => {
             const chart = charts[chartId];
             if (!chart) return;
-            
+
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
             tempCanvas.width = chart.canvas.width;
             tempCanvas.height = chart.canvas.height;
             tempCtx.drawImage(chart.canvas, 0, 0);
-            
-            const blob = await new Promise(resolve => 
+
+            const blob = await new Promise(resolve =>
                 tempCanvas.toBlob(resolve, 'image/png', 1)
             );
-            
+
             folder.file(`${chartId}_${date}.png`, blob);
         }));
-        
+
         // Generar y descargar ZIP
-        const content = await zip.generateAsync({type: "blob"});
+        const content = await zip.generateAsync({ type: "blob" });
         saveAs(content, `graficas_sisges_${date}.zip`);
-        
+
     } catch (error) {
         mostrarError(`Error al exportar gráficas: ${error.message}`);
     }
@@ -2823,20 +2823,20 @@ window.exportAllCharts = async () => {
 window.exportChart = (chartId, fileName = 'chart') => {
     const chart = charts[chartId];
     if (!chart) return;
-    
+
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
-    
+
     // Aumentar resolución para exportación HD
     const scale = 2;
     tempCanvas.width = chart.canvas.width * scale;
     tempCanvas.height = chart.canvas.height * scale;
     tempCtx.scale(scale, scale);
     tempCtx.drawImage(chart.canvas, 0, 0);
-    
+
     const url = tempCanvas.toDataURL('image/png', 1);
     const link = document.createElement('a');
-    link.download = `${fileName}_${new Date().toISOString().slice(0,10)}.png`;
+    link.download = `${fileName}_${new Date().toISOString().slice(0, 10)}.png`;
     link.href = url;
     link.click();
 };
@@ -2857,14 +2857,14 @@ function obtenerFiltroEspecial() {
 document.getElementById('confirmarRechazar').addEventListener('click', async () => {
     const motivoInput = document.getElementById('motivoRechazo');
     const motivo = motivoInput.value.trim();
-    
+
     // Validación robusta
     if (!motivo || motivo.length > 500) {
         mostrarError(motivo ? "¡El motivo no puede exceder 500 caracteres!" : "¡Debe ingresar un motivo de rechazo!");
         motivoInput.classList.add('is-invalid');
         return;
     }
-    
+
     try {
         await cambiarEstado(folioActual, 'pendiente', motivo);
         motivoInput.value = '';
@@ -2880,9 +2880,9 @@ document.getElementById('confirmarRechazarModal').addEventListener('hidden.bs.mo
     document.getElementById('motivoRechazo').value = '';
 });
 
-window.mostrarMotivo = function(motivo, usuario, fecha) {
+window.mostrarMotivo = function (motivo, usuario, fecha) {
     const motivoContenido = document.getElementById('textoMotivo');
-    
+
     if (!motivoContenido) {
         console.error('Elemento textoMotivo no encontrado');
         return;
@@ -2901,38 +2901,38 @@ window.mostrarMotivo = function(motivo, usuario, fecha) {
     new bootstrap.Modal(document.getElementById('motivoModal')).show();
 };
 
-     window.mostrarJustificacion = function(folio, justificacion) {
-            document.getElementById('textoJustificacion').textContent = 
-                justificacion || 'No se ha proporcionado una justificación.';
-            
-            new bootstrap.Modal('#justificacionModal').show();
-        };
-        
-        // Función modificada para confirmar cambio de estado
-        window.confirmarCambioEstado = function (nuevoEstado) {
-            const justificacion = document.getElementById('justificacionProceso').value.trim();
+window.mostrarJustificacion = function (folio, justificacion) {
+    document.getElementById('textoJustificacion').textContent =
+        justificacion || 'No se ha proporcionado una justificación.';
 
-            // Validar la justificación
-            if (!justificacion || justificacion.length < 20) {
-                document.getElementById('justificacionProceso').classList.add('is-invalid');
-                return;
-            }
+    new bootstrap.Modal('#justificacionModal').show();
+};
 
-            // CORRECCIÓN: Pasar la justificación como cuarto parámetro
-            cambiarEstado(folioActual, nuevoEstado, '', justificacion);
+// Función modificada para confirmar cambio de estado
+window.confirmarCambioEstado = function (nuevoEstado) {
+    const justificacion = document.getElementById('justificacionProceso').value.trim();
 
-            // Cerrar modal
-            bootstrap.Modal.getInstance('#confirmarProcesoModal').hide();
-        };
+    // Validar la justificación
+    if (!justificacion || justificacion.length < 20) {
+        document.getElementById('justificacionProceso').classList.add('is-invalid');
+        return;
+    }
 
-        // Manejo del formulario institucional
+    // CORRECCIÓN: Pasar la justificación como cuarto parámetro
+    cambiarEstado(folioActual, nuevoEstado, '', justificacion);
+
+    // Cerrar modal
+    bootstrap.Modal.getInstance('#confirmarProcesoModal').hide();
+};
+
+// Manejo del formulario institucional
 document.getElementById('formNuevaInstitucional').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     try {
         // Validar campos requeridos
         const camposRequeridos = [
-            'asuntoInstitucional', 
+            'asuntoInstitucional',
             'institucionInstitucional',
             'contactoInstitucional',
             'telefonoInstitucional',
@@ -2942,7 +2942,7 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
             'secretariaInstitucional',
             'documentoInstitucional'
         ];
-        
+
         let validado = true;
         camposRequeridos.forEach(id => {
             const campo = document.getElementById(id);
@@ -2975,7 +2975,7 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
         // Obtener archivo
         const docInput = document.getElementById('documentoInstitucional');
         const docFile = docInput.files[0];
-        
+
         // Validar archivo
         if (!docFile) {
             mostrarError("Debes subir un documento inicial");
@@ -2997,7 +2997,7 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
 
         // Generar folio
         const folio = await generarFolio('institucional');
-        
+
         // Subir documento
         const storagePath = `${folio}/Documento Institucional/${docFile.name}`;
         const docRef = storageRef(storage, storagePath);
@@ -3029,17 +3029,17 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
 
         // Guardar en Firebase (en nueva colección)
         await set(ref(database, `solicitudes_institucionales/${folio}`), nuevaSolicitud);
-        
+
         // Limpiar formulario
         document.getElementById('formNuevaInstitucional').reset();
         // Restablecer fecha actual
         document.getElementById('fechaInstitucional').value = obtenerFechaHoy();
         // Limpiar archivo
         docInput.value = '';
-        document.getElementById('docInstitucionalInfo').textContent = 
+        document.getElementById('docInstitucionalInfo').textContent =
             'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
         document.getElementById('removeDocInstitucional').classList.add('d-none');
-        
+
         mostrarExito("Solicitud institucional creada exitosamente!");
 
     } catch (error) {
@@ -3056,11 +3056,11 @@ document.getElementById('removeDocInstitucional').addEventListener('click', () =
 });
 
 // Evento para mostrar información del archivo
-document.getElementById('documentoInstitucional').addEventListener('change', function(e) {
+document.getElementById('documentoInstitucional').addEventListener('change', function (e) {
     const fileInfo = document.getElementById('docInstitucionalInfo');
     const removeBtn = document.getElementById('removeDocInstitucional');
-    
-    if(this.files.length > 0) {
+
+    if (this.files.length > 0) {
         const file = this.files[0];
         fileInfo.innerHTML = `
             <span class="text-success">
