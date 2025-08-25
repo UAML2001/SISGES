@@ -27,22 +27,6 @@ Almacenamiento: Firebase Storage para documentos adjuntos
 
 Hosting: Firebase Hosting
 
-📦 Estructura del proyecto
-text
-sisges/
-├── index.html
-├── css/
-│   └── styles.css
-├── js/
-│   ├── auth.js
-│   ├── dashboard.js
-│   ├── forms.js
-│   ├── tracking.js
-│   └── firebase.js
-├── assets/
-│   └── (imágenes e iconos)
-└── README.md
-
 📄 Documentación
 El sistema cuenta con un Manual Operativo detallado que incluye flujos de trabajo, roles de usuario, estados de solicitudes y procedimientos de validación. Consulte la carpeta /docs o el manual adjunto para más información.
 
