@@ -39,11 +39,12 @@ const analytics = getAnalytics(app);
 
 let charts = {
     mainChart: null,
-    typeChart: null,    // <- Ya existía
-    trendChart: null,   // <- Añadir estos
-    statusChart: null,  // <- 
+    typeChart: null,
+    trendChart: null,
+    statusChart: null,
     efficiencyChart: null,
-    departmentChart: null
+    departmentChart: null,
+    quarterlyChart: null  // ← Nueva gráfica
 };
 
 
@@ -2559,6 +2560,7 @@ function actualizarGraficas(solicitudes) {
     actualizarGraficaEstatus(solicitudes);
     actualizarEficienciaDepartamentos(solicitudes);
     actualizarTiemposRespuesta(solicitudes);
+    actualizarGraficaTrimestral(solicitudes);  // ← Nueva llamada
 }
 
 function actualizarGraficaPrincipal(solicitudes) {
@@ -2786,14 +2788,20 @@ function actualizarTiemposRespuesta(solicitudes) {
 }
 
 // Función mejorada para exportación múltiple
+// En la función exportAllCharts, agregar la nueva gráfica
 window.exportAllCharts = async () => {
     try {
         const zip = new JSZip();
         const folder = zip.folder("graficas_sisges");
         const date = new Date().toISOString().slice(0, 10);
         
-        // Generar todas las gráficas
+        // Generar todas las gráficas (incluyendo la nueva)
         await Promise.all(Object.keys(charts).map(async (chartId) => {
+            if (chartId === 'quarterlyChart' && !charts[chartId]) {
+                // Si la gráfica trimestral no está inicializada, la creamos
+                actualizarGraficaTrimestral(solicitudesSeguimiento);
+            }
+            
             const chart = charts[chartId];
             if (!chart) return;
             
@@ -3076,3 +3084,160 @@ document.getElementById('documentoInstitucional').addEventListener('change', fun
 
 // Inicializar fecha actual
 document.getElementById('fechaInstitucional').value = obtenerFechaHoy();
+
+// Función para obtener el trimestre de una fecha
+function obtenerTrimestre(fecha) {
+    const mes = new Date(fecha).getMonth();
+    return Math.floor(mes / 3) + 1;
+}
+
+// Función para obtener el año y trimestre en formato "YYYY-T"
+function obtenerPeriodo(fecha) {
+    const año = new Date(fecha).getFullYear();
+    const trimestre = obtenerTrimestre(fecha);
+    return `${año}-T${trimestre}`;
+}
+
+// Función para procesar datos trimestrales
+function procesarDatosTrimestrales(solicitudes) {
+    const datosTrimestrales = {};
+    const años = new Set();
+    
+    // Procesar todas las solicitudes atendidas
+    solicitudes.filter(s => s.estado === 'atendida').forEach(solicitud => {
+        if (!solicitud.fechaAtencion) return;
+        
+        const periodo = obtenerPeriodo(solicitud.fechaAtencion);
+        const año = periodo.split('-')[0];
+        años.add(año);
+        
+        if (!datosTrimestrales[periodo]) {
+            datosTrimestrales[periodo] = {
+                total: 0,
+                porTipo: {}
+            };
+        }
+        
+        datosTrimestrales[periodo].total++;
+        
+        // Contabilizar por tipo de solicitud
+        const tipo = solicitud.tipoPath === 'solicitudes' ? 'Solicitud' : 
+                    solicitud.tipoPath === 'acuerdos' ? 'Acuerdo' : 
+                    solicitud.tipoPath === 'oficios' ? 'Oficio' : 
+                    solicitud.tipoPath === 'solicitudes_institucionales' ? 'Institucional' : 'Otro';
+        
+        if (!datosTrimestrales[periodo].porTipo[tipo]) {
+            datosTrimestrales[periodo].porTipo[tipo] = 0;
+        }
+        datosTrimestrales[periodo].porTipo[tipo]++;
+    });
+    
+    return { datosTrimestrales, años: Array.from(años).sort() };
+}
+
+// Función para actualizar la gráfica trimestral
+function actualizarGraficaTrimestral(solicitudes) {
+    const { datosTrimestrales, años } = procesarDatosTrimestrales(solicitudes);
+    
+    // Obtener todos los periodos (trimestres) ordenados
+    const periodos = Object.keys(datosTrimestrales).sort();
+    
+    // Obtener todos los tipos de solicitudes únicos
+    const tiposUnicos = new Set();
+    periodos.forEach(periodo => {
+        Object.keys(datosTrimestrales[periodo].porTipo).forEach(tipo => {
+            tiposUnicos.add(tipo);
+        });
+    });
+    const tipos = Array.from(tiposUnicos);
+    
+    // Preparar datos para la gráfica
+    const datasets = tipos.map(tipo => {
+        return {
+            label: tipo,
+            data: periodos.map(periodo => datosTrimestrales[periodo].porTipo[tipo] || 0),
+            backgroundColor: obtenerColorParaTipo(tipo),
+            borderColor: obtenerColorParaTipo(tipo),
+            borderWidth: 1
+        };
+    });
+    
+    // Agregar también el total general
+    datasets.push({
+        label: 'Total',
+        data: periodos.map(periodo => datosTrimestrales[periodo].total),
+        type: 'line',
+        fill: false,
+        borderColor: '#491F42',
+        borderWidth: 3,
+        pointRadius: 5,
+        pointHoverRadius: 7
+    });
+    
+    // Crear o actualizar la gráfica
+    const ctx = document.getElementById('quarterlyChart').getContext('2d');
+    
+    if (charts.quarterlyChart) {
+        charts.quarterlyChart.destroy();
+    }
+    
+    charts.quarterlyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: periodos.map(p => {
+                const [año, trimestre] = p.split('-');
+                return `T${trimestre} ${año}`;
+            }),
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    stacked: true,
+                    grid: {
+                        display: false
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    },
+                    title: {
+                        display: true,
+                        text: 'Cantidad de Solicitudes'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        afterBody: function(context) {
+                            const periodo = periodos[context[0].dataIndex];
+                            const total = datosTrimestrales[periodo].total;
+                            return `Total: ${total}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Función auxiliar para obtener colores según el tipo
+function obtenerColorParaTipo(tipo) {
+    const colores = {
+        'Solicitud': '#491F42',
+        'Acuerdo': '#2E7D32',
+        'Oficio': '#ae9074',
+        'Institucional': '#FFA500',
+        'Otro': '#a90000'
+    };
+    
+    return colores[tipo] || '#666666';
+}
