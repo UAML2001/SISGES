@@ -258,6 +258,21 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- En la sección de gráficas, después de la gráfica de trimestres -->
+                    <div class="col-12 col-lg-6">
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <h5>Solicitudes Atendidas por Canal</h5>
+                                <button class="btn btn-export" onclick="exportChart('channelChart', 'solicitudes-canal')">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="channelChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -744,40 +759,59 @@
                     <i class="fa-solid fa-check-double"></i>
                     Solicitudes Atendidas
                 </h2>
-                <div class="filtros-container mb-4">
-                    <div class="input-group">
-                        <span class="input-group-text">
-                            <i class="fas fa-search"></i>
-                        </span>
-                        <input type="text" id="busqueda-validadas" placeholder="Buscar por folio o asunto..."
-                            class="form-control">
+               <div class="filtros-container mb-4">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fas fa-search"></i>
+                                </span>
+                                <input type="text" id="busqueda-validadas" placeholder="Buscar por folio o asunto..." class="form-control">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <select id="filtro-secretaria-validadas" class="form-select">
+                                <option value="">Todas las secretarías</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <select id="filtro-canal-validadas" class="form-select">
+                                <option value="">Todos los canales</option>
+                                <option>Oficina de Presidencia</option>
+                                <option>Audiencias ciudadanas</option>
+                                <option>Audiencias comunitarias</option>
+                                <option>Audiencias virtuales</option>
+                                <option>Recorridos</option>
+                                <option>Redes sociales</option>
+                                <option>Llamada telefónica</option>
+                                <option>Oficios</option>
+                                <option>Junta de Gabinete</option>
+                            </select>
+                        </div>
                     </div>
-                    <select id="filtro-secretaria-validadas" class="form-select">
-                        <option value="">Todas las secretarías</option>
-                    </select>
-                </div>
-                <div class="custom-table">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Folio</th>
-                                <th>Canal</th>
-                                <th>Asunto</th>
-                                <th>Secretaría</th>
-                                <th>Nombre de Peticionario</th>
-                                <th>Telefono</th>
-                                <th>Fecha Atención</th>
-                                <th>Evidencias</th>
-                            </tr>
-                        </thead>
-                        <tbody id="lista-validadas">
-                            <!-- Contenido dinámico -->
-                        </tbody>
-                    </table>
-                </div>
-                <div class="paginacion-container paginacion-validadas"></div>
-            </div>
-        </div>
+                    </div>
+                    <div class="custom-table">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Folio</th>
+                                    <th>Canal</th>
+                                    <th>Asunto</th>
+                                    <th>Secretaría</th>
+                                    <th>Nombre de Peticionario</th>
+                                    <th>Telefono</th>
+                                    <th>Fecha Atención</th>
+                                    <th>Evidencias</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-validadas">
+                                <!-- Contenido dinámico -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="paginacion-container paginacion-validadas"></div>
+                    </div>
+                    </div>
 
         <!-- Modal de Confirmación -->
         <div class="modal fade" id="logoutModal" tabindex="-1">

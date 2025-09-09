@@ -44,7 +44,8 @@ let charts = {
     statusChart: null,
     efficiencyChart: null,
     departmentChart: null,
-    quarterlyChart: null  // ← Nueva gráfica
+    quarterlyChart: null,
+    channelChart: null  // ← Nueva gráfica de canales
 };
 
 
@@ -287,7 +288,7 @@ function mostrarPaginaValidadas(data) {
     
     const items = data.slice(start, end);
     
-items.forEach(solicitud => {
+    items.forEach(solicitud => {
         // Determinar tipo basado en la colección
         let tipoDocumento = 'Solicitud';
         if (solicitud.tipoPath === 'acuerdos') tipoDocumento = 'Acuerdo';
@@ -297,7 +298,7 @@ items.forEach(solicitud => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${solicitud.key}</td>
-            <td>${tipoDocumento}</td>
+            <td>${solicitud.tipo || tipoDocumento}</td> <!-- Mostrar el canal -->
             <td>${solicitud.asunto}</td>
             <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
             <td>${solicitud.solicitante?.nombre || solicitud.contacto || 'N/A'}</td>
@@ -385,20 +386,23 @@ function actualizarPaginacion(tipo, totalItems) {
 function aplicarFiltrosValidadas() {
     const busqueda = document.getElementById('busqueda-validadas').value.toLowerCase();
     const secretaria = document.getElementById('filtro-secretaria-validadas').value;
+    const canal = document.getElementById('filtro-canal-validadas').value;
     const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
     
     const filtradas = solicitudesValidadas.filter(doc => {
-    const esAcuerdoAtendido = (doc.tipo === 'Acuerdo' && doc.estado === 'atendida');
+        const esAcuerdoAtendido = (doc.tipo === 'Acuerdo' && doc.estado === 'atendida');
         
         if(esJefaturaGabinete && !esAcuerdoAtendido && doc.tipo !== 'acuerdo') 
-            return false
+            return false;
         
         if(esSecretariaParticular && !esAcuerdoAtendido && doc.tipo === 'acuerdo') 
             return false;
 
         const texto = `${doc.key} ${doc.asunto} ${dependenciasMap[doc.dependencia]} ${doc.tipo}`.toLowerCase();
         const coincideSecretaria = !secretaria || doc.dependencia === secretaria;
-        return texto.includes(busqueda) && coincideSecretaria;
+        const coincideCanal = !canal || (doc.tipo || '').toLowerCase().includes(canal.toLowerCase());
+        
+        return texto.includes(busqueda) && coincideSecretaria && coincideCanal;
     });
     
     mostrarPaginaValidadas(filtradas);
@@ -1994,6 +1998,12 @@ document.getElementById('filtro-secretaria-validadas').addEventListener('change'
     aplicarFiltrosValidadas();
 });
 
+// En DOMContentLoaded, después de cargar dependencias:
+document.getElementById('filtro-canal-validadas').addEventListener('change', () => {
+    currentPageValidadas = 1;
+    aplicarFiltrosValidadas();
+});
+
 document.getElementById('confirmarAtendidaModal').addEventListener('hidden.bs.modal', () => {
     const fileInput = document.getElementById('evidenciaFile');
     fileInput.value = '';
@@ -2560,7 +2570,8 @@ function actualizarGraficas(solicitudes) {
     actualizarGraficaEstatus(solicitudes);
     actualizarEficienciaDepartamentos(solicitudes);
     actualizarTiemposRespuesta(solicitudes);
-    actualizarGraficaTrimestral(solicitudes);  // ← Nueva llamada
+    actualizarGraficaTrimestral(solicitudes);
+    actualizarGraficaCanales(solicitudes); // ← Nueva función
 }
 
 function actualizarGraficaPrincipal(solicitudes) {
@@ -2800,6 +2811,11 @@ window.exportAllCharts = async () => {
             if (chartId === 'quarterlyChart' && !charts[chartId]) {
                 // Si la gráfica trimestral no está inicializada, la creamos
                 actualizarGraficaTrimestral(solicitudesSeguimiento);
+            }
+
+             if (chartId === 'channelChart' && !charts[chartId]) {
+                // Si la gráfica de canales no está inicializada, la creamos
+                actualizarGraficaCanales(solicitudesSeguimiento);
             }
             
             const chart = charts[chartId];
@@ -3240,4 +3256,66 @@ function obtenerColorParaTipo(tipo) {
     };
     
     return colores[tipo] || '#666666';
+}
+
+function actualizarGraficaCanales(solicitudes) {
+    // Filtrar solo solicitudes atendidas
+    const solicitudesAtendidas = solicitudes.filter(s => s.estado === 'atendida');
+    
+    // Contar por canal
+    const canales = {};
+    
+    solicitudesAtendidas.forEach(s => {
+        const canal = s.tipo || s.canal || 'Sin especificar';
+        canales[canal] = (canales[canal] || 0) + 1;
+    });
+    
+    // Ordenar canales por cantidad (descendente)
+    const canalesOrdenados = Object.entries(canales)
+        .sort((a, b) => b[1] - a[1])
+        .reduce((obj, [key, value]) => {
+            obj[key] = value;
+            return obj;
+        }, {});
+    
+    if (charts.channelChart) charts.channelChart.destroy();
+    
+    const ctx = document.getElementById('channelChart').getContext('2d');
+    charts.channelChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(canalesOrdenados),
+            datasets: [{
+                label: 'Solicitudes Atendidas',
+                data: Object.values(canalesOrdenados),
+                backgroundColor: [
+                    '#491F42', '#2E7D32', '#ae9074', '#FFA500', 
+                    '#720F36', '#a90000', '#0066cc', '#663399', '#008080'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y', // Gráfica horizontal
+            plugins: {
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: 'Distribución por Canal de Atención'
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    }
+                }
+            }
+        }
+    });
 }
