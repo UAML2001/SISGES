@@ -3262,6 +3262,9 @@ function actualizarGraficaCanales(solicitudes) {
     // Filtrar solo solicitudes atendidas
     const solicitudesAtendidas = solicitudes.filter(s => s.estado === 'atendida');
     
+    // Calcular el total de solicitudes atendidas
+    const totalAtendidas = solicitudesAtendidas.length;
+    
     // Contar por canal
     const canales = {};
     
@@ -3305,17 +3308,61 @@ function actualizarGraficaCanales(solicitudes) {
                 },
                 title: {
                     display: true,
-                    text: 'Distribución por Canal de Atención'
+                    text: `Solicitudes Atendidas por Canal - Total: ${totalAtendidas}`,
+                    font: {
+                        size: 16,
+                        weight: 'bold'
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.raw;
+                            const percentage = ((value / totalAtendidas) * 100).toFixed(1);
+                            return `${value} solicitudes (${percentage}%)`;
+                        }
+                    }
+                },
+                // Agregar plugin personalizado para mostrar el total
+                afterDraw: function(chart) {
+                    const ctx = chart.ctx;
+                    ctx.save();
+                    ctx.font = 'bold 14px Poppins';
+                    ctx.fillStyle = '#491F42';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(`Total: ${totalAtendidas}`, chart.chartArea.right - 10, chart.chartArea.top - 10);
+                    ctx.restore();
                 }
             },
             scales: {
                 x: {
                     beginAtZero: true,
                     ticks: {
-                        precision: 0
+                        precision: 0,
+                        callback: function(value) {
+                            return value; // Mostrar valores enteros
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Cantidad de Solicitudes'
+                    }
+                },
+                y: {
+                    ticks: {
+                        autoSkip: false,
+                        font: {
+                            size: 12
+                        }
                     }
                 }
             }
         }
     });
+    
+    // También actualizar el subtítulo si existe
+    const chartHeader = document.querySelector('#channelChart').closest('.chart-card').querySelector('.chart-header h5');
+    if (chartHeader) {
+        chartHeader.innerHTML = `Solicitudes Atendidas por Canal <small class="text-muted">(Total: ${totalAtendidas})</small>`;
+    }
 }
