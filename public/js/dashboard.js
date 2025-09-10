@@ -3259,56 +3259,108 @@ function obtenerColorParaTipo(tipo) {
 }
 
 function actualizarGraficaCanales(solicitudes) {
-    // Filtrar solo solicitudes atendidas
-    const solicitudesAtendidas = solicitudes.filter(s => s.estado === 'atendida');
-    
-    // Calcular el total de solicitudes atendidas
-    const totalAtendidas = solicitudesAtendidas.length;
-    
-    // Contar por canal
-    const canales = {};
-    
-    solicitudesAtendidas.forEach(s => {
+    // Definir los estados que vamos a mostrar y sus colores
+    const estados = [
+        { id: 'atendida', label: 'Atendidas', color: '#2E7D32' },
+        { id: 'pendiente', label: 'Pendientes', color: '#491F42' },
+        { id: 'en_proceso', label: 'En Proceso', color: '#ae9074' },
+        { id: 'por_vencer', label: 'Por Vencer', color: '#720F36' },
+        { id: 'atrasada', label: 'Vencidas', color: '#a90000' },
+        { id: 'verificacion', label: 'En Verificación', color: '#FFA500' }
+    ];
+
+    // Obtener todos los canales únicos
+    const canalesSet = new Set();
+    solicitudes.forEach(s => {
         const canal = s.tipo || s.canal || 'Sin especificar';
-        canales[canal] = (canales[canal] || 0) + 1;
+        canalesSet.add(canal);
     });
     
-    // Ordenar canales por cantidad (descendente)
-    const canalesOrdenados = Object.entries(canales)
-        .sort((a, b) => b[1] - a[1])
-        .reduce((obj, [key, value]) => {
-            obj[key] = value;
-            return obj;
-        }, {});
+    const canales = Array.from(canalesSet);
     
+    // Preparar datos para la gráfica
+    const datasets = estados.map(estado => {
+        const data = canales.map(canal => {
+            return solicitudes.filter(s => {
+                const sCanal = s.tipo || s.canal || 'Sin especificar';
+                return sCanal === canal && s.estado === estado.id;
+            }).length;
+        });
+        
+        return {
+            label: estado.label,
+            data: data,
+            backgroundColor: estado.color,
+            borderWidth: 0
+        };
+    });
+    
+    // Calcular totales por canal
+    const totalesPorCanal = canales.map(canal => {
+        return solicitudes.filter(s => {
+            const sCanal = s.tipo || s.canal || 'Sin especificar';
+            return sCanal === canal;
+        }).length;
+    });
+    
+    // Calcular déficit por canal (no atendidas)
+    const deficitPorCanal = canales.map(canal => {
+        const atendidas = solicitudes.filter(s => {
+            const sCanal = s.tipo || s.canal || 'Sin especificar';
+            return sCanal === canal && s.estado === 'atendida';
+        }).length;
+        
+        const total = solicitudes.filter(s => {
+            const sCanal = s.tipo || s.canal || 'Sin especificar';
+            return sCanal === canal;
+        }).length;
+        
+        return total - atendidas;
+    });
+
+    // Destruir gráfica anterior si existe
     if (charts.channelChart) charts.channelChart.destroy();
     
     const ctx = document.getElementById('channelChart').getContext('2d');
     charts.channelChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: Object.keys(canalesOrdenados),
-            datasets: [{
-                label: 'Solicitudes Atendidas',
-                data: Object.values(canalesOrdenados),
-                backgroundColor: [
-                    '#491F42', '#2E7D32', '#ae9074', '#FFA500', 
-                    '#720F36', '#a90000', '#0066cc', '#663399', '#008080'
-                ],
-                borderWidth: 0
-            }]
+            labels: canales,
+            datasets: datasets
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            indexAxis: 'y', // Gráfica horizontal
+            scales: {
+                x: {
+                    stacked: true,
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    },
+                    title: {
+                        display: true,
+                        text: 'Cantidad de Solicitudes'
+                    }
+                }
+            },
             plugins: {
                 legend: {
-                    display: false
+                    position: 'top',
                 },
                 title: {
                     display: true,
-                    text: `Solicitudes Atendidas por Canal - Total: ${totalAtendidas}`,
+                    text: 'Solicitudes por Canal y Estado',
                     font: {
                         size: 16,
                         weight: 'bold'
@@ -3317,42 +3369,22 @@ function actualizarGraficaCanales(solicitudes) {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
+                            const datasetLabel = context.dataset.label || '';
                             const value = context.raw;
-                            const percentage = ((value / totalAtendidas) * 100).toFixed(1);
-                            return `${value} solicitudes (${percentage}%)`;
-                        }
-                    }
-                },
-                // Agregar plugin personalizado para mostrar el total
-                afterDraw: function(chart) {
-                    const ctx = chart.ctx;
-                    ctx.save();
-                    ctx.font = 'bold 14px Poppins';
-                    ctx.fillStyle = '#491F42';
-                    ctx.textAlign = 'right';
-                    ctx.fillText(`Total: ${totalAtendidas}`, chart.chartArea.right - 10, chart.chartArea.top - 10);
-                    ctx.restore();
-                }
-            },
-            scales: {
-                x: {
-                    beginAtZero: true,
-                    ticks: {
-                        precision: 0,
-                        callback: function(value) {
-                            return value; // Mostrar valores enteros
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: 'Cantidad de Solicitudes'
-                    }
-                },
-                y: {
-                    ticks: {
-                        autoSkip: false,
-                        font: {
-                            size: 12
+                            const total = totalesPorCanal[context.dataIndex];
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                            return `${datasetLabel}: ${value} (${percentage}%)`;
+                        },
+                        afterBody: function(context) {
+                            const index = context[0].dataIndex;
+                            const canal = canales[index];
+                            const total = totalesPorCanal[index];
+                            const deficit = deficitPorCanal[index];
+                            
+                            return [
+                                `Total ${canal}: ${total}`,
+                                `Déficit (no atendidas): ${deficit}`
+                            ];
                         }
                     }
                 }
@@ -3360,9 +3392,9 @@ function actualizarGraficaCanales(solicitudes) {
         }
     });
     
-    // También actualizar el subtítulo si existe
+    // Actualizar el título de la gráfica
     const chartHeader = document.querySelector('#channelChart').closest('.chart-card').querySelector('.chart-header h5');
     if (chartHeader) {
-        chartHeader.innerHTML = `Solicitudes Atendidas por Canal <small class="text-muted">(Total: ${totalAtendidas})</small>`;
+        chartHeader.textContent = 'Solicitudes por Canal y Estado';
     }
 }
