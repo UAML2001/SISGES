@@ -2447,14 +2447,25 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('fechaAcuerdo').value = obtenerFechaHoy();
     document.getElementById('fechaOficio').value = obtenerFechaHoy();
     
-    // Mostrar módulos solo para rol 3
+    // Obtener email del usuario
+    const userEmail = getCookie('email');
+    
+    // Mostrar módulos solo para rol 3, excepto para los correos específicos
     const role = parseInt(getCookie('rol'));
+    
     if (role === 3) {
-        document.getElementById('navAcuerdo').style.display = 'block';
+        // Ocultar acuerdo de gabinete para los correos específicos
+        if (userEmail === 'vinculacion.ciudadana@tizayuca.gob.mx' || 
+            userEmail === 'oficialia.mayor@tizayuca.gob.mx') {
+            document.getElementById('navAcuerdo').style.display = 'none';
+        } else {
+            document.getElementById('navAcuerdo').style.display = 'block';
+        }
+        
+        // Mostrar otros módulos normalmente
         document.getElementById('navOficio').style.display = 'block';
         document.getElementById('navInstitucional').style.display = 'block';
-    }
-    else {
+    } else {
         document.getElementById('navAcuerdo').style.display = 'none';
         document.getElementById('navOficio').style.display = 'none';
         document.getElementById('navInstitucional').style.display = 'none';
@@ -2865,15 +2876,16 @@ window.exportChart = (chartId, fileName = 'chart') => {
     link.click();
 };
 
-// Añadir esta función auxiliar al inicio
 function obtenerFiltroEspecial() {
     const userEmail = getCookie('email');
     return {
         esJefaturaGabinete: userEmail === 'jefaturadegabinete@tizayuca.gob.mx',
-        esSecretariaParticular: userEmail === 'oficinadepresidencia@tizayuca.gob.mx',
+        esSecretariaParticular: 
+            userEmail === 'oficinadepresidencia@tizayuca.gob.mx' || 
+            userEmail === 'vinculacion.ciudadana@tizayuca.gob.mx', // ← Agregar este correo
         esOficialMayor: userEmail === 'oficialia.mayor@tizayuca.gob.mx',
         esPresidentaMunicipal: userEmail === 'pdta.gretchen@tizayuca.gob.mx',
-        mostrarAcuerdosAtendidos: true // Nueva propiedad
+        mostrarAcuerdosAtendidos: true
     };
 }
 
