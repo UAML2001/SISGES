@@ -1,21 +1,21 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-import { 
-    getDatabase, 
-    ref, 
-    get, 
-    set, 
+import {
+    getDatabase,
+    ref,
+    get,
+    set,
     update,
     onValue,
     query,
     orderByChild,
     equalTo // ← Agregar esta importación
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
-import { 
-    getStorage, 
-    ref as storageRef, 
-    uploadBytes, 
+import {
+    getStorage,
+    ref as storageRef,
+    uploadBytes,
     getDownloadURL,
-    deleteObject  
+    deleteObject
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-analytics.js";
 
@@ -61,6 +61,12 @@ let currentPageVerificacion = 1; // ← Añadir esta línea con las demás varia
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
+// Agregar con las otras variables globales
+let solicitudesVobo = [];
+let currentPageVobo = 1;
+
+let folioReenvioVobo = '';
+
 // Agregar estas constantes al inicio
 const MAX_INITIAL_FILE_SIZE_MB = 10;
 const MAX_INITIAL_FILE_SIZE_BYTES = MAX_INITIAL_FILE_SIZE_MB * 1024 * 1024;
@@ -74,15 +80,18 @@ const MAX_OFICIO_SIZE_MB = 10;
 const navLinks = document.querySelectorAll('.nav-link');
 const contentSections = document.querySelectorAll('.content-section');
 
+// Agregar después de las otras constantes
+const CORREO_VINCULACION_CIUDADANA = 'vinculacion.ciudadana@tizayuca.gob.mx';
+const CORREO_SECRETARIA_GENERAL = 'secretariamunicipal@tizayuca.gob.mx';
 
 let suppressFileInputEvents = false;
 
-window.mostrarModalEstado = function(folio) {
+window.mostrarModalEstado = function (folio) {
     document.getElementById('modalFolio').textContent = folio;
     new bootstrap.Modal('#statusModal').show();
 };
 
-window.cambiarEstadoModal = function(nuevoEstado) {
+window.cambiarEstadoModal = function (nuevoEstado) {
     const folio = document.getElementById('modalFolio').textContent;
     cambiarEstado(folio, nuevoEstado);
 };
@@ -99,14 +108,14 @@ function calcularFechaLimite(fechaCreacion) {
             diasAgregados++;
         }
     }
-    
+
     return fechaLimite.toISOString();
 }
 
 function calcularDiasRestantes(fechaLimite) {
     const ahora = ajustarHoraMexico(new Date());
     const limite = ajustarHoraMexico(new Date(fechaLimite));
-    
+
     // Si ya expiró, retornar valor negativo
     if (ahora >= limite) {
         const diffMs = ahora - limite;
@@ -115,7 +124,7 @@ function calcularDiasRestantes(fechaLimite) {
 
     let diasRestantes = 0;
     const current = new Date(ahora);
-    
+
     // Calcular días hábiles restantes
     while (current < limite) {
         current.setDate(current.getDate() + 1);
@@ -177,14 +186,14 @@ async function generarFolio(tipo = 'solicitud') {
         'solicitud': 'ultimoFolio',
         'institucional': 'ultimoFolioInstitucional',
     };
-    
+
     const prefijos = {
         'acuerdo': 'AG-',
         'oficio': 'OF-',
         'solicitud': 'SO-',
         'institucional': 'SI-',
     };
-    
+
     const folioRef = ref(database, `configuracion/${tipoFolio[tipo]}`);
     const snapshot = await get(folioRef);
     const nuevoFolio = (snapshot.val() || 0) + 1;
@@ -195,17 +204,17 @@ async function generarFolio(tipo = 'solicitud') {
 // Función para cargar solicitudes validadas
 function cargarValidadas() {
     const userRol = parseInt(getCookie('rol')) || 0;
-    const userDependencias = getCookie('dependencia') ? 
+    const userDependencias = getCookie('dependencia') ?
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
     const { esJefaturaGabinete, esSecretariaParticular, esOficialMayor, esPresidentaMunicipal } = obtenerFiltroEspecial();
     let paths = ['solicitudes', 'acuerdos', 'oficios', 'solicitudes_institucionales'];
-    
-    if(esJefaturaGabinete) {
+
+    if (esJefaturaGabinete) {
         paths = ['acuerdos'];
-    } else if(esSecretariaParticular) {
+    } else if (esSecretariaParticular) {
         paths = ['solicitudes', 'oficios'];
-    } else if(esOficialMayor) {
+    } else if (esOficialMayor) {
         paths = ['solicitudes_institucionales'];
     }
 
@@ -232,13 +241,13 @@ function cargarValidadas() {
         onValue(q, (snapshot) => {
             // Limpiar solicitudes anteriores de esta ruta
             solicitudesValidadas = solicitudesValidadas.filter(s => s.tipoPath !== path);
-            
+
             snapshot.forEach(childSnapshot => {
                 const doc = childSnapshot.val();
-                
+
                 // Filtrar por dependencia si no es admin ni presidenta
                 if (userRol !== 3 && userRol !== 4 && !userDependencias.includes(doc.dependencia)) return;
-                
+
                 // Solo agregar atendidas
                 if (doc.estado !== 'atendida') return;
 
@@ -254,12 +263,12 @@ function cargarValidadas() {
                     solicitudesValidadas.push(solicitud);
                 }
             });
-            
+
             // Ordenar por fecha de atención
-            solicitudesValidadas.sort((a, b) => 
+            solicitudesValidadas.sort((a, b) =>
                 new Date(b.fechaAtencion || b.fechaCreacion) - new Date(a.fechaAtencion || a.fechaCreacion)
             );
-            
+
             aplicarFiltrosValidadas();
         });
     });
@@ -270,9 +279,9 @@ function mostrarPaginaValidadas(data) {
     const start = (currentPageValidadas - 1) * itemsPerPage;
     const end = start + itemsPerPage;
     const tabla = document.getElementById('lista-validadas');
-    
+
     tabla.innerHTML = '';
-    
+
     if (data.length === 0) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -285,9 +294,9 @@ function mostrarPaginaValidadas(data) {
         actualizarPaginacion('validadas', 0);
         return;
     }
-    
+
     const items = data.slice(start, end);
-    
+
     items.forEach(solicitud => {
         // Determinar tipo basado en la colección
         let tipoDocumento = 'Solicitud';
@@ -322,7 +331,7 @@ function mostrarPaginaValidadas(data) {
         `;
         tabla.appendChild(tr);
     });
-    
+
     actualizarPaginacion('validadas', data.length);
 }
 
@@ -388,23 +397,23 @@ function aplicarFiltrosValidadas() {
     const secretaria = document.getElementById('filtro-secretaria-validadas').value;
     const canal = document.getElementById('filtro-canal-validadas').value;
     const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
-    
+
     const filtradas = solicitudesValidadas.filter(doc => {
         const esAcuerdoAtendido = (doc.tipo === 'Acuerdo' && doc.estado === 'atendida');
-        
-        if(esJefaturaGabinete && !esAcuerdoAtendido && doc.tipo !== 'acuerdo') 
+
+        if (esJefaturaGabinete && !esAcuerdoAtendido && doc.tipo !== 'acuerdo')
             return false;
-        
-        if(esSecretariaParticular && !esAcuerdoAtendido && doc.tipo === 'acuerdo') 
+
+        if (esSecretariaParticular && !esAcuerdoAtendido && doc.tipo === 'acuerdo')
             return false;
 
         const texto = `${doc.key} ${doc.asunto} ${dependenciasMap[doc.dependencia]} ${doc.tipo}`.toLowerCase();
         const coincideSecretaria = !secretaria || doc.dependencia === secretaria;
         const coincideCanal = !canal || (doc.tipo || '').toLowerCase().includes(canal.toLowerCase());
-        
+
         return texto.includes(busqueda) && coincideSecretaria && coincideCanal;
     });
-    
+
     mostrarPaginaValidadas(filtradas);
 }
 
@@ -412,19 +421,19 @@ function aplicarFiltrosSeguimiento() {
     const busqueda = document.getElementById('busqueda-seguimiento').value.toLowerCase();
     const estado = document.getElementById('filtro-estado-seguimiento').value;
     const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
-    
+
     const filtradas = solicitudesSeguimiento.filter(s => {
         if (esJefaturaGabinete && s.tipoPath !== 'acuerdos') return false;
         if (esSecretariaParticular && s.tipoPath === 'acuerdos') return false;
         // Excluir atendidas y aplicar otros filtros
         if (s.estado === 'atendida') return false;
-        
+
         const texto = `${s.key} ${s.asunto} ${dependenciasMap[s.dependencia]}`.toLowerCase();
         const coincideEstado = !estado || s.estado === estado;
         return texto.includes(busqueda) && coincideEstado;
-        
+
     });
-    
+
     mostrarPaginaSeguimiento(filtradas);
 }
 
@@ -433,9 +442,9 @@ function mostrarPaginaSeguimiento(data) {
     const start = (currentPageSeguimiento - 1) * itemsPerPage;
     const end = start + itemsPerPage;
     const tabla = document.getElementById('lista-seguimiento');
-    
+
     tabla.innerHTML = '';
-    
+
     if (data.length === 0) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -448,18 +457,18 @@ function mostrarPaginaSeguimiento(data) {
         actualizarPaginacion('seguimiento', 0);
         return;
     }
-    
+
     const items = data.slice(start, end);
-    
+
     if (items.length === 0) {
         currentPageSeguimiento = Math.max(1, currentPageSeguimiento - 1);
         return mostrarPaginaSeguimiento(data);
     }
-    
+
     items.forEach(solicitud => {
         tabla.appendChild(crearFilaSolicitud(solicitud));
     });
-    
+
     actualizarPaginacion('seguimiento', data.length);
 }
 
@@ -467,41 +476,41 @@ function mostrarPaginaSeguimiento(data) {
 async function cargarSecretarias() {
     const secretariasRef = ref(database, 'dependencias');
     const snapshot = await get(secretariasRef);
-    const selects = ['secretaria', 'secretariaAcuerdo', 'secretariaOficio', 'filtro-secretaria-validadas', 'secretariaInstitucional'];
-    
+    const selects = ['secretaria', 'secretariaAcuerdo', 'secretariaOficio', 'filtro-secretaria-validadas', 'secretariaInstitucional', 'filtro-secretaria-vobo'];
+
     // Obtener datos del usuario
     const userRol = parseInt(getCookie('rol')) || 0;
-    const userDependencias = getCookie('dependencia') ? 
+    const userDependencias = getCookie('dependencia') ?
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
-    
-        selects.forEach(selectId => {
-            const select = document.getElementById(selectId);
-            select.innerHTML = '<option value="" disabled selected>Seleccione una secretaría</option>';
 
-    snapshot.forEach((childSnapshot) => {
-        const dependencia = childSnapshot.val();
-        const dependenciaKey = childSnapshot.key;
-        
-        // Validar existencia de la dependencia y su nombre
-        if (!dependencia || typeof dependencia.nombre !== 'string') return;
-        
-        // Filtrar por rol
-        if (userRol !== 3 && !userDependencias.includes(dependenciaKey)) return;
-        
-        // Validar nombre no vacío
-        const nombre = dependencia.nombre.trim();
-        if (!nombre) return;
-        
-        // Crear opción válida
-        const option = document.createElement('option');
-        option.value = dependenciaKey;
-        option.textContent = nombre;
-        select.appendChild(option);
+    selects.forEach(selectId => {
+        const select = document.getElementById(selectId);
+        select.innerHTML = '<option value="" disabled selected>Seleccione una secretaría</option>';
+
+        snapshot.forEach((childSnapshot) => {
+            const dependencia = childSnapshot.val();
+            const dependenciaKey = childSnapshot.key;
+
+            // Validar existencia de la dependencia y su nombre
+            if (!dependencia || typeof dependencia.nombre !== 'string') return;
+
+            // Filtrar por rol
+            if (userRol !== 3 && !userDependencias.includes(dependenciaKey)) return;
+
+            // Validar nombre no vacío
+            const nombre = dependencia.nombre.trim();
+            if (!nombre) return;
+
+            // Crear opción válida
+            const option = document.createElement('option');
+            option.value = dependenciaKey;
+            option.textContent = nombre;
+            select.appendChild(option);
+        });
     });
-});
 }
 
-window.mostrarEvidenciaModal = function(folio, tipoDocumento, urlDocumento, secretaria = '') {
+window.mostrarEvidenciaModal = function (folio, tipoDocumento, urlDocumento, secretaria = '') {
     const modal = new bootstrap.Modal(document.getElementById('evidenciaModal'));
     const loading = document.getElementById('loadingPreview');
     const pdfContainer = document.getElementById('pdfContainer');
@@ -517,12 +526,12 @@ window.mostrarEvidenciaModal = function(folio, tipoDocumento, urlDocumento, secr
     // Extraer nombre de archivo
     let nombreArchivo = 'Sin documento';
     let extension = '';
-    
-    if(urlDocumento) {
+
+    if (urlDocumento) {
         try {
             nombreArchivo = decodeURIComponent(urlDocumento.split('/').pop().split('?')[0]);
             extension = nombreArchivo.split('.').pop().toLowerCase();
-        } catch(error) {
+        } catch (error) {
             console.error('Error procesando URL:', error);
         }
     }
@@ -537,26 +546,26 @@ window.mostrarEvidenciaModal = function(folio, tipoDocumento, urlDocumento, secr
     setTimeout(() => {
         loading.classList.add('d-none');
 
-        if(!urlDocumento) {
+        if (!urlDocumento) {
             visorNoSoportado.classList.remove('d-none');
             document.getElementById('tipoArchivo').textContent = 'Documento no disponible';
             return;
         }
 
-        if(['pdf'].includes(extension)) {
+        if (['pdf'].includes(extension)) {
             pdfContainer.classList.remove('d-none');
             pdfViewer.src = `${urlDocumento}#view=FitH&toolbar=0`;
             document.getElementById('pdfMeta').textContent = `${nombreArchivo} | ${tipoDocumento}`;
-        } 
-        else if(['jpg', 'jpeg', 'png'].includes(extension)) {
+        }
+        else if (['jpg', 'jpeg', 'png'].includes(extension)) {
             imagenContainer.classList.remove('d-none');
             const img = document.getElementById('visorImagen');
             img.src = urlDocumento;
             img.onload = () => {
-                document.getElementById('imagenDimensions').textContent = 
+                document.getElementById('imagenDimensions').textContent =
                     `${img.naturalWidth}px × ${img.naturalHeight}px`;
             };
-        } 
+        }
         else {
             visorNoSoportado.classList.remove('d-none');
             document.getElementById('tipoArchivo').textContent = `.${extension}`;
@@ -576,7 +585,7 @@ let dependenciasMap = {};
 async function cargarDependencias() {
     const dependenciasRef = ref(database, 'dependencias');
     const snapshot = await get(dependenciasRef);
-    
+
     // Mapeo de claves a nombres oficiales
     const mapeoOficial = {
         'presidencia-municipal-constitucional': 'Presidencia Municipal Constitucional',
@@ -602,20 +611,20 @@ let intervaloActualizacionGlobal = null;
 // Función para actualización visual de tiempos (sin afectar estados reales)
 function iniciarActualizacionTiempo() {
     if (intervaloActualizacionGlobal) clearInterval(intervaloActualizacionGlobal);
-    
+
     intervaloActualizacionGlobal = setInterval(() => {
         document.querySelectorAll('#lista-seguimiento tr').forEach(fila => {
             const estado = fila.dataset.estado;
             const celdaTiempo = fila.cells[7];
-            
+
             // Congelar visualización para estos estados
             if (['verificacion', 'atendida'].includes(estado)) {
-                celdaTiempo.textContent = estado === 'verificacion' 
-                    ? 'En Verificación' 
+                celdaTiempo.textContent = estado === 'verificacion'
+                    ? 'En Verificación'
                     : 'Atendida';
                 return;
             }
-            
+
             // Actualizar solo la visualización del tiempo
             const fechaLimite = fila.dataset.fechaLimite;
             celdaTiempo.textContent = calcularTiempoRestante(fechaLimite);
@@ -627,7 +636,8 @@ function iniciarActualizacionTiempo() {
 function actualizarEstadisticas(solicitudes) {
     const stats = {
         pendientes: 0,
-        porVencer: 0,  // <- Contador directo (no derivado de pendientes)
+        pendientesVobo: 0, // ← Nueva estadística
+        porVencer: 0,
         enProceso: 0,
         verificacion: 0,
         atendidas: 0,
@@ -637,13 +647,16 @@ function actualizarEstadisticas(solicitudes) {
 
     solicitudes.forEach(s => {
         stats.total++;
-        const estado = s.estado;  // Usar el estado real de la solicitud
+        const estado = s.estado;
 
-        switch(estado) {
+        switch (estado) {
             case 'pendiente':
                 stats.pendientes++;
                 break;
-            case 'por_vencer':  // <- Caso explícito
+            case 'pendiente_vobo': // ← Nuevo caso
+                stats.pendientesVobo++;
+                break;
+            case 'por_vencer':
                 stats.porVencer++;
                 break;
             case 'en_proceso':
@@ -663,20 +676,26 @@ function actualizarEstadisticas(solicitudes) {
 
     // Actualizar DOM
     document.getElementById('stats-pendientes').textContent = stats.pendientes;
-    document.getElementById('stats-vencer').textContent = stats.porVencer; // <- Valor directo
+    document.getElementById('stats-vencer').textContent = stats.porVencer;
     document.getElementById('stats-en-proceso').textContent = stats.enProceso;
     document.getElementById('stats-verificacion').textContent = stats.verificacion;
     document.getElementById('stats-atendidas').textContent = stats.atendidas;
     document.getElementById('stats-atrasadas').textContent = stats.atrasadas;
-    
+
     const eficiencia = (stats.atendidas / (stats.total || 1)) * 100;
     document.getElementById('stats-eficiencia').textContent = `${Math.round(eficiencia)}%`;
+
+    // Opcional: Mostrar estadística de pendientes VoBo si existe el elemento
+    const statsVoboElement = document.getElementById('stats-pendientes-vobo');
+    if (statsVoboElement) {
+        statsVoboElement.textContent = stats.pendientesVobo;
+    }
 }
 
 function actualizarTablaSeguimiento() {
     const tabla = document.getElementById('lista-seguimiento');
     const foliosUnicos = new Set();
-    
+
     // Limpiar tabla completamente
     tabla.innerHTML = '';
 
@@ -702,28 +721,28 @@ function actualizarTablaSeguimiento() {
 // Modificar la función cambiarEstado para hacerla global
 let accionActual = '';
 
-window.cambiarEstado = async function(folio, nuevoEstado, motivo = '', justificacion = '') {
+window.cambiarEstado = async function (folio, nuevoEstado, motivo = '', justificacion = '') {
     try {
         // 1. Buscar en datos locales primero para optimizar
         const solicitudExistente = solicitudesSeguimiento.find(s => s.key === folio);
-        
+
         if (!solicitudExistente) {
             throw new Error('Documento no encontrado en datos locales');
         }
 
         // 2. Determinar path CORRECTAMENTE - SOLUCIÓN PARA INSTITUCIONALES
         let path = solicitudExistente.tipoPath || 'solicitudes';
-        
+
         // Si es institucional pero no tiene tipoPath, determinar por folio
         if (path === 'solicitudes' && folio.startsWith('SI-')) {
             path = 'solicitudes_institucionales';
         }
-        
+
         const docRef = ref(database, `${path}/${folio}`);
-        const tipoDocumento = path === 'solicitudes' ? 'Solicitud' : 
-                           path === 'acuerdos' ? 'Acuerdo' : 
-                           path === 'oficios' ? 'Oficio' : 
-                           path === 'solicitudes_institucionales' ? 'Institucional' : 'Documento';
+        const tipoDocumento = path === 'solicitudes' ? 'Solicitud' :
+            path === 'acuerdos' ? 'Acuerdo' :
+                path === 'oficios' ? 'Oficio' :
+                    path === 'solicitudes_institucionales' ? 'Institucional' : 'Documento';
 
         // 3. Obtener datos actualizados directamente de Firebase
         const snapshot = await get(docRef);
@@ -752,19 +771,19 @@ window.cambiarEstado = async function(folio, nuevoEstado, motivo = '', justifica
         }
 
         if (nuevoEstado === 'pendiente' && !motivo) {
-        // mostrarError("Error crítico: Motivo requerido no proporcionado");
-        return;
-    }
+            // mostrarError("Error crítico: Motivo requerido no proporcionado");
+            return;
+        }
         // 5. Preparar actualización optimizada
-const actualizacion = {
-    estado: nuevoEstado,
-    ultimaActualizacion: new Date().toISOString(),
-    evidencias: nuevoEstado === 'pendiente' ? null : datos.evidencias || null,
-    _actualizadoPor: getCookie('nombre') || 'Sistema',
-    motivoRechazo: nuevoEstado === 'pendiente' ? motivo : null, // Asegurar motivo
-    fechaRechazo: nuevoEstado === 'pendiente' ? new Date().toISOString() : null,
-    justificacionProceso: nuevoEstado === 'en_proceso' ? justificacion : null
-};
+        const actualizacion = {
+            estado: nuevoEstado,
+            ultimaActualizacion: new Date().toISOString(),
+            evidencias: nuevoEstado === 'pendiente' ? null : datos.evidencias || null,
+            _actualizadoPor: getCookie('nombre') || 'Sistema',
+            motivoRechazo: nuevoEstado === 'pendiente' ? motivo : null, // Asegurar motivo
+            fechaRechazo: nuevoEstado === 'pendiente' ? new Date().toISOString() : null,
+            justificacionProceso: nuevoEstado === 'en_proceso' ? justificacion : null
+        };
 
         // 6. Agregar marcas de tiempo específicas
         if (nuevoEstado === 'atendida') {
@@ -784,14 +803,14 @@ const actualizacion = {
                 ...actualizacion,
                 tipoPath: path // Asegurar que mantenga el tipoPath correcto
             };
-            
+
             // Actualizar UI específica
             if (typeof actualizarTablaSeguimiento === 'function') {
                 actualizarTablaSeguimiento();
             } else {
                 console.error('Función actualizarTablaSeguimiento no definida');
             }
-            
+
             cargarVerificacion();
             cargarValidadas();
         }
@@ -808,12 +827,12 @@ const actualizacion = {
             mostrarExito(mensajes[nuevoEstado]);
         }
 
-   } catch (error) {
+    } catch (error) {
         console.error("Error completo:", error);
-        const mensajeError = error.code === 'storage/object-not-found' 
-                           ? 'El archivo adjunto no fue encontrado'
-                           : 'Error al actualizar el documento';
-        
+        const mensajeError = error.code === 'storage/object-not-found'
+            ? 'El archivo adjunto no fue encontrado'
+            : 'Error al actualizar el documento';
+
         mostrarError(mensajeError);
     } finally {
         if (nuevoEstado !== 'pendiente' || (motivo && motivo.trim() !== '')) {
@@ -824,32 +843,32 @@ const actualizacion = {
 };
 
 // Modifica el event listener del input de archivo
-document.getElementById('evidenciaFile').addEventListener('change', function(e) {
+document.getElementById('evidenciaFile').addEventListener('change', function (e) {
     const fileInfo = document.getElementById('fileInfo');
     const removeBtn = document.getElementById('removeFile');
-    
-    if(this.files.length > 0) {
+
+    if (this.files.length > 0) {
         const file = this.files[0];
         const extension = file.name.split('.').pop().toLowerCase();
-        
+
         // Validar extensión
-        if(!ALLOWED_EXTENSIONS.includes(extension)) {
+        if (!ALLOWED_EXTENSIONS.includes(extension)) {
             mostrarError(`Formato no permitido: .${extension}`);
             this.value = '';
             fileInfo.textContent = 'Formatos permitidos: .pdf, .jpg, .jpeg, .png, .zip, .rar (Máx. 10MB)';
             removeBtn.classList.add('d-none');
             return;
         }
-        
+
         // Validar tamaño
-        if(file.size > MAX_FILE_SIZE_BYTES) {
+        if (file.size > MAX_FILE_SIZE_BYTES) {
             mostrarError(`El archivo excede el tamaño máximo de ${MAX_FILE_SIZE_MB}MB`);
             this.value = '';
             fileInfo.textContent = 'Formatos permitidos: .pdf, .jpg, .jpeg, .png, .zip, .rar (Máx. 10MB)';
             removeBtn.classList.add('d-none');
             return;
         }
-        
+
         removeBtn.classList.remove('d-none');
         fileInfo.innerHTML = `
             <span class="text-success">
@@ -892,14 +911,14 @@ fileDropArea.addEventListener('drop', (e) => {
 });
 
 // Función para subir evidencia y cambiar estado
-window.subirEvidenciaYCambiarEstado = async function() {
+window.subirEvidenciaYCambiarEstado = async function () {
     const fileInput = document.getElementById('evidenciaFile');
     const file = fileInput.files[0];
-     let tipo = 'solicitudes';
+    let tipo = 'solicitudes';
     if (folioActual.startsWith('AG-')) tipo = 'acuerdos';
     else if (folioActual.startsWith('OF-')) tipo = 'oficios';
     else if (folioActual.startsWith('SI-')) tipo = 'solicitudes_institucionales';
-    
+
     if (!file) {
         mostrarError("Debes seleccionar un archivo primero");
         return;
@@ -907,7 +926,7 @@ window.subirEvidenciaYCambiarEstado = async function() {
 
     // Validar extensión nuevamente (por si el usuario modificó el input)
     const extension = file.name.split('.').pop().toLowerCase();
-    if(!ALLOWED_EXTENSIONS.includes(extension)) {
+    if (!ALLOWED_EXTENSIONS.includes(extension)) {
         mostrarError(`Formato no permitido: .${extension}`);
         return;
     }
@@ -945,7 +964,7 @@ window.subirEvidenciaYCambiarEstado = async function() {
         fileInput.value = '';
         bootstrap.Modal.getInstance('#confirmarAtendidaModal').hide();
         mostrarExito("Evidencia subida correctamente");
-        
+
     } catch (error) {
         console.error("Error completo:", error);
         mostrarError(`Error técnico: ${error.code} - ${error.message}`);
@@ -973,23 +992,23 @@ function mostrarExito(mensaje) {
 function cargarVerificacion() {
     const { esJefaturaGabinete, esSecretariaParticular, esOficialMayor, esPresidentaMunicipal } = obtenerFiltroEspecial();
     let paths = ['solicitudes', 'acuerdos', 'oficios', 'solicitudes_institucionales'];
-    
-    if(esJefaturaGabinete) {
+
+    if (esJefaturaGabinete) {
         paths = ['acuerdos'];
-    } else if(esSecretariaParticular) {
+    } else if (esSecretariaParticular) {
         paths = ['solicitudes', 'oficios'];
-    } else if(esOficialMayor) {
+    } else if (esOficialMayor) {
         paths = ['solicitudes_institucionales']; // Solo institucionales
     }
 
     solicitudesVerificacion = [];
 
     const userRol = parseInt(getCookie('rol')) || 0;
-    const userDependencias = getCookie('dependencia') ? 
+    const userDependencias = getCookie('dependencia') ?
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
     // Corregir: Validar si hay dependencias para no-admin
-    if(userRol !== 3 && userDependencias.length === 0) {
+    if (userRol !== 3 && userDependencias.length === 0) {
         mostrarPaginaVerificacion([]);
         return;
     }
@@ -1014,14 +1033,14 @@ function cargarVerificacion() {
         }
 
         // Añadir validación de query existente
-        if(!q) {
+        if (!q) {
             console.error('Query no definida para el path:', path);
             return;
         }
 
         onValue(q, (snapshot) => {
             solicitudesVerificacion = solicitudesVerificacion.filter(s => s.tipoPath !== path);
-            
+
             snapshot.forEach(childSnapshot => {
                 const solicitud = childSnapshot.val();
                 if (userRol !== 3 && userRol !== 4 && !userDependencias.includes(solicitud.dependencia)) return;
@@ -1032,7 +1051,7 @@ function cargarVerificacion() {
                 solicitud.folio = solicitud.folio || childSnapshot.key;
                 solicitudesVerificacion.push(solicitud);
             });
-            
+
             aplicarFiltrosVerificacion();
         });
     });
@@ -1165,45 +1184,45 @@ function mostrarPaginaVerificacion(data) {
     actualizarPaginacionVerificacion(data.length);
 }
 
-window.mostrarConfirmacion = function(folio, accion, tipo) {
+window.mostrarConfirmacion = function (folio, accion, tipo) {
     folioActual = folio;
     accionActual = accion;
     tipoActual = tipo;
-    
-    const modalId = accion === 'aprobar' 
-        ? '#confirmarAprobarModal' 
+
+    const modalId = accion === 'aprobar'
+        ? '#confirmarAprobarModal'
         : '#confirmarRechazarModal';
-    
+
     new bootstrap.Modal(document.querySelector(modalId)).show();
 };
 
 // Evento modificado para cambio de archivo
-document.getElementById('documentoInicial').addEventListener('change', function(e) {
+document.getElementById('documentoInicial').addEventListener('change', function (e) {
     if (suppressFileInputEvents) return;
-    
+
     const fileInfo = document.getElementById('docInicialInfo');
     const removeBtn = document.getElementById('removeDocInicial');
-    
-    if(this.files.length > 0) {
+
+    if (this.files.length > 0) {
         const file = this.files[0];
         const extension = file.name.split('.').pop().toLowerCase();
-        
-        if(!ALLOWED_INITIAL_EXTENSIONS.includes(extension)) {
+
+        if (!ALLOWED_INITIAL_EXTENSIONS.includes(extension)) {
             mostrarError(`Formato no permitido: .${extension}`);
             this.value = '';
             fileInfo.textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
             removeBtn.classList.add('d-none');
             return;
         }
-        
-        if(file.size > MAX_INITIAL_FILE_SIZE_BYTES) {
+
+        if (file.size > MAX_INITIAL_FILE_SIZE_BYTES) {
             mostrarError(`El archivo excede el tamaño máximo de ${MAX_INITIAL_FILE_SIZE_MB}MB`);
             this.value = '';
             fileInfo.textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
             removeBtn.classList.add('d-none');
             return;
         }
-        
+
         removeBtn.classList.remove('d-none');
         fileInfo.innerHTML = `
             <span class="text-success">
@@ -1223,35 +1242,66 @@ document.getElementById('removeDocInicial').addEventListener('click', () => {
     fileInput.dispatchEvent(new Event('change'));
 });
 
-const estados = {
-    'pendiente': {texto: 'Pendiente', color: '#491F42'},
-    'por_vencer': {texto: 'Por Vencer', color: '#720F36'},
-    'en_proceso': {texto: 'En Proceso', color: '#ae9074'},
-    'verificacion': {texto: 'En Verificación', color: '#FFA500'},
-    'atendida': {texto: 'Atendida', color: '#2E7D32'},
-    'atrasada': {texto: 'Atrasada', color: '#a90000'}
+// Agregar al inicio del archivo, después de las constantes
+const coloresGraficas = {
+    primary: '#491F42',
+    secondary: '#720F36',
+    success: '#2E7D32',
+    warning: '#FFA500',
+    danger: '#a90000',
+    info: '#ae9074',
+    light: '#f8f9fa',
+    dark: '#343a40',
+    pendiente_vobo: '#FF6B35',
+    rechazado_vobo: '#DC3545'
 };
+
+// Actualizar el objeto estados
+const estados = {
+    'pendiente': { texto: 'Pendiente', color: coloresGraficas.primary },
+    'pendiente_vobo': { texto: 'Pendiente VoBo', color: coloresGraficas.pendiente_vobo },
+    'rechazado_vobo': { texto: 'VoBo Rechazado', color: coloresGraficas.rechazado_vobo },
+    'por_vencer': { texto: 'Por Vencer', color: coloresGraficas.secondary },
+    'en_proceso': { texto: 'En Proceso', color: coloresGraficas.info },
+    'verificacion': { texto: 'En Verificación', color: coloresGraficas.warning },
+    'atendida': { texto: 'Atendida', color: coloresGraficas.success },
+    'atrasada': { texto: 'Atrasada', color: coloresGraficas.danger }
+};
+
 
 function crearFilaSolicitud(solicitud) {
     const tr = document.createElement('tr');
     tr.dataset.fechaLimite = solicitud.fechaLimite;
     tr.dataset.estado = solicitud.estado;
-    tr.dataset.estado = solicitud.estado; // ← Asegurar este atributo
 
     const nombresTipos = {
         'acuerdo': 'Acuerdo de Gabinete',
         'oficio': 'Oficio',
         'solicitud': 'Solicitud',
-        'institucional': 'Solicitud Institucional' // Nuevo tipo
+        'institucional': 'Solicitud Institucional'
     };
 
     const estado = estados[solicitud.estado] || { texto: 'Desconocido', color: '#666' };
     const dependenciaNombre = dependenciasMap[solicitud.dependencia] || 'Desconocida';
 
-    // SOLUCIÓN: Deshabilitar botones cuando está en verificación
+    // Verificar si es Vinculación Ciudadana
+    const userEmail = getCookie('email');
+    const esVinculacionCiudadana = userEmail === CORREO_VINCULACION_CIUDADANA;
+
+    // Deshabilitar botones cuando está en pendiente_vobo o verificación/atendida
+    const pendienteVobo = solicitud.estado === 'pendiente_vobo';
     const enVerificacion = solicitud.estado === 'verificacion';
     const atendida = solicitud.estado === 'atendida';
-    const deshabilitarBotones = enVerificacion || atendida;
+    const rechazadaVobo = solicitud.estado === 'rechazado_vobo';
+    const deshabilitarBotones = pendienteVobo || enVerificacion || atendida;
+
+    // Botón de reenvío solo para Vinculación Ciudadana y estado rechazado_vobo
+    const botonReenvio = (esVinculacionCiudadana && rechazadaVobo) ? `
+        <button class="btn btn-sm btn-warning" 
+                onclick="mostrarReenvioVobo('${solicitud.folio}', '${solicitud.motivoRechazoVobo || ''}')">
+            <i class="fas fa-redo-alt me-1"></i> Reenviar VoBo
+        </button>
+    ` : '';
 
     tr.innerHTML = `
         <td>${solicitud.folio}</td>
@@ -1261,43 +1311,53 @@ function crearFilaSolicitud(solicitud) {
         <td>${solicitud.solicitante?.nombre || solicitud.contacto || 'N/A'}</td>
         <td>${solicitud.solicitante?.telefono || solicitud.telefono || 'N/A'}</td>
         <td><span class="status-badge" style="background:${estado.color}">${estado.texto}</span></td>
-        <td>${solicitud.estado === 'atendida' ? 'Atendida' : solicitud.estado === 'verificacion' ? 'En Verificación' : calcularTiempoRestante(solicitud.fechaLimite)}</td>
+        <td>${solicitud.estado === 'atendida' ? 'Atendida' : solicitud.estado === 'verificacion' ? 'En Verificación' : solicitud.estado === 'pendiente_vobo' ? 'Esperando VoBo' : solicitud.estado === 'rechazado_vobo' ? 'VoBo Rechazado' : calcularTiempoRestante(solicitud.fechaLimite)}</td>
         <td>
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 flex-wrap">
                 ${solicitud.documentoInicial ? `
                     <button class="btn btn-sm btn-documento" 
                             onclick="mostrarDocumentoInicial('${solicitud.folio}', '${solicitud.nombreDocumento}', '${solicitud.documentoInicial}')">
                         <i class="fas fa-file-alt me-1"></i>Documento Inicial
                     </button>
                 ` : ''}
+                
+                <!-- Botón para VoBo (solo visible para Secretaría General) -->
+                ${solicitud.estado === 'pendiente_vobo' && obtenerFiltroEspecial().esSecretariaGeneral ? `
+                    <button class="btn btn-sm btn-success" 
+                            onclick="aprobarVobo('${solicitud.folio}')">
+                        <i class="fas fa-check me-1"></i> Dar VoBo
+                    </button>
+                ` : ''}
+                
+                ${botonReenvio}
+                
                 <button class="btn btn-sm btn-proceso" 
-                    ${solicitud.estado === 'verificacion' || solicitud.estado === 'atendida' ? 'disabled' : ''}
-                    onclick="${solicitud.estado !== 'verificacion' && solicitud.estado !== 'atendida' ? `mostrarConfirmacionProceso('${solicitud.folio}')` : ''}">
+                    ${deshabilitarBotones ? 'disabled' : ''}
+                    onclick="${!deshabilitarBotones ? `mostrarConfirmacionProceso('${solicitud.folio}')` : ''}">
                     <i class="fas fa-sync-alt"></i> ${solicitud.estado === 'en_proceso' ? 'En Proceso' : 'Marcar Proceso'}
                 </button>
                 
-<button class="btn btn-sm btn-verificacion" 
-    ${solicitud.estado === 'verificacion' || solicitud.estado === 'atendida' ? 'disabled' : ''}
-    onclick="${solicitud.estado !== 'verificacion' && solicitud.estado !== 'atendida' ? `mostrarConfirmacionAtendida('${solicitud.folio}')` : ''}">
-    <i class="fas fa-check-circle"></i> ${solicitud.estado === 'verificacion' ? 'En Verificación' : 'Mandar a Verificación'}
-</button>
+                <button class="btn btn-sm btn-verificacion" 
+                    ${deshabilitarBotones ? 'disabled' : ''}
+                    onclick="${!deshabilitarBotones ? `mostrarConfirmacionAtendida('${solicitud.folio}')` : ''}">
+                    <i class="fas fa-check-circle"></i> ${solicitud.estado === 'verificacion' ? 'En Verificación' : 'Mandar a Verificación'}
+                </button>
 
-${solicitud.motivoRechazo ? `
-<button class="btn btn-sm btn-info" 
-        onclick="mostrarMotivo('${solicitud.motivoRechazo}', '${solicitud._usuarioRechazo || 'Sistema'}', '${solicitud.fechaRechazo || 'Fecha no disponible'}')"
-        data-bs-toggle="tooltip" 
-        title="Ver detalles de rechazo">
-    <i class="fa-solid fa-message"></i>
-</button>
-` : ''}
-
-${solicitud.justificacionProceso ? `
-<button class="btn btn-sm btn-proceso"
-                    onclick="mostrarJustificacion('${solicitud.folio}', '${solicitud.justificacionProceso}')">
-                    <i class="fas fa-sync-alt"></i>
+                ${solicitud.motivoRechazo ? `
+                <button class="btn btn-sm btn-info" 
+                        onclick="mostrarMotivo('${solicitud.motivoRechazo}', '${solicitud._usuarioRechazo || 'Sistema'}', '${solicitud.fechaRechazo || 'Fecha no disponible'}')"
+                        data-bs-toggle="tooltip" 
+                        title="Ver detalles de rechazo">
+                    <i class="fa-solid fa-message"></i>
                 </button>
                 ` : ''}
 
+                ${solicitud.justificacionProceso ? `
+                <button class="btn btn-sm btn-proceso"
+                            onclick="mostrarJustificacion('${solicitud.folio}', '${solicitud.justificacionProceso}')">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                ` : ''}
             </div>
         </td>
     `;
@@ -1306,11 +1366,11 @@ ${solicitud.justificacionProceso ? `
         btn.style.opacity = '0.6';
         btn.style.cursor = 'not-allowed';
     });
-    
+
     return tr;
 }
 
-window.mostrarDocumentoInicial = function(folio, nombreArchivo, url, secretariaOrigen) {
+window.mostrarDocumentoInicial = function (folio, nombreArchivo, url, secretariaOrigen) {
     const modal = new bootstrap.Modal(document.getElementById('evidenciaModal'));
     const loading = document.getElementById('loadingPreview');
     const pdfContainer = document.getElementById('pdfContainer');
@@ -1353,7 +1413,7 @@ window.mostrarDocumentoInicial = function(folio, nombreArchivo, url, secretariaO
         if (pdfViewer.dataset.tempSrc) {
             const container = pdfViewer.parentElement;
             pdfViewer.style.height = `${container.clientHeight}px`;
-            
+
             setTimeout(() => {
                 pdfViewer.src = pdfViewer.dataset.tempSrc;
                 delete pdfViewer.dataset.tempSrc;
@@ -1372,13 +1432,13 @@ window.mostrarDocumentoInicial = function(folio, nombreArchivo, url, secretariaO
     // Configurar visores
     setTimeout(() => {
         loading.classList.add('d-none');
-        
+
         if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExt)) {
             imagenContainer.classList.remove('d-none');
             const img = document.getElementById('visorImagen');
             img.src = url;
             img.onload = () => {
-                document.getElementById('imagenDimensions').textContent = 
+                document.getElementById('imagenDimensions').textContent =
                     `${img.naturalWidth}px × ${img.naturalHeight}px`;
             };
         } else if (fileExt === 'pdf') {
@@ -1397,7 +1457,7 @@ window.mostrarDocumentoInicial = function(folio, nombreArchivo, url, secretariaO
     }, 300);
 
     // Evento de zoom para imágenes
-    document.getElementById('visorImagen').onclick = function() {
+    document.getElementById('visorImagen').onclick = function () {
         this.classList.toggle('img-zoom');
     };
 
@@ -1426,29 +1486,29 @@ const DIAS_ADVERTENCIA = 1; // Días previos para marcar como "por vencer"
 async function actualizarEstadosAutomaticos() {
     if (actualizacionEnCurso) return;
     actualizacionEnCurso = true;
-    
+
     try {
         const ahora = ajustarHoraMexico(new Date());
         const updates = {};
         const paths = ['solicitudes', 'acuerdos', 'oficios'];
-        
+
         // Obtener datos directamente de Firebase
         const allDocs = await Promise.all(paths.map(async (path) => {
             const snapshot = await get(query(ref(database, path)));
             return snapshot.val() || {};
         }));
-        
+
         // Procesar cada documento
         paths.forEach((path, index) => {
             const docs = allDocs[index];
             Object.entries(docs).forEach(([key, doc]) => {
                 if (!['pendiente', 'por_vencer'].includes(doc.estado)) return;
-                
+
                 const fechaLimite = ajustarHoraMexico(new Date(doc.fechaLimite));
                 const diasRestantes = calcularDiasHabilesRestantes(ahora, fechaLimite);
-                
+
                 let nuevoEstado = doc.estado;
-                
+
                 // Lógica mejorada de transición de estados
                 if (diasRestantes === 0) {
                     nuevoEstado = 'atrasada';
@@ -1457,22 +1517,22 @@ async function actualizarEstadosAutomaticos() {
                 } else if (diasRestantes > DIAS_ADVERTENCIA && doc.estado === 'por_vencer') {
                     nuevoEstado = 'pendiente';
                 }
-                
+
                 if (nuevoEstado !== doc.estado) {
                     updates[`${path}/${key}/estado`] = nuevoEstado;
                     updates[`${path}/${key}/ultimaActualizacion`] = ahora.toISOString();
                 }
             });
         });
-        
+
         // Ejecutar actualizaciones si hay cambios
         if (Object.keys(updates).length > 0) {
             await update(ref(database), updates);
-            
+
             // Actualizar datos locales sin recargar toda la lista
             Object.entries(updates).forEach(([path, value]) => {
                 const [collection, key, field] = path.split('/');
-                const index = solicitudesSeguimiento.findIndex(s => 
+                const index = solicitudesSeguimiento.findIndex(s =>
                     s.tipoPath === collection && s.key === key
                 );
                 if (index > -1 && field === 'estado') {
@@ -1480,7 +1540,7 @@ async function actualizarEstadosAutomaticos() {
                 }
             });
         }
-        
+
     } catch (error) {
         console.error('Error en actualización automática:', error);
         mostrarError('Error técnico al actualizar estados');
@@ -1493,14 +1553,14 @@ async function actualizarEstadosAutomaticos() {
 function calcularDiasHabilesRestantes(fechaInicio, fechaLimite) {
     let dias = 0;
     const fechaActual = new Date(fechaInicio);
-    
+
     while (fechaActual < fechaLimite) {
         fechaActual.setDate(fechaActual.getDate() + 1);
         if (fechaActual.getDay() !== 0 && fechaActual.getDay() !== 6) {
             dias++;
         }
     }
-    
+
     return dias;
 }
 
@@ -1509,8 +1569,8 @@ setInterval(actualizarEstadosAutomaticos, 43200000); // 12 horas 43200000
 document.addEventListener('DOMContentLoaded', actualizarEstadosAutomaticos);
 
 function cargarSeguimiento() {
-     const { 
-        esJefaturaGabinete, 
+    const {
+        esJefaturaGabinete,
         esSecretariaParticular,
         esOficialMayor,
         esPresidentaMunicipal
@@ -1526,15 +1586,15 @@ function cargarSeguimiento() {
     } else if (esSecretariaParticular) {
         paths = ['solicitudes', 'oficios'];
     }
-    
+
     const userRol = parseInt(getCookie('rol')) || 0;
-    const userDependencias = getCookie('dependencia') ? 
+    const userDependencias = getCookie('dependencia') ?
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
     // Limpiar listeners anteriores
     paths.forEach(path => {
         const refPath = ref(database, path);
-        onValue(refPath, () => {});
+        onValue(refPath, () => { });
     });
 
     if (userRol === 3) {
@@ -1647,17 +1707,15 @@ function cargarSeguimiento() {
 document.getElementById('formNuevaSolicitud').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
-    
-    // Validación de campos
+
+    // Validación de campos (código existente)
     const camposRequeridos = [
-        'receptor', 'canal', 'nombre', 
-        'colonia', 'telefono', 'asunto', 
+        'receptor', 'canal', 'nombre',
+        'colonia', 'telefono', 'asunto',
         'secretaria', 'documentoInicial'
     ];
-    
+
     let validado = true;
-    
-    // Validar campos requeridos
     camposRequeridos.forEach(id => {
         const campo = document.getElementById(id);
         if (!campo || !campo.value.trim()) {
@@ -1678,11 +1736,11 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
     try {
         // Generar folio primero
         const folio = await generarFolio();
-        
+
         // Manejar documento inicial
         const docInicialInput = document.getElementById('documentoInicial');
         const docInicialFile = docInicialInput.files[0];
-        
+
         // Validar archivo
         if (!docInicialFile) {
             mostrarError("Debes subir un documento inicial");
@@ -1701,10 +1759,19 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
         }
 
         // Subir documento a Storage
-       const storagePath = `${folio}/Documento Inicial/${docInicialFile.name}`;
+        const storagePath = `${folio}/Documento Inicial/${docInicialFile.name}`;
         const docRef = storageRef(storage, storagePath);
         await uploadBytes(docRef, docInicialFile);
         const docUrl = await getDownloadURL(docRef);
+
+        // VERIFICACIÓN DE VINCULACIÓN CIUDADANA Y VOB0
+        const { esVinculacionCiudadana } = obtenerFiltroEspecial();
+        const userEmail = getCookie('email');
+
+        // Si es Vinculación Ciudadana, el estado será 'pendiente_vobo', sino 'pendiente'
+        const estadoInicial = (esVinculacionCiudadana || userEmail === CORREO_VINCULACION_CIUDADANA)
+            ? 'pendiente_vobo'
+            : 'pendiente';
 
         // Crear objeto de solicitud
         const fechaCreacion = new Date().toISOString();
@@ -1713,7 +1780,7 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
             tipo: document.getElementById('canal').value,
             tiposolicitud: document.getElementById('receptor').value,
             dependencia: document.getElementById('secretaria').value,
-            estado: 'pendiente',
+            estado: estadoInicial, // ← Estado modificado
             solicitante: {
                 nombre: document.getElementById('nombre').value,
                 colonia: document.getElementById('colonia').value,
@@ -1724,26 +1791,36 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
             fechaLimite: calcularFechaLimite(fechaCreacion),
             documentoInicial: docUrl,
             nombreDocumento: docInicialFile.name,
-            folio: folio
+            folio: folio,
+            // Campos adicionales para control de VoBo
+            requiereVobo: (esVinculacionCiudadana || userEmail === CORREO_VINCULACION_CIUDADANA),
+            voboAprobado: false,
+            voboSecretariaGeneral: null,
+            fechaSolicitudVobo: (esVinculacionCiudadana || userEmail === CORREO_VINCULACION_CIUDADANA) ? new Date().toISOString() : null
         };
 
         // Guardar en la base de datos
         await set(ref(database, `solicitudes/${folio}`), nuevaSolicitud);
-        
+
         // Limpiar formulario sin triggerear alertas
         suppressFileInputEvents = true;
         form.reset();
         document.getElementById('fecha').value = obtenerFechaHoy();
         docInicialInput.value = '';
-        
+
         // Restaurar UI manualmente
-        document.getElementById('docInicialInfo').textContent = 
+        document.getElementById('docInicialInfo').textContent =
             'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
         document.getElementById('removeDocInicial').classList.add('d-none');
         suppressFileInputEvents = false;
-        
-        mostrarExito("Solicitud creada exitosamente!");
-        
+
+        // Mensaje diferente según si requiere VoBo o no
+        if (estadoInicial === 'pendiente_vobo') {
+            mostrarExito("Solicitud creada exitosamente! Esperando VoBo de Secretaría General.");
+        } else {
+            mostrarExito("Solicitud creada exitosamente!");
+        }
+
     } catch (error) {
         console.error("Error al guardar:", error);
         mostrarError(`Error al crear la solicitud: ${error.message}`);
@@ -1757,7 +1834,7 @@ const coloresEstatus = {
     en_progreso: '#ae9074',
     atendida: '#2E7D32',
     atrasado: '#a90000',
-    verificacion : '#FFA500'
+    verificacion: '#FFA500'
 };
 
 // Paleta de énfasis visual
@@ -1774,50 +1851,38 @@ let myChart = null;
 function obtenerTiposSolicitud(solicitudes) {
     const tiposUnicos = new Set();
     solicitudes.forEach(solicitud => {
-        if(solicitud.tipo) tiposUnicos.add(solicitud.tipo);
+        if (solicitud.tipo) tiposUnicos.add(solicitud.tipo);
     });
     return Array.from(tiposUnicos);
 }
 
 function actualizarGrafica(solicitudes) {
     const tiposSolicitud = obtenerTiposSolicitud(solicitudes);
-    
-    // Corregir estructura de datos para coincidir con los estados reales
+
     const datos = {
         pendiente: new Array(tiposSolicitud.length).fill(0),
+        pendiente_vobo: new Array(tiposSolicitud.length).fill(0), // ← Nuevo dataset
         por_vencer: new Array(tiposSolicitud.length).fill(0),
         en_proceso: new Array(tiposSolicitud.length).fill(0),
         atrasada: new Array(tiposSolicitud.length).fill(0),
         atendida: new Array(tiposSolicitud.length).fill(0),
-        verificacion : new Array(tiposSolicitud.length).fill(0)
+        verificacion: new Array(tiposSolicitud.length).fill(0)
     };
 
     solicitudes.forEach(solicitud => {
         const index = tiposSolicitud.indexOf(solicitud.tipo);
-        if(index === -1) return;
+        if (index === -1) return;
 
-        // Usar directamente el estado de la solicitud
-        if(datos.hasOwnProperty(solicitud.estado)) {
+        if (datos.hasOwnProperty(solicitud.estado)) {
             datos[solicitud.estado][index]++;
         }
     });
 
     const ctx = document.getElementById('mainChart').getContext('2d');
-    
-    // Destruir gráfica anterior si existe
-    if(charts.mainChart) {
+
+    if (charts.mainChart) {
         charts.mainChart.destroy();
     }
-
-    // Actualizar colores según la paleta proporcionada
-    const coloresEstatus = {
-        pendiente: '#491F42',
-        por_vencer: '#720F36',
-        en_proceso: '#ae9074',
-        atendida: '#2E7D32',
-        atrasada: '#a90000',
-        verificacion: '#FFA500'
-    };
 
     charts.mainChart = new Chart(ctx, {
         type: 'bar',
@@ -1828,6 +1893,15 @@ function actualizarGrafica(solicitudes) {
                     label: 'Pendientes',
                     data: datos.pendiente,
                     backgroundColor: coloresEstatus.pendiente,
+                    borderColor: coloresSecundarios.linea,
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    barThickness: 35
+                },
+                {
+                    label: 'Pendientes VoBo', // ← Nueva serie
+                    data: datos.pendiente_vobo,
+                    backgroundColor: coloresEstatus.pendiente_vobo,
                     borderColor: coloresSecundarios.linea,
                     borderWidth: 1,
                     borderRadius: 4,
@@ -2010,25 +2084,43 @@ document.getElementById('confirmarAtendidaModal').addEventListener('hidden.bs.mo
     fileInput.dispatchEvent(new Event('change'));
 });
 
+// Agregar en el DOMContentLoaded, después de los otros event listeners
+document.getElementById('busqueda-vobo')?.addEventListener('input', () => {
+    currentPageVobo = 1;
+    aplicarFiltrosVobo();
+});
+
+document.getElementById('filtro-secretaria-vobo')?.addEventListener('change', () => {
+    currentPageVobo = 1;
+    aplicarFiltrosVobo();
+});
+
+// En el DOMContentLoaded, agregar este event listener
+document.getElementById('filtro-fecha-vobo')?.addEventListener('change', () => {
+    currentPageVobo = 1;
+    aplicarFiltrosVobo();
+});
+
 // Sistema de navegación y UI
 document.addEventListener('DOMContentLoaded', async function () {
     checkSession();
     showUserInfo();
     setupLogout();
-    
+
     // Cargar primero las dependencias
     await cargarDependencias();
-    
+
     // Luego cargar otros componentes
     cargarSecretarias();
     cargarSeguimiento();
-    cargarValidadas(); // Nueva línea
+    cargarValidadas();
     cargarVerificacion();
 
-    // Obtener rol del usuario
+    // Obtener email del usuario PRIMERO
+    const userEmail = getCookie('email'); // ← Definir userEmail aquí
     const role = parseInt(getCookie('rol')) || 0;
-    const userDependencias = getCookie('dependencia') ? 
-    decodeURIComponent(getCookie('dependencia')).split(',') : [];
+    const userDependencias = getCookie('dependencia') ?
+        decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
     // Ocultar/mostrar pestañas según rol
     const nuevaLi = document.querySelector('a[data-content="nueva"]').parentElement;
@@ -2037,6 +2129,20 @@ document.addEventListener('DOMContentLoaded', async function () {
     const verificacionLi = document.querySelector('a[data-content="verificacion"]').parentElement;
     const navacuerdos = document.querySelector('a[data-content="acuerdo"]').parentElement;
     const navoficios = document.querySelector('a[data-content="oficio"]').parentElement;
+    const navInstitucional = document.getElementById('navInstitucional');
+    const navVobo = document.getElementById('navVobo'); // ← Agregar esta línea
+
+    // Mostrar sección de VoBo solo para Secretaría General
+    if (userEmail === CORREO_SECRETARIA_GENERAL) {
+        if (navVobo) {
+            navVobo.style.display = 'block';
+            cargarSolicitudesVobo(); // Cargar solicitudes de VoBo
+        }
+    } else {
+        if (navVobo) {
+            navVobo.style.display = 'none';
+        }
+    }
 
     switch (role) {
         case 1:
@@ -2046,6 +2152,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             verificacionLi.style.display = 'none';
             navacuerdos.style.display = 'none';
             navoficios.style.display = 'none';
+            if (navInstitucional) navInstitucional.style.display = 'none';
             break;
         case 2:
             nuevaLi.style.display = 'none';
@@ -2054,20 +2161,35 @@ document.addEventListener('DOMContentLoaded', async function () {
             verificacionLi.style.display = 'none';
             navacuerdos.style.display = 'none';
             navoficios.style.display = 'none';
+            if (navInstitucional) navInstitucional.style.display = 'none';
             break;
         case 3:
-            // Todas visibles por defecto
+            // Mostrar acuerdo de gabinete solo si NO es Vinculación Ciudadana u Oficialía Mayor
+            if (userEmail === 'vinculacion.ciudadana@tizayuca.gob.mx' ||
+                userEmail === 'oficialia.mayor@tizayuca.gob.mx') {
+                navacuerdos.style.display = 'none';
+            } else {
+                navacuerdos.style.display = 'block';
+            }
+
+            // Mostrar otros módulos normalmente
+            navoficios.style.display = 'block';
+            if (navInstitucional) navInstitucional.style.display = 'block';
             break;
         default:
             nuevaLi.style.display = 'none';
             seguimientoLi.style.display = 'none';
             validadasLi.style.display = 'none';
+            navacuerdos.style.display = 'none';
+            navoficios.style.display = 'none';
+            if (navInstitucional) navInstitucional.style.display = 'none';
     }
+
 
     // Validar pestaña activa guardada
     const savedTab = localStorage.getItem('activeTab');
     const allowedTabs = ['dashboard'];
-    
+
     switch (role) {
         case 1:
             allowedTabs.push('nueva');
@@ -2101,6 +2223,17 @@ document.addEventListener('DOMContentLoaded', async function () {
         <option>Llamada telefónica</option>
     `;
 
+    // Mostrar/ocultar pestañas según rol
+    const voboLi = document.getElementById('navVobo');
+
+    // Mostrar VoBo solo para Secretaría General
+    if (userEmail === CORREO_SECRETARIA_GENERAL) {
+        voboLi.style.display = 'block';
+        cargarSolicitudesVobo(); // Cargar solicitudes de VoBo
+    } else {
+        voboLi.style.display = 'none';
+    }
+
     // Menú móvil
     const sidebar = document.querySelector('.sidebar');
     const menuToggle = document.querySelector('.menu-toggle');
@@ -2129,12 +2262,17 @@ document.addEventListener('DOMContentLoaded', async function () {
             activeSection.style.display = 'block';
         }
     }
-    
+
     // Event listeners para los navLinks
     navLinks.forEach(link => {
-        link.addEventListener('click', function(e) {
+        link.addEventListener('click', function (e) {
             e.preventDefault();
             const contentId = this.getAttribute('data-content');
+            if (contentId === 'vobo') {
+                // Asegurarse de que los datos de VoBo estén cargados
+                aplicarFiltrosVobo();
+            }
+
             navLinks.forEach(n => n.classList.remove('active'));
             this.classList.add('active');
             switchTab(contentId);
@@ -2209,19 +2347,19 @@ function setupLogout() {
 
 let folioActual = '';
 
-window.mostrarConfirmacionProceso = function(folio) {
+window.mostrarConfirmacionProceso = function (folio) {
     folioActual = folio;
     new bootstrap.Modal('#confirmarProcesoModal').show();
 };
 
-window.mostrarConfirmacionAtendida = function(folio) {
+window.mostrarConfirmacionAtendida = function (folio) {
     folioActual = folio;
     new bootstrap.Modal('#confirmarAtendidaModal').show();
 };
 
-window.confirmarCambioEstado = function(nuevoEstado) {
+window.confirmarCambioEstado = function (nuevoEstado) {
     cambiarEstado(folioActual, nuevoEstado);
-    
+
     // Cerrar ambos modales de confirmación
     ['#confirmarProcesoModal', '#confirmarAtendidaModal'].forEach(modalId => {
         const modal = bootstrap.Modal.getInstance(document.querySelector(modalId));
@@ -2232,20 +2370,20 @@ window.confirmarCambioEstado = function(nuevoEstado) {
 // Configurar formulario Acuerdo
 document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     try {
         // Obtener elementos del DOM
         const docInput = document.getElementById('documentoAcuerdo');
         const docFile = docInput.files[0];
         const prefix = 'Acuerdo';
-        
+
         // Validar campos requeridos
         const camposRequeridos = [
-            'asuntoAcuerdo', 
-            'descripcionAcuerdo', 
+            'asuntoAcuerdo',
+            'descripcionAcuerdo',
             'secretariaAcuerdo'
         ];
-        
+
         let valido = true;
         camposRequeridos.forEach(id => {
             const campo = document.getElementById(id);
@@ -2266,7 +2404,7 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
                 mostrarError(`Formato no permitido para Acuerdo: .${extension}`);
                 valido = false;
             }
-            
+
             if (docFile.size > MAX_INITIAL_FILE_SIZE_BYTES) {
                 mostrarError(`El archivo excede el tamaño máximo de ${MAX_INITIAL_FILE_SIZE_MB}MB para Acuerdos`);
                 valido = false;
@@ -2299,7 +2437,7 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
 
         // Guardar en Firebase
         await set(ref(database, `acuerdos/${folio}`), nuevoAcuerdo);
-        
+
         // Limpiar formulario
         limpiarFormulario('acuerdo');
         mostrarExito("Acuerdo creado exitosamente!");
@@ -2313,12 +2451,12 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
 // Configurar formulario Oficio (similar a Acuerdo)
 document.getElementById('formNuevoOficio').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     try {
         const folio = await generarFolio('oficio');
         const docFile = document.getElementById('documentoOficio').files[0];
-        
-       if (!validarDocumento(docFile, true)) return;
+
+        if (!validarDocumento(docFile, true)) return;
 
         const storagePath = `${folio}/Documento Inicial Oficio/${docFile.name}`;
         const docRef = storageRef(storage, storagePath);
@@ -2367,9 +2505,9 @@ function validarCampos(campos) {
 }
 
 function validarDocumento(file, tipoDocumento) {
-    const ALLOWED_EXT = ['pdf','jpg', 'jpeg', 'png', 'zip', 'rar'];
+    const ALLOWED_EXT = ['pdf', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
     const MAX_SIZE_MB = 10;
-    
+
     if (!file) {
         mostrarError(`Debes subir un documento para ${tipoDocumento}`);
         return false;
@@ -2392,22 +2530,22 @@ function validarDocumento(file, tipoDocumento) {
 function limpiarFormulario(tipo) {
     const prefix = tipo.charAt(0).toUpperCase() + tipo.slice(1);
     const form = document.getElementById(`formNuevo${prefix}`);
-    
+
     // Resetear campos
     form.reset();
-    
+
     // Limpiar file input y UI
     const fileInput = document.getElementById(`documento${prefix}`);
     const fileInfo = document.getElementById(`doc${prefix}Info`);
     const removeBtn = document.getElementById(`removeDoc${prefix}`);
-    
+
     fileInput.value = '';
     fileInfo.textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
     removeBtn.classList.add('d-none');
-    
+
     // Restablecer fecha
     document.getElementById(`fecha${prefix}`).value = obtenerFechaHoy();
-    
+
     // Limpiar nuevos campos específicos para oficio
     if (tipo === 'oficio') {
         document.getElementById('peticionarioOficio').value = '';
@@ -2420,7 +2558,7 @@ function limpiarFormulario(tipo) {
     const removeBtn = document.getElementById(`removeDoc${tipo}`);
     const docInfo = document.getElementById(`doc${tipo}Info`);
 
-    docInput.addEventListener('change', function(e) {
+    docInput.addEventListener('change', function (e) {
         if (this.files.length > 0) {
             const file = this.files[0];
             docInfo.innerHTML = `
@@ -2446,22 +2584,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // Configurar fechas
     document.getElementById('fechaAcuerdo').value = obtenerFechaHoy();
     document.getElementById('fechaOficio').value = obtenerFechaHoy();
-    
+
     // Obtener email del usuario
     const userEmail = getCookie('email');
-    
+
     // Mostrar módulos solo para rol 3, excepto para los correos específicos
     const role = parseInt(getCookie('rol'));
-    
+
     if (role === 3) {
         // Ocultar acuerdo de gabinete para los correos específicos
-        if (userEmail === 'vinculacion.ciudadana@tizayuca.gob.mx' || 
+        if (userEmail === 'vinculacion.ciudadana@tizayuca.gob.mx' ||
             userEmail === 'oficialia.mayor@tizayuca.gob.mx') {
             document.getElementById('navAcuerdo').style.display = 'none';
         } else {
             document.getElementById('navAcuerdo').style.display = 'block';
         }
-        
+
         // Mostrar otros módulos normalmente
         document.getElementById('navOficio').style.display = 'block';
         document.getElementById('navInstitucional').style.display = 'block';
@@ -2493,19 +2631,19 @@ function validarFormulario(tipo) {
     // Validar archivo
     const fileInput = document.getElementById(`documento${prefix}`);
     const file = fileInput.files[0];
-    
+
     if (!file) {
         mostrarError(`Debe adjuntar un documento para ${prefix}`);
         valido = false;
     } else {
         const extension = file.name.split('.').pop().toLowerCase();
         const allowedExtensions = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
-        
+
         if (!allowedExtensions.includes(extension)) {
             mostrarError(`Formato no permitido para ${prefix}: .${extension}`);
             valido = false;
         }
-        
+
         if (file.size > 10 * 1024 * 1024) { // 10MB
             mostrarError(`El archivo excede el tamaño máximo de 10MB para ${prefix}`);
             valido = false;
@@ -2516,12 +2654,12 @@ function validarFormulario(tipo) {
 }
 
 // Configurar validación en tiempo real para Acuerdos
-document.getElementById('documentoAcuerdo').addEventListener('change', function(e) {
+document.getElementById('documentoAcuerdo').addEventListener('change', function (e) {
     validarArchivoInput(this, 'Acuerdo');
 });
 
 // Configurar validación en tiempo real para Oficios
-document.getElementById('documentoOficio').addEventListener('change', function(e) {
+document.getElementById('documentoOficio').addEventListener('change', function (e) {
     validarArchivoInput(this, 'Oficio');
 });
 
@@ -2534,7 +2672,7 @@ function validarArchivoInput(input, tipoDocumento) {
     // Resetear estado
     input.classList.remove('is-invalid');
     fileInfo.classList.remove('text-danger');
-    
+
     if (!file) {
         fileInfo.textContent = `Formatos permitidos: ${ALLOWED_INITIAL_EXTENSIONS.join(', ')} (Máx. ${MAX_INITIAL_FILE_SIZE_MB}MB)`;
         removeBtn?.classList.add('d-none');
@@ -2586,14 +2724,205 @@ function actualizarGraficas(solicitudes) {
 }
 
 function actualizarGraficaPrincipal(solicitudes) {
-    // Mantén tu código existente de actualizarGrafica
+    const tiposSolicitud = obtenerTiposSolicitud(solicitudes);
+
+    const datos = {
+        pendiente: new Array(tiposSolicitud.length).fill(0),
+        pendiente_vobo: new Array(tiposSolicitud.length).fill(0),
+        por_vencer: new Array(tiposSolicitud.length).fill(0),
+        en_proceso: new Array(tiposSolicitud.length).fill(0),
+        atrasada: new Array(tiposSolicitud.length).fill(0),
+        atendida: new Array(tiposSolicitud.length).fill(0),
+        verificacion: new Array(tiposSolicitud.length).fill(0)
+    };
+
+    solicitudes.forEach(solicitud => {
+        const index = tiposSolicitud.indexOf(solicitud.tipo);
+        if (index === -1) return;
+
+        if (datos.hasOwnProperty(solicitud.estado)) {
+            datos[solicitud.estado][index]++;
+        }
+    });
+
+    const ctx = document.getElementById('mainChart').getContext('2d');
+
+    if (charts.mainChart) {
+        charts.mainChart.destroy();
+    }
+
+    charts.mainChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: tiposSolicitud,
+            datasets: [
+                {
+                    label: 'Pendientes',
+                    data: datos.pendiente,
+                    backgroundColor: coloresGraficas.primary,
+                    borderColor: coloresGraficas.primary,
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    barThickness: 35
+                },
+                {
+                    label: 'Pendientes VoBo',
+                    data: datos.pendiente_vobo,
+                    backgroundColor: coloresGraficas.pendiente_vobo,
+                    borderColor: coloresGraficas.pendiente_vobo,
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    barThickness: 35
+                },
+                {
+                    label: 'Por Vencer',
+                    data: datos.por_vencer,
+                    backgroundColor: coloresGraficas.secondary,
+                    borderColor: coloresGraficas.secondary,
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    barThickness: 35
+                },
+                {
+                    label: 'En Proceso',
+                    data: datos.en_proceso,
+                    backgroundColor: coloresGraficas.info,
+                    borderColor: coloresGraficas.info,
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    barThickness: 35
+                },
+                {
+                    label: 'Atrasadas',
+                    data: datos.atrasada,
+                    backgroundColor: coloresGraficas.danger,
+                    borderColor: coloresGraficas.danger,
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    barThickness: 35
+                },
+                {
+                    label: 'Atendidas',
+                    data: datos.atendida,
+                    backgroundColor: coloresGraficas.success,
+                    borderColor: coloresGraficas.success,
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    barThickness: 35
+                },
+                {
+                    label: 'En Verificación',
+                    data: datos.verificacion,
+                    backgroundColor: coloresGraficas.warning,
+                    borderColor: coloresGraficas.warning,
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    barThickness: 35
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    top: 20,
+                    right: 15,
+                    bottom: 25,
+                    left: 15
+                }
+            },
+            scales: {
+                x: {
+                    stacked: false,
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: coloresSecundarios.texto,
+                        font: {
+                            family: 'Poppins, sans-serif',
+                            size: 12
+                        },
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: coloresSecundarios.linea,
+                        borderDash: [4]
+                    },
+                    ticks: {
+                        color: coloresSecundarios.texto,
+                        font: {
+                            family: 'Poppins, sans-serif',
+                            size: 12
+                        },
+                        precision: 0,
+                        padding: 10
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        color: coloresSecundarios.texto,
+                        font: {
+                            family: 'Poppins, sans-serif',
+                            size: 13,
+                            weight: '500'
+                        },
+                        boxWidth: 20,
+                        padding: 15
+                    }
+                },
+                title: {
+                    display: true,
+                    text: 'Distribución de Solicitudes por Tipo y Estatus',
+                    color: coloresSecundarios.texto,
+                    font: {
+                        family: 'Poppins, sans-serif',
+                        size: 16,
+                        weight: '600'
+                    },
+                    padding: {
+                        top: 10,
+                        bottom: 20
+                    }
+                },
+                tooltip: {
+                    backgroundColor: coloresSecundarios.fondo,
+                    titleColor: coloresGraficas.primary,
+                    bodyColor: coloresSecundarios.texto,
+                    borderColor: coloresSecundarios.linea,
+                    borderWidth: 1,
+                    boxPadding: 10,
+                    titleFont: {
+                        family: 'Poppins, sans-serif',
+                        weight: '600'
+                    },
+                    bodyFont: {
+                        family: 'Poppins, sans-serif'
+                    }
+                }
+            },
+            animation: {
+                duration: 800,
+                easing: 'easeOutQuart'
+            }
+        }
+    });
 }
 
 function actualizarGraficaTipos(solicitudes) {
     const tipos = {
         'Solicitud': 0,
         'Acuerdo': 0,
-        'Oficio': 0
+        'Oficio': 0,
+        'Institucional': 0
     };
 
     solicitudes.forEach(s => {
@@ -2601,27 +2930,36 @@ function actualizarGraficaTipos(solicitudes) {
     });
 
     if (charts.typeChart) charts.typeChart.destroy();
-    
+
     const ctx = document.getElementById('typeChart').getContext('2d');
-    charts.typeChart = new Chart(ctx, { // <-- Usar charts.typeChart
+    charts.typeChart = new Chart(ctx, {
         type: 'pie',
         data: {
             labels: Object.keys(tipos),
             datasets: [{
                 data: Object.values(tipos),
                 backgroundColor: [
-                    '#491F42',
-                    '#2E7D32',
-                    '#ae9074'
+                    coloresGraficas.primary,
+                    coloresGraficas.success,
+                    coloresGraficas.info,
+                    coloresGraficas.warning
                 ],
-                borderWidth: 0
+                borderWidth: 2,
+                borderColor: '#fff'
             }]
         },
         options: {
             responsive: true,
             plugins: {
                 legend: {
-                    position: 'bottom'
+                    position: 'bottom',
+                    labels: {
+                        color: coloresSecundarios.texto,
+                        font: {
+                            family: 'Poppins, sans-serif',
+                            size: 12
+                        }
+                    }
                 }
             }
         }
@@ -2629,33 +2967,36 @@ function actualizarGraficaTipos(solicitudes) {
 }
 
 function actualizarGraficaTendencias(solicitudes) {
-    const meses = Array.from({length: 12}, (_, i) => {
+    const meses = Array.from({ length: 12 }, (_, i) => {
         const date = new Date();
         date.setMonth(i);
-        return date.toLocaleString('es-MX', {month: 'short'});
+        return date.toLocaleString('es-MX', { month: 'short' });
     });
 
     const datos = Array(12).fill(0);
-    
+
     solicitudes.forEach(s => {
         const mes = new Date(s.fechaCreacion).getMonth();
         datos[mes]++;
     });
 
     if (charts.trendChart) charts.trendChart.destroy();
-    
+
     const ctx = document.getElementById('trendChart').getContext('2d');
-    charts.trendChart = new Chart(ctx, { // <-- Usar charts.trendChart
+    charts.trendChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: meses,
             datasets: [{
                 label: 'Solicitudes por Mes',
                 data: datos,
-                borderColor: '#491F42',
+                borderColor: coloresGraficas.primary,
+                backgroundColor: 'rgba(73, 31, 66, 0.1)',
                 tension: 0.3,
                 fill: true,
-                backgroundColor: 'rgba(73,31,66,0.05)'
+                pointBackgroundColor: coloresGraficas.primary,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2
             }]
         },
         options: {
@@ -2667,6 +3008,13 @@ function actualizarGraficaTendencias(solicitudes) {
                         stepSize: 1
                     }
                 }
+            },
+            plugins: {
+                legend: {
+                    labels: {
+                        color: coloresSecundarios.texto
+                    }
+                }
             }
         }
     });
@@ -2675,6 +3023,7 @@ function actualizarGraficaTendencias(solicitudes) {
 function actualizarGraficaEstatus(solicitudes) {
     const estatus = {
         'pendiente': 0,
+        'pendiente_vobo': 0,
         'en_proceso': 0,
         'verificacion': 0,
         'atendida': 0,
@@ -2684,29 +3033,31 @@ function actualizarGraficaEstatus(solicitudes) {
     solicitudes.forEach(s => estatus[s.estado]++);
 
     if (charts.statusChart) charts.statusChart.destroy();
-    
+
     const ctx = document.getElementById('statusChart').getContext('2d');
-    charts.statusChart = new Chart(ctx, { // <-- Usar charts.statusChart
+    charts.statusChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: Object.keys(estatus),
+            labels: Object.keys(estatus).map(key => estados[key]?.texto || key),
             datasets: [{
                 data: Object.values(estatus),
-                backgroundColor: [
-                    '#491F42',
-                    '#720F36',
-                    '#FFA500',
-                    '#2E7D32',
-                    '#a90000'
-                ],
-                borderWidth: 0
+                backgroundColor: Object.keys(estatus).map(key => estados[key]?.color || coloresGraficas.primary),
+                borderWidth: 2,
+                borderColor: '#fff'
             }]
         },
         options: {
             responsive: true,
             plugins: {
                 legend: {
-                    position: 'bottom'
+                    position: 'bottom',
+                    labels: {
+                        color: coloresSecundarios.texto,
+                        font: {
+                            family: 'Poppins, sans-serif',
+                            size: 12
+                        }
+                    }
                 }
             }
         }
@@ -2715,7 +3066,7 @@ function actualizarGraficaEstatus(solicitudes) {
 
 function actualizarEficienciaDepartamentos(solicitudes) {
     const departamentos = {};
-    
+
     solicitudes.forEach(s => {
         const depto = dependenciasMap[s.dependencia] || 'Desconocido';
         if (!departamentos[depto]) {
@@ -2734,7 +3085,7 @@ function actualizarEficienciaDepartamentos(solicitudes) {
     });
 
     if (charts.departmentChart) charts.departmentChart.destroy();
-    
+
     const ctx = document.getElementById('departmentChart').getContext('2d');
     charts.departmentChart = new Chart(ctx, {
         type: 'bar',
@@ -2774,7 +3125,7 @@ function actualizarTiemposRespuesta(solicitudes) {
         const inicio = new Date(s.fechaCreacion);
         const fin = new Date(s.fechaAtencion);
         const diff = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24));
-        
+
         if (diff <= 3) tiempos['1-3 días']++;
         else if (diff <= 7) tiempos['4-7 días']++;
         else if (diff <= 15) tiempos['8-15 días']++;
@@ -2782,7 +3133,7 @@ function actualizarTiemposRespuesta(solicitudes) {
     });
 
     if (charts.efficiencyChart) charts.efficiencyChart.destroy();
-    
+
     const ctx = document.getElementById('efficiencyChart').getContext('2d');
     charts.efficiencyChart = new Chart(ctx, {
         type: 'polarArea',
@@ -2816,7 +3167,7 @@ window.exportAllCharts = async () => {
         const zip = new JSZip();
         const folder = zip.folder("graficas_sisges");
         const date = new Date().toISOString().slice(0, 10);
-        
+
         // Generar todas las gráficas (incluyendo la nueva)
         await Promise.all(Object.keys(charts).map(async (chartId) => {
             if (chartId === 'quarterlyChart' && !charts[chartId]) {
@@ -2824,31 +3175,31 @@ window.exportAllCharts = async () => {
                 actualizarGraficaTrimestral(solicitudesSeguimiento);
             }
 
-             if (chartId === 'channelChart' && !charts[chartId]) {
+            if (chartId === 'channelChart' && !charts[chartId]) {
                 // Si la gráfica de canales no está inicializada, la creamos
                 actualizarGraficaCanales(solicitudesSeguimiento);
             }
-            
+
             const chart = charts[chartId];
             if (!chart) return;
-            
+
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
             tempCanvas.width = chart.canvas.width;
             tempCanvas.height = chart.canvas.height;
             tempCtx.drawImage(chart.canvas, 0, 0);
-            
-            const blob = await new Promise(resolve => 
+
+            const blob = await new Promise(resolve =>
                 tempCanvas.toBlob(resolve, 'image/png', 1)
             );
-            
+
             folder.file(`${chartId}_${date}.png`, blob);
         }));
-        
+
         // Generar y descargar ZIP
-        const content = await zip.generateAsync({type: "blob"});
+        const content = await zip.generateAsync({ type: "blob" });
         saveAs(content, `graficas_sisges_${date}.zip`);
-        
+
     } catch (error) {
         mostrarError(`Error al exportar gráficas: ${error.message}`);
     }
@@ -2858,20 +3209,20 @@ window.exportAllCharts = async () => {
 window.exportChart = (chartId, fileName = 'chart') => {
     const chart = charts[chartId];
     if (!chart) return;
-    
+
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
-    
+
     // Aumentar resolución para exportación HD
     const scale = 2;
     tempCanvas.width = chart.canvas.width * scale;
     tempCanvas.height = chart.canvas.height * scale;
     tempCtx.scale(scale, scale);
     tempCtx.drawImage(chart.canvas, 0, 0);
-    
+
     const url = tempCanvas.toDataURL('image/png', 1);
     const link = document.createElement('a');
-    link.download = `${fileName}_${new Date().toISOString().slice(0,10)}.png`;
+    link.download = `${fileName}_${new Date().toISOString().slice(0, 10)}.png`;
     link.href = url;
     link.click();
 };
@@ -2881,10 +3232,12 @@ function obtenerFiltroEspecial() {
     return {
         esJefaturaGabinete: userEmail === 'jefaturadegabinete@tizayuca.gob.mx',
         esSecretariaParticular: 
-            userEmail === 'oficinadepresidencia@tizayuca.gob.mx' || 
-            userEmail === 'vinculacion.ciudadana@tizayuca.gob.mx', // ← Agregar este correo
+            userEmail === 'oficinadepresidencia@tizayuca.gob.mx' ||
+            userEmail === 'vinculacion.ciudadana@tizayuca.gob.mx',
         esOficialMayor: userEmail === 'oficialia.mayor@tizayuca.gob.mx',
         esPresidentaMunicipal: userEmail === 'pdta.gretchen@tizayuca.gob.mx',
+        esVinculacionCiudadana: userEmail === CORREO_VINCULACION_CIUDADANA,
+        esSecretariaGeneral: userEmail === CORREO_SECRETARIA_GENERAL,
         mostrarAcuerdosAtendidos: true
     };
 }
@@ -2893,14 +3246,14 @@ function obtenerFiltroEspecial() {
 document.getElementById('confirmarRechazar').addEventListener('click', async () => {
     const motivoInput = document.getElementById('motivoRechazo');
     const motivo = motivoInput.value.trim();
-    
+
     // Validación robusta
     if (!motivo || motivo.length > 500) {
         mostrarError(motivo ? "¡El motivo no puede exceder 500 caracteres!" : "¡Debe ingresar un motivo de rechazo!");
         motivoInput.classList.add('is-invalid');
         return;
     }
-    
+
     try {
         await cambiarEstado(folioActual, 'pendiente', motivo);
         motivoInput.value = '';
@@ -2916,9 +3269,9 @@ document.getElementById('confirmarRechazarModal').addEventListener('hidden.bs.mo
     document.getElementById('motivoRechazo').value = '';
 });
 
-window.mostrarMotivo = function(motivo, usuario, fecha) {
+window.mostrarMotivo = function (motivo, usuario, fecha) {
     const motivoContenido = document.getElementById('textoMotivo');
-    
+
     if (!motivoContenido) {
         console.error('Elemento textoMotivo no encontrado');
         return;
@@ -2937,38 +3290,38 @@ window.mostrarMotivo = function(motivo, usuario, fecha) {
     new bootstrap.Modal(document.getElementById('motivoModal')).show();
 };
 
-     window.mostrarJustificacion = function(folio, justificacion) {
-            document.getElementById('textoJustificacion').textContent = 
-                justificacion || 'No se ha proporcionado una justificación.';
-            
-            new bootstrap.Modal('#justificacionModal').show();
-        };
-        
-        // Función modificada para confirmar cambio de estado
-        window.confirmarCambioEstado = function (nuevoEstado) {
-            const justificacion = document.getElementById('justificacionProceso').value.trim();
+window.mostrarJustificacion = function (folio, justificacion) {
+    document.getElementById('textoJustificacion').textContent =
+        justificacion || 'No se ha proporcionado una justificación.';
 
-            // Validar la justificación
-            if (!justificacion || justificacion.length < 20) {
-                document.getElementById('justificacionProceso').classList.add('is-invalid');
-                return;
-            }
+    new bootstrap.Modal('#justificacionModal').show();
+};
 
-            // CORRECCIÓN: Pasar la justificación como cuarto parámetro
-            cambiarEstado(folioActual, nuevoEstado, '', justificacion);
+// Función modificada para confirmar cambio de estado
+window.confirmarCambioEstado = function (nuevoEstado) {
+    const justificacion = document.getElementById('justificacionProceso').value.trim();
 
-            // Cerrar modal
-            bootstrap.Modal.getInstance('#confirmarProcesoModal').hide();
-        };
+    // Validar la justificación
+    if (!justificacion || justificacion.length < 20) {
+        document.getElementById('justificacionProceso').classList.add('is-invalid');
+        return;
+    }
 
-        // Manejo del formulario institucional
+    // CORRECCIÓN: Pasar la justificación como cuarto parámetro
+    cambiarEstado(folioActual, nuevoEstado, '', justificacion);
+
+    // Cerrar modal
+    bootstrap.Modal.getInstance('#confirmarProcesoModal').hide();
+};
+
+// Manejo del formulario institucional
 document.getElementById('formNuevaInstitucional').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     try {
         // Validar campos requeridos
         const camposRequeridos = [
-            'asuntoInstitucional', 
+            'asuntoInstitucional',
             'institucionInstitucional',
             'contactoInstitucional',
             'telefonoInstitucional',
@@ -2978,7 +3331,7 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
             'secretariaInstitucional',
             'documentoInstitucional'
         ];
-        
+
         let validado = true;
         camposRequeridos.forEach(id => {
             const campo = document.getElementById(id);
@@ -3011,7 +3364,7 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
         // Obtener archivo
         const docInput = document.getElementById('documentoInstitucional');
         const docFile = docInput.files[0];
-        
+
         // Validar archivo
         if (!docFile) {
             mostrarError("Debes subir un documento inicial");
@@ -3033,7 +3386,7 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
 
         // Generar folio
         const folio = await generarFolio('institucional');
-        
+
         // Subir documento
         const storagePath = `${folio}/Documento Institucional/${docFile.name}`;
         const docRef = storageRef(storage, storagePath);
@@ -3065,17 +3418,17 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
 
         // Guardar en Firebase (en nueva colección)
         await set(ref(database, `solicitudes_institucionales/${folio}`), nuevaSolicitud);
-        
+
         // Limpiar formulario
         document.getElementById('formNuevaInstitucional').reset();
         // Restablecer fecha actual
         document.getElementById('fechaInstitucional').value = obtenerFechaHoy();
         // Limpiar archivo
         docInput.value = '';
-        document.getElementById('docInstitucionalInfo').textContent = 
+        document.getElementById('docInstitucionalInfo').textContent =
             'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
         document.getElementById('removeDocInstitucional').classList.add('d-none');
-        
+
         mostrarExito("Solicitud institucional creada exitosamente!");
 
     } catch (error) {
@@ -3092,11 +3445,11 @@ document.getElementById('removeDocInstitucional').addEventListener('click', () =
 });
 
 // Evento para mostrar información del archivo
-document.getElementById('documentoInstitucional').addEventListener('change', function(e) {
+document.getElementById('documentoInstitucional').addEventListener('change', function (e) {
     const fileInfo = document.getElementById('docInstitucionalInfo');
     const removeBtn = document.getElementById('removeDocInstitucional');
-    
-    if(this.files.length > 0) {
+
+    if (this.files.length > 0) {
         const file = this.files[0];
         fileInfo.innerHTML = `
             <span class="text-success">
@@ -3130,46 +3483,46 @@ function obtenerPeriodo(fecha) {
 function procesarDatosTrimestrales(solicitudes) {
     const datosTrimestrales = {};
     const años = new Set();
-    
+
     // Procesar todas las solicitudes atendidas
     solicitudes.filter(s => s.estado === 'atendida').forEach(solicitud => {
         if (!solicitud.fechaAtencion) return;
-        
+
         const periodo = obtenerPeriodo(solicitud.fechaAtencion);
         const año = periodo.split('-')[0];
         años.add(año);
-        
+
         if (!datosTrimestrales[periodo]) {
             datosTrimestrales[periodo] = {
                 total: 0,
                 porTipo: {}
             };
         }
-        
+
         datosTrimestrales[periodo].total++;
-        
+
         // Contabilizar por tipo de solicitud
-        const tipo = solicitud.tipoPath === 'solicitudes' ? 'Solicitud' : 
-                    solicitud.tipoPath === 'acuerdos' ? 'Acuerdo' : 
-                    solicitud.tipoPath === 'oficios' ? 'Oficio' : 
+        const tipo = solicitud.tipoPath === 'solicitudes' ? 'Solicitud' :
+            solicitud.tipoPath === 'acuerdos' ? 'Acuerdo' :
+                solicitud.tipoPath === 'oficios' ? 'Oficio' :
                     solicitud.tipoPath === 'solicitudes_institucionales' ? 'Institucional' : 'Otro';
-        
+
         if (!datosTrimestrales[periodo].porTipo[tipo]) {
             datosTrimestrales[periodo].porTipo[tipo] = 0;
         }
         datosTrimestrales[periodo].porTipo[tipo]++;
     });
-    
+
     return { datosTrimestrales, años: Array.from(años).sort() };
 }
 
 // Función para actualizar la gráfica trimestral
 function actualizarGraficaTrimestral(solicitudes) {
     const { datosTrimestrales, años } = procesarDatosTrimestrales(solicitudes);
-    
+
     // Obtener todos los periodos (trimestres) ordenados
     const periodos = Object.keys(datosTrimestrales).sort();
-    
+
     // Obtener todos los tipos de solicitudes únicos
     const tiposUnicos = new Set();
     periodos.forEach(periodo => {
@@ -3178,7 +3531,7 @@ function actualizarGraficaTrimestral(solicitudes) {
         });
     });
     const tipos = Array.from(tiposUnicos);
-    
+
     // Preparar datos para la gráfica
     const datasets = tipos.map(tipo => {
         return {
@@ -3189,7 +3542,7 @@ function actualizarGraficaTrimestral(solicitudes) {
             borderWidth: 1
         };
     });
-    
+
     // Agregar también el total general
     datasets.push({
         label: 'Total',
@@ -3201,14 +3554,14 @@ function actualizarGraficaTrimestral(solicitudes) {
         pointRadius: 5,
         pointHoverRadius: 7
     });
-    
+
     // Crear o actualizar la gráfica
     const ctx = document.getElementById('quarterlyChart').getContext('2d');
-    
+
     if (charts.quarterlyChart) {
         charts.quarterlyChart.destroy();
     }
-    
+
     charts.quarterlyChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -3245,7 +3598,7 @@ function actualizarGraficaTrimestral(solicitudes) {
                 },
                 tooltip: {
                     callbacks: {
-                        afterBody: function(context) {
+                        afterBody: function (context) {
                             const periodo = periodos[context[0].dataIndex];
                             const total = datosTrimestrales[periodo].total;
                             return `Total: ${total}`;
@@ -3266,7 +3619,7 @@ function obtenerColorParaTipo(tipo) {
         'Institucional': '#FFA500',
         'Otro': '#a90000'
     };
-    
+
     return colores[tipo] || '#666666';
 }
 
@@ -3287,9 +3640,9 @@ function actualizarGraficaCanales(solicitudes) {
         const canal = s.tipo || s.canal || 'Sin especificar';
         canalesSet.add(canal);
     });
-    
+
     const canales = Array.from(canalesSet);
-    
+
     // Preparar datos para la gráfica
     const datasets = estados.map(estado => {
         const data = canales.map(canal => {
@@ -3298,7 +3651,7 @@ function actualizarGraficaCanales(solicitudes) {
                 return sCanal === canal && s.estado === estado.id;
             }).length;
         });
-        
+
         return {
             label: estado.label,
             data: data,
@@ -3306,7 +3659,7 @@ function actualizarGraficaCanales(solicitudes) {
             borderWidth: 0
         };
     });
-    
+
     // Calcular totales por canal
     const totalesPorCanal = canales.map(canal => {
         return solicitudes.filter(s => {
@@ -3314,25 +3667,25 @@ function actualizarGraficaCanales(solicitudes) {
             return sCanal === canal;
         }).length;
     });
-    
+
     // Calcular déficit por canal (no atendidas)
     const deficitPorCanal = canales.map(canal => {
         const atendidas = solicitudes.filter(s => {
             const sCanal = s.tipo || s.canal || 'Sin especificar';
             return sCanal === canal && s.estado === 'atendida';
         }).length;
-        
+
         const total = solicitudes.filter(s => {
             const sCanal = s.tipo || s.canal || 'Sin especificar';
             return sCanal === canal;
         }).length;
-        
+
         return total - atendidas;
     });
 
     // Destruir gráfica anterior si existe
     if (charts.channelChart) charts.channelChart.destroy();
-    
+
     const ctx = document.getElementById('channelChart').getContext('2d');
     charts.channelChart = new Chart(ctx, {
         type: 'bar',
@@ -3380,19 +3733,19 @@ function actualizarGraficaCanales(solicitudes) {
                 },
                 tooltip: {
                     callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                             const datasetLabel = context.dataset.label || '';
                             const value = context.raw;
                             const total = totalesPorCanal[context.dataIndex];
                             const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
                             return `${datasetLabel}: ${value} (${percentage}%)`;
                         },
-                        afterBody: function(context) {
+                        afterBody: function (context) {
                             const index = context[0].dataIndex;
                             const canal = canales[index];
                             const total = totalesPorCanal[index];
                             const deficit = deficitPorCanal[index];
-                            
+
                             return [
                                 `Total ${canal}: ${total}`,
                                 `Déficit (no atendidas): ${deficit}`
@@ -3403,10 +3756,500 @@ function actualizarGraficaCanales(solicitudes) {
             }
         }
     });
-    
+
     // Actualizar el título de la gráfica
     const chartHeader = document.querySelector('#channelChart').closest('.chart-card').querySelector('.chart-header h5');
     if (chartHeader) {
         chartHeader.textContent = 'Solicitudes por Canal y Estado';
     }
 }
+
+// También modifica cargarSolicitudesVobo para que no aplique filtros automáticamente
+function cargarSolicitudesVobo() {
+    const { esSecretariaGeneral } = obtenerFiltroEspecial();
+
+    if (!esSecretariaGeneral) {
+        return;
+    }
+
+    solicitudesVobo = [];
+
+    const q = query(
+        ref(database, 'solicitudes'),
+        orderByChild('estado'),
+        equalTo('pendiente_vobo')
+    );
+
+    onValue(q, (snapshot) => {
+        solicitudesVobo = [];
+        snapshot.forEach(childSnapshot => {
+            const solicitud = childSnapshot.val();
+            if (solicitud.estado === 'pendiente_vobo') {
+                solicitud.key = childSnapshot.key;
+                solicitud.tipoPath = 'solicitudes';
+                solicitudesVobo.push(solicitud);
+            }
+        });
+
+        // Ordenar por fecha de solicitud (más recientes primero)
+        solicitudesVobo.sort((a, b) => new Date(b.fechaSolicitudVobo || b.fechaCreacion) - new Date(a.fechaSolicitudVobo || a.fechaCreacion));
+
+        // Solo aplicar filtros si la sección de VoBo está activa
+        const voboSection = document.getElementById('vobo-content');
+        if (voboSection && voboSection.style.display !== 'none') {
+            aplicarFiltrosVobo();
+        }
+
+        actualizarEstadisticasVobo(solicitudesVobo);
+    });
+}
+
+function mostrarPaginaVobo(data) {
+    const tabla = document.getElementById('lista-vobo');
+
+    // Verificar que la tabla exista
+    if (!tabla) {
+        console.warn('Tabla de VoBo no encontrada');
+        return;
+    }
+
+    const start = (currentPageVobo - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+
+    tabla.innerHTML = '';
+
+    if (data.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td colspan="9" class="text-center py-4">
+                <i class="fas fa-info-circle me-2"></i>
+                No hay solicitudes pendientes de VoBo
+            </td>
+        `;
+        tabla.appendChild(tr);
+        actualizarPaginacionVobo(0);
+        return;
+    }
+
+    const items = data.slice(start, end);
+
+    items.forEach(solicitud => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>
+                ${solicitud.folio}
+            </td>
+            <td>
+                ${new Date(solicitud.fechaSolicitudVobo || solicitud.fechaCreacion).toLocaleDateString()}
+            </td>
+            <td>
+                <strong>${solicitud.asunto}</strong>
+            </td>
+            <td>
+                <strong>${solicitud.solicitante?.nombre || 'N/A'}</strong>
+            </td>
+            <td>
+                ${solicitud.solicitante?.telefono || 'N/A'}
+            </td>
+            <td>
+                ${solicitud.solicitante?.colonia || 'N/A'}
+            </td>
+            <td>
+                <span class="secretaria-badge">${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</span>
+            </td>
+            <td>
+                ${solicitud.documentoInicial ? `
+                <button class="btn btn-sm btn-documento-inicial" 
+                        onclick="mostrarDocumentoInicial('${solicitud.folio}', '${solicitud.nombreDocumento}', '${solicitud.documentoInicial}')">
+                    <i class="fas fa-file-pdf me-1"></i> Ver
+                </button>
+                ` : '<span class="text-muted small">Sin documento</span>'}
+            </td>
+            <td>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-success" 
+                            onclick="aprobarVobo('${solicitud.folio}')"
+                            data-bs-toggle="tooltip"
+                            title="Aprobar VoBo y turnar a secretaría">
+                        <i class="fas fa-check"></i> Aprobar
+                    </button>
+                    <button class="btn btn-sm btn-danger" 
+                            onclick="rechazarVobo('${solicitud.folio}')"
+                            data-bs-toggle="tooltip"
+                            title="Rechazar VoBo y devolver">
+                        <i class="fas fa-times"></i> Rechazar
+                    </button>
+                </div>
+            </td>
+        `;
+        tabla.appendChild(tr);
+    });
+
+    actualizarPaginacionVobo(data.length);
+}
+
+function actualizarEstadisticasVobo(solicitudes) {
+    const hoy = new Date().toDateString();
+    const aprobadasHoy = solicitudes.filter(s =>
+        s.fechaVoboAprobado && new Date(s.fechaVoboAprobado).toDateString() === hoy
+    ).length;
+
+    const rechazadasHoy = solicitudes.filter(s =>
+        s.fechaVoboRechazado && new Date(s.fechaVoboRechazado).toDateString() === hoy
+    ).length;
+
+    document.getElementById('stats-pendientes-vobo').textContent = solicitudes.length;
+    document.getElementById('stats-aprobadas-hoy').textContent = aprobadasHoy;
+    document.getElementById('stats-rechazadas-hoy').textContent = rechazadasHoy;
+}
+
+function aplicarFiltrosVobo() {
+    // Verificar que los elementos del DOM existan antes de acceder a ellos
+    const busquedaInput = document.getElementById('busqueda-vobo');
+    const secretariaSelect = document.getElementById('filtro-secretaria-vobo');
+    const fechaSelect = document.getElementById('filtro-fecha-vobo');
+
+    // Si los elementos no existen, salir de la función
+    if (!busquedaInput || !secretariaSelect) {
+        console.warn('Elementos de filtro VoBo no encontrados');
+        return;
+    }
+
+    const busqueda = busquedaInput.value.toLowerCase();
+    const secretaria = secretariaSelect.value;
+    const fecha = fechaSelect ? fechaSelect.value : ''; // fechaSelect puede ser null
+
+    const hoy = new Date();
+    const filtradas = solicitudesVobo.filter(s => {
+        const texto = `${s.folio} ${s.asunto} ${s.solicitante?.nombre || ''} ${s.solicitante?.colonia || ''}`.toLowerCase();
+        const coincideSecretaria = !secretaria || s.dependencia === secretaria;
+
+        // Filtro por fecha (solo si el elemento existe)
+        let coincideFecha = true;
+        if (fecha && fechaSelect) {
+            const fechaSolicitud = new Date(s.fechaSolicitudVobo || s.fechaCreacion);
+            switch (fecha) {
+                case 'hoy':
+                    coincideFecha = fechaSolicitud.toDateString() === hoy.toDateString();
+                    break;
+                case 'ayer':
+                    const ayer = new Date(hoy);
+                    ayer.setDate(ayer.getDate() - 1);
+                    coincideFecha = fechaSolicitud.toDateString() === ayer.toDateString();
+                    break;
+                case 'semana':
+                    const semanaPasada = new Date(hoy);
+                    semanaPasada.setDate(semanaPasada.getDate() - 7);
+                    coincideFecha = fechaSolicitud >= semanaPasada;
+                    break;
+                case 'mes':
+                    const mesPasado = new Date(hoy);
+                    mesPasado.setMonth(mesPasado.getMonth() - 1);
+                    coincideFecha = fechaSolicitud >= mesPasado;
+                    break;
+            }
+        }
+
+        return texto.includes(busqueda) && coincideSecretaria && coincideFecha;
+    });
+
+    mostrarPaginaVobo(filtradas);
+}
+
+function actualizarPaginacionVobo(totalItems) {
+    const container = document.querySelector('.paginacion-vobo');
+
+    // Verificar que el contenedor exista
+    if (!container) {
+        return;
+    }
+
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    container.innerHTML = '';
+
+    const startItem = (currentPageVobo - 1) * itemsPerPage + 1;
+    const endItem = Math.min(currentPageVobo * itemsPerPage, totalItems);
+
+    container.innerHTML = `
+        <div class="paginacion-contenedor">
+            <button class="btn-pag anterior" ${currentPageVobo === 1 ? 'disabled' : ''}>
+                <i class="fas fa-chevron-left me-1"></i> Anterior
+            </button>
+            <span class="info-pagina">Página ${currentPageVobo} de ${totalPages}</span>
+            <button class="btn-pag siguiente" ${currentPageVobo === totalPages ? 'disabled' : ''}>
+                Siguiente <i class="fas fa-chevron-right ms-1"></i>
+            </button>
+        </div>
+    `;
+
+    container.querySelector('.anterior')?.addEventListener('click', () => {
+        currentPageVobo = Math.max(1, currentPageVobo - 1);
+        aplicarFiltrosVobo();
+    });
+
+    container.querySelector('.siguiente')?.addEventListener('click', () => {
+        currentPageVobo = Math.min(totalPages, currentPageVobo + 1);
+        aplicarFiltrosVobo();
+    });
+}
+
+window.aprobarVobo = async function (folio) {
+    try {
+        // Verificar que el usuario actual es Secretaría General
+        const { esSecretariaGeneral } = obtenerFiltroEspecial();
+        if (!esSecretariaGeneral) {
+            mostrarError('No tienes permisos para aprobar VoBo');
+            return;
+        }
+
+        // Buscar la solicitud en los datos locales
+        const solicitudExistente = solicitudesVobo.find(s => s.key === folio);
+
+        if (!solicitudExistente) {
+            throw new Error('Solicitud no encontrada');
+        }
+
+        const docRef = ref(database, `solicitudes/${folio}`);
+        const usuarioActual = getCookie('nombre') || 'Secretaría General';
+        const fechaActual = new Date().toISOString();
+
+        // Actualizar el estado a 'pendiente' y marcar VoBo como aprobado
+        await update(docRef, {
+            estado: 'pendiente',
+            voboAprobado: true,
+            voboSecretariaGeneral: usuarioActual,
+            fechaVoboAprobado: fechaActual,
+            ultimaActualizacion: fechaActual,
+            comentariosVobo: `VoBo aprobado por ${usuarioActual} el ${new Date().toLocaleDateString()}`
+        });
+
+        // Actualizar datos locales
+        const indexVobo = solicitudesVobo.findIndex(s => s.key === folio);
+        if (indexVobo !== -1) {
+            solicitudesVobo.splice(indexVobo, 1);
+        }
+
+        // Actualizar también en seguimiento si existe
+        const indexSeguimiento = solicitudesSeguimiento.findIndex(s => s.key === folio);
+        if (indexSeguimiento !== -1) {
+            solicitudesSeguimiento[indexSeguimiento].estado = 'pendiente';
+            solicitudesSeguimiento[indexSeguimiento].voboAprobado = true;
+            solicitudesSeguimiento[indexSeguimiento].voboSecretariaGeneral = usuarioActual;
+            solicitudesSeguimiento[indexSeguimiento].fechaVoboAprobado = fechaActual;
+        }
+
+        // Actualizar UI
+        aplicarFiltrosVobo();
+        if (typeof actualizarTablaSeguimiento === 'function') {
+            actualizarTablaSeguimiento();
+        }
+
+        mostrarExito(`VoBo aprobado para ${folio}. La solicitud ha sido turnada a la secretaría correspondiente.`);
+
+    } catch (error) {
+        console.error("Error al aprobar VoBo:", error);
+        mostrarError(`Error al aprobar VoBo: ${error.message}`);
+    }
+};
+
+window.rechazarVobo = async function (folio) {
+    // Verificar que el usuario actual es Secretaría General
+    const { esSecretariaGeneral } = obtenerFiltroEspecial();
+    if (!esSecretariaGeneral) {
+        mostrarError('No tienes permisos para rechazar VoBo');
+        return;
+    }
+
+    const motivo = prompt('Ingrese el motivo del rechazo del VoBo:');
+
+    if (!motivo || motivo.trim() === '') {
+        mostrarError('Debe proporcionar un motivo para rechazar el VoBo.');
+        return;
+    }
+
+    if (motivo.length < 10) {
+        mostrarError('El motivo debe tener al menos 10 caracteres.');
+        return;
+    }
+
+    try {
+        const solicitudExistente = solicitudesVobo.find(s => s.key === folio);
+
+        if (!solicitudExistente) {
+            throw new Error('Solicitud no encontrada');
+        }
+
+        const docRef = ref(database, `solicitudes/${folio}`);
+        const usuarioActual = getCookie('nombre') || 'Secretaría General';
+        const fechaActual = new Date().toISOString();
+
+        // Marcar como rechazado y devolver a estado especial
+        await update(docRef, {
+            estado: 'rechazado_vobo',
+            voboAprobado: false,
+            voboRechazado: true,
+            voboSecretariaGeneral: usuarioActual,
+            fechaVoboRechazado: fechaActual,
+            motivoRechazoVobo: motivo,
+            ultimaActualizacion: fechaActual,
+            comentariosVobo: `VoBo rechazado por ${usuarioActual} el ${new Date().toLocaleDateString()}. Motivo: ${motivo}`
+        });
+
+        // Remover de la lista de VoBo
+        const indexVobo = solicitudesVobo.findIndex(s => s.key === folio);
+        if (indexVobo !== -1) {
+            solicitudesVobo.splice(indexVobo, 1);
+        }
+
+        // Actualizar en seguimiento si existe
+        const indexSeguimiento = solicitudesSeguimiento.findIndex(s => s.key === folio);
+        if (indexSeguimiento !== -1) {
+            solicitudesSeguimiento[indexSeguimiento].estado = 'rechazado_vobo';
+            solicitudesSeguimiento[indexSeguimiento].voboAprobado = false;
+            solicitudesSeguimiento[indexSeguimiento].voboRechazado = true;
+            solicitudesSeguimiento[indexSeguimiento].motivoRechazoVobo = motivo;
+        }
+
+        // Actualizar UI
+        aplicarFiltrosVobo();
+        if (typeof actualizarTablaSeguimiento === 'function') {
+            actualizarTablaSeguimiento();
+        }
+
+        mostrarExito(`VoBo rechazado para ${folio}. La solicitud ha sido devuelta a Vinculación Ciudadana.`);
+
+    } catch (error) {
+        console.error("Error al rechazar VoBo:", error);
+        mostrarError(`Error al rechazar VoBo: ${error.message}`);
+    }
+};
+
+window.mostrarReenvioVobo = function (folio, motivoRechazo) {
+    folioReenvioVobo = folio;
+    
+    // Mostrar el motivo de rechazo anterior
+    document.getElementById('motivoRechazoAnterior').textContent = 
+        motivoRechazo || 'No se especificó motivo de rechazo.';
+    
+    // Limpiar el formulario
+    document.getElementById('nuevoDocumentoVobo').value = '';
+    document.getElementById('nuevoDocVoboInfo').textContent = 
+        'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
+    document.getElementById('removeNuevoDocVobo').classList.add('d-none');
+    document.getElementById('comentariosReenvio').value = '';
+    
+    new bootstrap.Modal(document.getElementById('reenviarVoboModal')).show();
+};
+
+// Event listener para el botón de confirmación
+document.getElementById('confirmarReenvioVobo')?.addEventListener('click', async () => {
+    await reenviarSolicitudVobo();
+});
+
+async function reenviarSolicitudVobo() {
+    const fileInput = document.getElementById('nuevoDocumentoVobo');
+    const nuevoArchivo = fileInput.files[0];
+    const comentarios = document.getElementById('comentariosReenvio').value;
+
+    try {
+        let nuevoDocumentoUrl = null;
+        let nuevoNombreDocumento = null;
+
+        // Si se subió un nuevo archivo, procesarlo
+        if (nuevoArchivo) {
+            const extension = nuevoArchivo.name.split('.').pop().toLowerCase();
+            
+            if (!ALLOWED_INITIAL_EXTENSIONS.includes(extension)) {
+                mostrarError(`Formato no permitido: .${extension}`);
+                return;
+            }
+
+            if (nuevoArchivo.size > MAX_INITIAL_FILE_SIZE_BYTES) {
+                mostrarError(`El archivo excede el tamaño máximo de ${MAX_INITIAL_FILE_SIZE_MB}MB`);
+                return;
+            }
+
+            // Subir nuevo documento
+            const storagePath = `${folioReenvioVobo}/Documento Inicial/${nuevoArchivo.name}`;
+            const docRef = storageRef(storage, storagePath);
+            await uploadBytes(docRef, nuevoArchivo);
+            nuevoDocumentoUrl = await getDownloadURL(docRef);
+            nuevoNombreDocumento = nuevoArchivo.name;
+        }
+
+        // Preparar actualización
+        const actualizacion = {
+            estado: 'pendiente_vobo',
+            voboRechazado: false,
+            motivoRechazoVobo: null,
+            fechaVoboRechazado: null,
+            fechaSolicitudVobo: new Date().toISOString(),
+            ultimaActualizacion: new Date().toISOString(),
+            comentariosReenvio: comentarios || null,
+            _reenviadoPor: getCookie('nombre') || 'Vinculación Ciudadana',
+            fechaReenvioVobo: new Date().toISOString()
+        };
+
+        // Si hay nuevo documento, actualizar la referencia
+        if (nuevoDocumentoUrl) {
+            actualizacion.documentoInicial = nuevoDocumentoUrl;
+            actualizacion.nombreDocumento = nuevoNombreDocumento;
+        }
+
+        // Actualizar en Firebase
+        await update(ref(database, `solicitudes/${folioReenvioVobo}`), actualizacion);
+
+        // Actualizar datos locales
+        const index = solicitudesSeguimiento.findIndex(s => s.key === folioReenvioVobo);
+        if (index !== -1) {
+            solicitudesSeguimiento[index] = {
+                ...solicitudesSeguimiento[index],
+                ...actualizacion
+            };
+        }
+
+        // Cerrar modal y mostrar éxito
+        bootstrap.Modal.getInstance(document.getElementById('reenviarVoboModal')).hide();
+        mostrarExito('Solicitud reenviada a VoBo exitosamente.');
+        
+        // Actualizar UI
+        actualizarTablaSeguimiento();
+
+    } catch (error) {
+        console.error('Error al reenviar a VoBo:', error);
+        mostrarError(`Error al reenviar a VoBo: ${error.message}`);
+    }
+}
+
+// Event listeners para el manejo del archivo en el modal de reenvío
+document.getElementById('nuevoDocumentoVobo')?.addEventListener('change', function(e) {
+    const fileInfo = document.getElementById('nuevoDocVoboInfo');
+    const removeBtn = document.getElementById('removeNuevoDocVobo');
+
+    if (this.files.length > 0) {
+        const file = this.files[0];
+        fileInfo.innerHTML = `
+            <span class="text-success">
+                <i class="fas fa-file me-2"></i>${file.name}
+            </span>
+            <br><small>${(file.size / 1024 / 1024).toFixed(2)} MB</small>`;
+        removeBtn.classList.remove('d-none');
+    } else {
+        fileInfo.textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
+        removeBtn.classList.add('d-none');
+    }
+});
+
+document.getElementById('removeNuevoDocVobo')?.addEventListener('click', () => {
+    const fileInput = document.getElementById('nuevoDocumentoVobo');
+    fileInput.value = '';
+    fileInput.dispatchEvent(new Event('change'));
+});
+
+// Limpiar el modal cuando se cierre
+document.getElementById('reenviarVoboModal')?.addEventListener('hidden.bs.modal', () => {
+    document.getElementById('nuevoDocumentoVobo').value = '';
+    document.getElementById('nuevoDocVoboInfo').textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
+    document.getElementById('removeNuevoDocVobo').classList.add('d-none');
+    document.getElementById('comentariosReenvio').value = '';
+});

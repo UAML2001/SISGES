@@ -964,3 +964,11 @@ body {
     border-color: #117a8b;
 }
 
+.secretaria-badge {
+    background: var(--primary);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
