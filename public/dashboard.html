@@ -1026,38 +1026,21 @@
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            <!-- Checkbox para atención sin documento -->
-                            <div class="form-check mb-3">
-                                <input class="form-check-input" type="checkbox" id="atencionSinDocumento">
-                                <label class="form-check-label" for="atencionSinDocumento">
-                                    <i class="fas fa-file-exclamation me-2"></i>Justificar atención sin documento
-                                </label>
-                            </div>
-
-                            <!-- Sección de justificación (inicialmente oculta) -->
-                            <div class="justificacion-section mb-4 d-none" id="seccionJustificacion">
-                                <label for="justificacionAtencion" class="form-label">Justificación de atención sin documento <span
-                                        class="text-danger">*</span></label>
-                                <textarea class="form-control" id="justificacionAtencion" rows="3"
-                                    placeholder="Explique detalladamente por qué no se adjunta documento de evidencia..."
-                                    maxlength="500"></textarea>
-                                <small class="form-text text-muted">Mínimo 20 caracteres, máximo 500</small>
-                            </div>
-
                             <!-- Sección de carga de archivos -->
-                            <div class="upload-section mb-4" id="seccionArchivo">
+                            <div class="upload-section mb-4">
                                 <div class="file-drop-area rounded-3 border-2 border-dashed p-4 text-center">
                                     <div class="mb-3 text-muted">
                                         <i class="fas fa-cloud-upload-alt fa-3x"></i>
                                     </div>
                                     <input type="file" class="form-control visually-hidden" id="evidenciaFile"
-                                        accept=".pdf,.jpg,.jpeg,.png,.zip,.rar">
+                                        accept=".pdf,.jpg,.jpeg,.png,.zip,.rar" required>
                                     <label for="evidenciaFile" class="btn btn-outline-success mb-2">
                                         <i class="fas fa-file-upload me-2"></i>Seleccionar archivo
                                     </label>
                                     <div class="file-info small text-muted" id="fileInfo">
                                         Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)
                                     </div>
+                                    <!-- Agrega este botón -->
                                     <button class="btn btn-sm btn-danger mt-2 d-none" id="removeFile">
                                         <i class="fas fa-times me-1"></i>Remover archivo
                                     </button>
@@ -1069,11 +1052,11 @@
                                 <div class="d-flex align-items-center">
                                     <i class="fas fa-exclamation-circle text-warning me-3 fs-4"></i>
                                     <div>
-                                        <p class="mb-0 fw-semibold" id="mensajeConfirmacion">¿Confirmar que la solicitud ha sido
-                                            completamente
+                                        <p class="mb-0 fw-semibold">¿Confirmar que la solicitud ha sido completamente
                                             atendida para verificación?</p>
                                         <small class="text-muted">Esta acción ni el documento adjunto se pueden deshacer
-                                            y se mandara a verificación</small>
+                                            y
+                                            se mandara a verificación</small>
                                     </div>
                                 </div>
                             </div>
@@ -1083,7 +1066,8 @@
                             <button type="button" class="btn btn-lg btn-outline-secondary" data-bs-dismiss="modal">
                                 <i class="fas fa-times me-2"></i>Cancelar
                             </button>
-                            <button type="button" class="btn btn-lg btn-success" onclick="validarYEnviarVerificacion()">
+                            <button type="button" class="btn btn-lg btn-success"
+                                onclick="subirEvidenciaYCambiarEstado()">
                                 <i class="fas fa-check me-2"></i>Mandar a Verificación
                             </button>
                         </div>
