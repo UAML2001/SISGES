@@ -937,12 +937,6 @@ window.subirEvidenciaYCambiarEstado = async function () {
         return;
     }
 
-    // Validar tamaño del archivo
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-        mostrarError(`El archivo excede el tamaño máximo de ${MAX_FILE_SIZE_MB}MB`);
-        return;
-    }
-
     try {
         const metadata = {
             contentType: file.type,
@@ -957,13 +951,19 @@ window.subirEvidenciaYCambiarEstado = async function () {
         await update(ref(database, `${tipo}/${folioActual}`), {
             estado: 'verificacion',
             evidencias: urlDescarga,
-            fechaVerificacion: new Date().toISOString()
+            fechaVerificacion: new Date().toISOString(),
+            atencionSinDocumento: false, // Asegurar que no es sin documento
+            justificacionAtencion: null // Limpiar justificación si existe
         });
 
         // Actualizar UI
         fileInput.value = '';
-        bootstrap.Modal.getInstance('#confirmarAtendidaModal').hide();
-        mostrarExito("Evidencia subida correctamente");
+        bootstrap.Modal.getInstance(document.getElementById('confirmarAtendidaModal')).hide();
+        mostrarExito("Evidencia subida correctamente y enviada a verificación");
+
+        // Actualizar listas
+        cargarSeguimiento();
+        cargarVerificacion();
 
     } catch (error) {
         console.error("Error completo:", error);
@@ -1123,11 +1123,13 @@ function mostrarPaginaVerificacion(data) {
     const items = data.slice(start, end);
 
     items.forEach(solicitud => {
-        // Determinar tipoDocumento basado en la colección
         let tipoDocumento = 'Solicitud';
         if (solicitud.tipoPath === 'acuerdos') tipoDocumento = 'Acuerdo';
         if (solicitud.tipoPath === 'oficios') tipoDocumento = 'Oficio';
         if (solicitud.tipoPath === 'solicitudes_institucionales') tipoDocumento = 'Institucional';
+
+        // Verificar si tiene justificación sin documento
+        const tieneJustificacion = solicitud.atencionSinDocumento && solicitud.justificacionAtencion;
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -1161,6 +1163,13 @@ function mostrarPaginaVerificacion(data) {
                             '${tipoDocumento}'
                         )">
                         <i class="fas fa-search me-2"></i> Documento Evidencia
+                    </button>
+                    ` : ''}
+                    
+                    ${tieneJustificacion ? `
+                    <button class="btn btn-sm btn-warning" 
+                        onclick="mostrarJustificacionAtencion('${solicitud.justificacionAtencion}', '${solicitud._atencionJustificadaPor || "Sistema"}', '${solicitud._fechaJustificacion || solicitud.fechaVerificacion}')">
+                        <i class="fas fa-file-alt me-1"></i> Justificación
                     </button>
                     ` : ''}
                 </div>
@@ -2078,10 +2087,17 @@ document.getElementById('filtro-canal-validadas').addEventListener('change', () 
     aplicarFiltrosValidadas();
 });
 
-document.getElementById('confirmarAtendidaModal').addEventListener('hidden.bs.modal', () => {
-    const fileInput = document.getElementById('evidenciaFile');
+// Limpiar campos cuando se cierre el modal
+document.getElementById('confirmarAtendidaModal').addEventListener('hidden.bs.modal', function () {
+    checkbox.checked = false;
+    seccionJustificacion.classList.add('d-none');
+    seccionArchivo.classList.remove('d-none');
+    justificacionInput.value = '';
+    justificacionInput.required = false;
+    fileInput.required = true;
     fileInput.value = '';
     fileInput.dispatchEvent(new Event('change'));
+    mensajeConfirmacion.innerHTML = '¿Confirmar que la solicitud ha sido completamente atendida para verificación?';
 });
 
 // Agregar en el DOMContentLoaded, después de los otros event listeners
@@ -2115,6 +2131,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     cargarSeguimiento();
     cargarValidadas();
     cargarVerificacion();
+    configurarAtencionSinDocumento();
 
     // Obtener email del usuario PRIMERO
     const userEmail = getCookie('email'); // ← Definir userEmail aquí
@@ -2354,6 +2371,16 @@ window.mostrarConfirmacionProceso = function (folio) {
 
 window.mostrarConfirmacionAtendida = function (folio) {
     folioActual = folio;
+    
+    // Resetear el estado del modal
+    document.getElementById('atencionSinDocumento').checked = false;
+    document.getElementById('seccionJustificacion').classList.add('d-none');
+    document.getElementById('seccionArchivo').classList.remove('d-none');
+    document.getElementById('justificacionAtencion').value = '';
+    document.getElementById('evidenciaFile').value = '';
+    document.getElementById('fileInfo').textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
+    document.getElementById('removeFile').classList.add('d-none');
+    
     new bootstrap.Modal('#confirmarAtendidaModal').show();
 };
 
@@ -4253,3 +4280,155 @@ document.getElementById('reenviarVoboModal')?.addEventListener('hidden.bs.modal'
     document.getElementById('removeNuevoDocVobo').classList.add('d-none');
     document.getElementById('comentariosReenvio').value = '';
 });
+
+// Nueva función para manejar el checkbox de atención sin documento
+function configurarAtencionSinDocumento() {
+    const checkbox = document.getElementById('atencionSinDocumento');
+    const seccionJustificacion = document.getElementById('seccionJustificacion');
+    const seccionArchivo = document.getElementById('seccionArchivo');
+    const mensajeConfirmacion = document.getElementById('mensajeConfirmacion');
+    const justificacionInput = document.getElementById('justificacionAtencion');
+    const fileInput = document.getElementById('evidenciaFile');
+
+    checkbox.addEventListener('change', function() {
+        if (this.checked) {
+            seccionJustificacion.classList.remove('d-none');
+            seccionArchivo.classList.add('d-none');
+            justificacionInput.required = true;
+            fileInput.required = false;
+            mensajeConfirmacion.innerHTML = '¿Confirmar que la solicitud ha sido atendida <strong>sin documento de evidencia</strong> para verificación?';
+        } else {
+            seccionJustificacion.classList.add('d-none');
+            seccionArchivo.classList.remove('d-none');
+            justificacionInput.required = false;
+            fileInput.required = true;
+            mensajeConfirmacion.innerHTML = '¿Confirmar que la solicitud ha sido completamente atendida para verificación?';
+        }
+    });
+}
+
+// Función de validación antes de enviar a verificación
+window.validarYEnviarVerificacion = function() {
+    const sinDocumento = document.getElementById('atencionSinDocumento').checked;
+    const justificacion = document.getElementById('justificacionAtencion').value.trim();
+    const fileInput = document.getElementById('evidenciaFile');
+    const file = fileInput.files[0];
+
+    if (sinDocumento) {
+        // Validar justificación
+        if (!justificacion || justificacion.length < 20) {
+            mostrarError('La justificación debe tener al menos 20 caracteres');
+            document.getElementById('justificacionAtencion').classList.add('is-invalid');
+            return;
+        }
+        if (justificacion.length > 500) {
+            mostrarError('La justificación no puede exceder 500 caracteres');
+            document.getElementById('justificacionAtencion').classList.add('is-invalid');
+            return;
+        }
+        
+        // Enviar sin documento
+        enviarVerificacionSinDocumento(justificacion);
+    } else {
+        // Validar archivo
+        if (!file) {
+            mostrarError('Debes seleccionar un archivo de evidencia');
+            return;
+        }
+        
+        const extension = file.name.split('.').pop().toLowerCase();
+        if (!ALLOWED_EXTENSIONS.includes(extension)) {
+            mostrarError(`Formato no permitido: .${extension}`);
+            return;
+        }
+
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+            mostrarError(`El archivo excede el tamaño máximo de ${MAX_FILE_SIZE_MB}MB`);
+            return;
+        }
+
+        // Enviar con documento
+        subirEvidenciaYCambiarEstado();
+    }
+}
+
+// Función para enviar a verificación sin documento
+async function enviarVerificacionSinDocumento(justificacion) {
+    try {
+        let tipo = 'solicitudes';
+        if (folioActual.startsWith('AG-')) tipo = 'acuerdos';
+        else if (folioActual.startsWith('OF-')) tipo = 'oficios';
+        else if (folioActual.startsWith('SI-')) tipo = 'solicitudes_institucionales';
+
+        // Actualizar en Firebase
+        await update(ref(database, `${tipo}/${folioActual}`), {
+            estado: 'verificacion',
+            fechaVerificacion: new Date().toISOString(),
+            atencionSinDocumento: true,
+            justificacionAtencion: justificacion,
+            evidencias: null, // Asegurar que no hay evidencias
+            _atencionJustificadaPor: getCookie('nombre') || 'Sistema',
+            _fechaJustificacion: new Date().toISOString()
+        });
+
+        // Cerrar modal y mostrar éxito
+        bootstrap.Modal.getInstance(document.getElementById('confirmarAtendidaModal')).hide();
+        mostrarExito("Solicitud enviada a verificación con justificación de atención sin documento");
+
+        // Actualizar UI
+        cargarSeguimiento();
+        cargarVerificacion();
+
+    } catch (error) {
+        console.error("Error al enviar a verificación sin documento:", error);
+        mostrarError(`Error técnico: ${error.message}`);
+    }
+}
+
+window.mostrarJustificacionAtencion = function(justificacion, usuario, fecha) {
+    const modalHTML = `
+        <div class="modal fade" id="justificacionAtencionModal">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-warning text-dark">
+                        <h5 class="modal-title">
+                            <i class="fas fa-file-exclamation me-2"></i>Justificación de Atención Sin Documento
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Justificación:</label>
+                            <div class="bg-light p-3 rounded" style="min-height: 100px; max-height: 300px; overflow-y: auto;">
+                                ${justificacion || 'No se proporcionó justificación.'}
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted"><strong>Justificado por:</strong> ${usuario}</small>
+                            </div>
+                            <div class="col-6 text-end">
+                                <small class="text-muted"><strong>Fecha:</strong> ${new Date(fecha).toLocaleDateString()}</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal existente si hay
+    const modalExistente = document.getElementById('justificacionAtencionModal');
+    if (modalExistente) {
+        modalExistente.remove();
+    }
+    
+    // Agregar nuevo modal al body
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Mostrar modal
+    new bootstrap.Modal(document.getElementById('justificacionAtencionModal')).show();
+};
