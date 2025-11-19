@@ -83,6 +83,7 @@ const contentSections = document.querySelectorAll('.content-section');
 // Agregar después de las otras constantes
 const CORREO_VINCULACION_CIUDADANA = 'vinculacion.ciudadana@tizayuca.gob.mx';
 const CORREO_SECRETARIA_GENERAL = 'secretariamunicipal@tizayuca.gob.mx';
+const DEPENDENCIA_SECRETARIA_GENERAL = 'secretaria-general-municipal'; // ← Agregar esta línea
 
 let suppressFileInputEvents = false;
 
@@ -221,9 +222,9 @@ function cargarValidadas() {
     solicitudesValidadas = [];
 
     // Obtener datos de Firebase usando onValue para cada path
-    paths.forEach(path => {
+        paths.forEach(path => {
         let q;
-        if (userRol === 3 || userRol === 4) { // Admin o presidenta ven todo
+        if (userRol === 3 || userRol === 4) {
             q = query(
                 ref(database, path),
                 orderByChild('estado'),
@@ -239,7 +240,6 @@ function cargarValidadas() {
         }
 
         onValue(q, (snapshot) => {
-            // Limpiar solicitudes anteriores de esta ruta
             solicitudesValidadas = solicitudesValidadas.filter(s => s.tipoPath !== path);
 
             snapshot.forEach(childSnapshot => {
@@ -263,6 +263,9 @@ function cargarValidadas() {
                     solicitudesValidadas.push(solicitud);
                 }
             });
+
+            // Aplicar filtro para Vinculación Ciudadana
+            solicitudesValidadas = filtrarSoloSecretariaGeneral(solicitudesValidadas);
 
             // Ordenar por fecha de atención
             solicitudesValidadas.sort((a, b) =>
@@ -472,16 +475,21 @@ function mostrarPaginaSeguimiento(data) {
     actualizarPaginacion('seguimiento', data.length);
 }
 
-
 async function cargarSecretarias() {
     const secretariasRef = ref(database, 'dependencias');
     const snapshot = await get(secretariasRef);
     const selects = ['secretaria', 'secretariaAcuerdo', 'secretariaOficio', 'filtro-secretaria-validadas', 'secretariaInstitucional', 'filtro-secretaria-vobo'];
 
-    // Obtener datos del usuario
     const userRol = parseInt(getCookie('rol')) || 0;
-    const userDependencias = getCookie('dependencia') ?
+    let userDependencias = getCookie('dependencia') ?
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
+
+    const { esVinculacionCiudadana } = obtenerFiltroEspecial();
+    
+    // Si es Vinculación Ciudadana, forzar solo Secretaría General
+    if (esVinculacionCiudadana) {
+        userDependencias = [DEPENDENCIA_SECRETARIA_GENERAL];
+    }
 
     selects.forEach(selectId => {
         const select = document.getElementById(selectId);
@@ -491,17 +499,14 @@ async function cargarSecretarias() {
             const dependencia = childSnapshot.val();
             const dependenciaKey = childSnapshot.key;
 
-            // Validar existencia de la dependencia y su nombre
             if (!dependencia || typeof dependencia.nombre !== 'string') return;
 
             // Filtrar por rol
             if (userRol !== 3 && !userDependencias.includes(dependenciaKey)) return;
 
-            // Validar nombre no vacío
             const nombre = dependencia.nombre.trim();
             if (!nombre) return;
 
-            // Crear opción válida
             const option = document.createElement('option');
             option.value = dependenciaKey;
             option.textContent = nombre;
@@ -1015,14 +1020,13 @@ function cargarVerificacion() {
 
     paths.forEach(path => {
         let q;
-        if (userRol === 3 || userRol === 4) { // Admin o presidenta ven todo
+        if (userRol === 3 || userRol === 4) {
             q = query(
                 ref(database, path),
                 orderByChild('estado'),
                 equalTo('verificacion')
             );
         } else {
-            // Corregir: Crear query válida para no-admin
             userDependencias.forEach(dependencia => {
                 q = query(
                     ref(database, path),
@@ -1032,7 +1036,6 @@ function cargarVerificacion() {
             });
         }
 
-        // Añadir validación de query existente
         if (!q) {
             console.error('Query no definida para el path:', path);
             return;
@@ -1047,10 +1050,13 @@ function cargarVerificacion() {
                 if (solicitud.estado !== 'verificacion') return;
 
                 solicitud.key = childSnapshot.key;
-                solicitud.tipoPath = path; // Guardar el tipo de colección
+                solicitud.tipoPath = path;
                 solicitud.folio = solicitud.folio || childSnapshot.key;
                 solicitudesVerificacion.push(solicitud);
             });
+
+            // Aplicar filtro para Vinculación Ciudadana
+            solicitudesVerificacion = filtrarSoloSecretariaGeneral(solicitudesVerificacion);
 
             aplicarFiltrosVerificacion();
         });
@@ -1597,7 +1603,7 @@ function cargarSeguimiento() {
         onValue(refPath, () => { });
     });
 
-    if (userRol === 3) {
+ if (userRol === 3) {
         // Admin: cargar todas las solicitudes
         Promise.all(paths.map(path => {
             return new Promise((resolve) => {
@@ -1607,11 +1613,13 @@ function cargarSeguimiento() {
                     snapshot.forEach(childSnapshot => {
                         const solicitud = childSnapshot.val();
                         solicitud.key = childSnapshot.key;
-                        solicitud.motivoRechazo = solicitud.motivoRechazo || null; // Asegurar campo
+                        solicitud.motivoRechazo = solicitud.motivoRechazo || null;
                         solicitud.tipoPath = path;
                         datos.push(solicitud);
                     });
-                    resolve(datos);
+                    // Aplicar filtro para Vinculación Ciudadana
+                    const datosFiltrados = filtrarSoloSecretariaGeneral(datos);
+                    resolve(datosFiltrados);
                 }, { onlyOnce: true });
             });
         })).then(results => {
@@ -1643,7 +1651,7 @@ function cargarSeguimiento() {
         });
     } else {
         // No admin: cargar solo las dependencias del usuario
-        const allPromises = [];
+ const allPromises = [];
         paths.forEach(path => {
             userDependencias.forEach(dependencia => {
                 const q = query(
@@ -1658,10 +1666,12 @@ function cargarSeguimiento() {
                             const solicitud = childSnapshot.val();
                             solicitud.key = childSnapshot.key;
                             solicitud.tipoPath = path;
-                            solicitud.motivoRechazo = solicitud.motivoRechazo || null; // Asegurar campo
+                            solicitud.motivoRechazo = solicitud.motivoRechazo || null;
                             datos.push(solicitud);
                         });
-                        resolve(datos);
+                        // Aplicar filtro para Vinculación Ciudadana
+                        const datosFiltrados = filtrarSoloSecretariaGeneral(datos);
+                        resolve(datosFiltrados);
                     }, { onlyOnce: true });
                 });
                 allPromises.push(promise);
@@ -2117,10 +2127,17 @@ document.addEventListener('DOMContentLoaded', async function () {
     cargarVerificacion();
 
     // Obtener email del usuario PRIMERO
-    const userEmail = getCookie('email'); // ← Definir userEmail aquí
+    const userEmail = getCookie('email');
     const role = parseInt(getCookie('rol')) || 0;
-    const userDependencias = getCookie('dependencia') ?
+    let userDependencias = getCookie('dependencia') ?
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
+
+    const { esVinculacionCiudadana } = obtenerFiltroEspecial();
+    
+    // Si es Vinculación Ciudadana, forzar solo Secretaría General
+    if (esVinculacionCiudadana) {
+        userDependencias = [DEPENDENCIA_SECRETARIA_GENERAL];
+    }
 
     // Ocultar/mostrar pestañas según rol
     const nuevaLi = document.querySelector('a[data-content="nueva"]').parentElement;
@@ -2130,7 +2147,21 @@ document.addEventListener('DOMContentLoaded', async function () {
     const navacuerdos = document.querySelector('a[data-content="acuerdo"]').parentElement;
     const navoficios = document.querySelector('a[data-content="oficio"]').parentElement;
     const navInstitucional = document.getElementById('navInstitucional');
-    const navVobo = document.getElementById('navVobo'); // ← Agregar esta línea
+    const navVobo = document.getElementById('navVobo');
+
+    // Si es Vinculación Ciudadana, ocultar secciones no deseadas
+    if (esVinculacionCiudadana) {
+        nuevaLi.style.display = 'none';
+        navacuerdos.style.display = 'none';
+        navoficios.style.display = 'none';
+        if (navInstitucional) navInstitucional.style.display = 'none';
+        if (navVobo) navVobo.style.display = 'none';
+        
+        // Solo mostrar seguimiento, validadas y verificación
+        seguimientoLi.style.display = 'block';
+        validadasLi.style.display = 'block';
+        verificacionLi.style.display = 'block';
+    }
 
     // Mostrar sección de VoBo solo para Secretaría General
     if (userEmail === CORREO_SECRETARIA_GENERAL) {
@@ -3791,10 +3822,17 @@ function cargarSolicitudesVobo() {
             }
         });
 
-        // Ordenar por fecha de solicitud (más recientes primero)
+        // Aplicar filtro para Vinculación Ciudadana (si es necesario)
+        const { esVinculacionCiudadana } = obtenerFiltroEspecial();
+        if (esVinculacionCiudadana) {
+            solicitudesVobo = solicitudesVobo.filter(solicitud => 
+                solicitud.dependencia === DEPENDENCIA_SECRETARIA_GENERAL
+            );
+        }
+
+        // Ordenar por fecha de solicitud
         solicitudesVobo.sort((a, b) => new Date(b.fechaSolicitudVobo || b.fechaCreacion) - new Date(a.fechaSolicitudVobo || a.fechaCreacion));
 
-        // Solo aplicar filtros si la sección de VoBo está activa
         const voboSection = document.getElementById('vobo-content');
         if (voboSection && voboSection.style.display !== 'none') {
             aplicarFiltrosVobo();
@@ -4253,3 +4291,16 @@ document.getElementById('reenviarVoboModal')?.addEventListener('hidden.bs.modal'
     document.getElementById('removeNuevoDocVobo').classList.add('d-none');
     document.getElementById('comentariosReenvio').value = '';
 });
+
+// Agregar esta función después de obtenerFiltroEspecial
+function filtrarSoloSecretariaGeneral(solicitudes) {
+    const { esVinculacionCiudadana } = obtenerFiltroEspecial();
+    
+    if (!esVinculacionCiudadana) {
+        return solicitudes;
+    }
+    
+    return solicitudes.filter(solicitud => 
+        solicitud.dependencia === DEPENDENCIA_SECRETARIA_GENERAL
+    );
+}
