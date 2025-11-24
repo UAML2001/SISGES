@@ -222,7 +222,7 @@ function cargarValidadas() {
     solicitudesValidadas = [];
 
     // Obtener datos de Firebase usando onValue para cada path
-        paths.forEach(path => {
+    paths.forEach(path => {
         let q;
         if (userRol === 3 || userRol === 4) {
             q = query(
@@ -264,8 +264,8 @@ function cargarValidadas() {
                 }
             });
 
-            // Aplicar filtro para Vinculación Ciudadana
-            solicitudesValidadas = filtrarSoloSecretariaGeneral(solicitudesValidadas);
+            // Aplicar filtro para Vinculación Ciudadana - SOLO SUS SOLICITUDES
+            solicitudesValidadas = filtrarSoloVinculacionCiudadana(solicitudesValidadas);
 
             // Ordenar por fecha de atención
             solicitudesValidadas.sort((a, b) =>
@@ -639,9 +639,12 @@ function iniciarActualizacionTiempo() {
 
 
 function actualizarEstadisticas(solicitudes) {
+    const { esSecretariaGeneral, esVinculacionCiudadana } = obtenerFiltroEspecial();
+    const userEmail = getCookie('email');
+    
     const stats = {
         pendientes: 0,
-        pendientesVobo: 0, // ← Nueva estadística
+        pendientesVobo: 0,
         porVencer: 0,
         enProceso: 0,
         verificacion: 0,
@@ -650,7 +653,23 @@ function actualizarEstadisticas(solicitudes) {
         total: 0
     };
 
-    solicitudes.forEach(s => {
+    // Si es Secretaría General, contar pendientes de VoBo de todas las dependencias
+    if (esSecretariaGeneral || userEmail === CORREO_SECRETARIA_GENERAL) {
+        // Contar pendientes de VoBo específicamente
+        solicitudesVobo.forEach(s => {
+            if (s.estado === 'pendiente_vobo') {
+                stats.pendientesVobo++;
+            }
+        });
+    }
+
+    // Filtrar solicitudes para Vinculación Ciudadana si es necesario
+    let solicitudesFiltradas = solicitudes;
+    if (esVinculacionCiudadana) {
+        solicitudesFiltradas = filtrarSoloVinculacionCiudadana(solicitudes);
+    }
+
+    solicitudesFiltradas.forEach(s => {
         stats.total++;
         const estado = s.estado;
 
@@ -658,8 +677,12 @@ function actualizarEstadisticas(solicitudes) {
             case 'pendiente':
                 stats.pendientes++;
                 break;
-            case 'pendiente_vobo': // ← Nuevo caso
-                stats.pendientesVobo++;
+            case 'pendiente_vobo':
+                // Para perfiles normales, contar como pendiente normal
+                // Para Secretaría General, ya lo contamos arriba específicamente
+                if (!esSecretariaGeneral && userEmail !== CORREO_SECRETARIA_GENERAL) {
+                    stats.pendientes++;
+                }
                 break;
             case 'por_vencer':
                 stats.porVencer++;
@@ -679,21 +702,42 @@ function actualizarEstadisticas(solicitudes) {
         }
     });
 
-    // Actualizar DOM
-    document.getElementById('stats-pendientes').textContent = stats.pendientes;
-    document.getElementById('stats-vencer').textContent = stats.porVencer;
-    document.getElementById('stats-en-proceso').textContent = stats.enProceso;
-    document.getElementById('stats-verificacion').textContent = stats.verificacion;
-    document.getElementById('stats-atendidas').textContent = stats.atendidas;
-    document.getElementById('stats-atrasadas').textContent = stats.atrasadas;
+    // Actualizar DOM - verificar que los elementos existan antes de actualizar
+    const elements = {
+        'stats-pendientes': stats.pendientes,
+        'stats-vencer': stats.porVencer,
+        'stats-en-proceso': stats.enProceso,
+        'stats-verificacion': stats.verificacion,
+        'stats-atendidas': stats.atendidas,
+        'stats-atrasadas': stats.atrasadas,
+        'stats-pendientes-vobo': stats.pendientesVobo
+    };
 
-    const eficiencia = (stats.atendidas / (stats.total || 1)) * 100;
-    document.getElementById('stats-eficiencia').textContent = `${Math.round(eficiencia)}%`;
+    Object.keys(elements).forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = elements[id];
+        }
+    });
 
-    // Opcional: Mostrar estadística de pendientes VoBo si existe el elemento
+    // Calcular y mostrar eficiencia
+    const eficienciaElement = document.getElementById('stats-eficiencia');
+    if (eficienciaElement) {
+        const eficiencia = (stats.atendidas / (stats.total || 1)) * 100;
+        eficienciaElement.textContent = `${Math.round(eficiencia)}%`;
+    }
+
+    // Mostrar/ocultar el elemento de VoBo según el perfil
     const statsVoboElement = document.getElementById('stats-pendientes-vobo');
     if (statsVoboElement) {
-        statsVoboElement.textContent = stats.pendientesVobo;
+        const statCard = statsVoboElement.closest('.stat-card');
+        if (statCard) {
+            if (esSecretariaGeneral || userEmail === CORREO_SECRETARIA_GENERAL) {
+                statCard.style.display = 'block';
+            } else {
+                statCard.style.display = 'none';
+            }
+        }
     }
 }
 
@@ -1055,8 +1099,8 @@ function cargarVerificacion() {
                 solicitudesVerificacion.push(solicitud);
             });
 
-            // Aplicar filtro para Vinculación Ciudadana
-            solicitudesVerificacion = filtrarSoloSecretariaGeneral(solicitudesVerificacion);
+            // Aplicar filtro para Vinculación Ciudadana - SOLO SUS SOLICITUDES
+            solicitudesVerificacion = filtrarSoloVinculacionCiudadana(solicitudesVerificacion);
 
             aplicarFiltrosVerificacion();
         });
@@ -1603,7 +1647,7 @@ function cargarSeguimiento() {
         onValue(refPath, () => { });
     });
 
- if (userRol === 3) {
+    if (userRol === 3) {
         // Admin: cargar todas las solicitudes
         Promise.all(paths.map(path => {
             return new Promise((resolve) => {
@@ -1617,21 +1661,24 @@ function cargarSeguimiento() {
                         solicitud.tipoPath = path;
                         datos.push(solicitud);
                     });
-                    // Aplicar filtro para Vinculación Ciudadana
-                    const datosFiltrados = filtrarSoloSecretariaGeneral(datos);
+                    // Aplicar filtro para Vinculación Ciudadana - SOLO SUS SOLICITUDES
+                    const datosFiltrados = filtrarSoloVinculacionCiudadana(datos);
                     resolve(datosFiltrados);
                 }, { onlyOnce: true });
             });
         })).then(results => {
-            const mergedData = [].concat(...results).reduce((acc, current) => {
-                if (!acc.find(item => item.key === current.key)) {
-                    acc.push(current);
-                }
-                return acc;
-            }, []);
-            solicitudesSeguimiento = mergedData;
-            actualizarTablaSeguimiento();
-        });
+        const mergedData = [].concat(...results).reduce((acc, current) => {
+            if (!acc.find(item => item.key === current.key)) {
+                acc.push(current);
+            }
+            return acc;
+        }, []);
+        solicitudesSeguimiento = mergedData;
+        actualizarTablaSeguimiento();
+        actualizarEstadisticas(solicitudesSeguimiento); // ← AÑADIR ESTA LÍNEA
+        actualizarGraficas(solicitudesSeguimiento);     // ← Y ESTA
+    });
+
 
         // Escuchar cambios en tiempo real
         paths.forEach(path => {
@@ -1646,12 +1693,14 @@ function cargarSeguimiento() {
                         solicitudesSeguimiento[index] = { ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path };
                     }
                 });
+                // Aplicar filtro para Vinculación Ciudadana
+                solicitudesSeguimiento = filtrarSoloVinculacionCiudadana(solicitudesSeguimiento);
                 actualizarTablaSeguimiento();
             });
         });
     } else {
         // No admin: cargar solo las dependencias del usuario
- const allPromises = [];
+        const allPromises = [];
         paths.forEach(path => {
             userDependencias.forEach(dependencia => {
                 const q = query(
@@ -1669,8 +1718,8 @@ function cargarSeguimiento() {
                             solicitud.motivoRechazo = solicitud.motivoRechazo || null;
                             datos.push(solicitud);
                         });
-                        // Aplicar filtro para Vinculación Ciudadana
-                        const datosFiltrados = filtrarSoloSecretariaGeneral(datos);
+                        // Aplicar filtro para Vinculación Ciudadana - SOLO SUS SOLICITUDES
+                        const datosFiltrados = filtrarSoloVinculacionCiudadana(datos);
                         resolve(datosFiltrados);
                     }, { onlyOnce: true });
                 });
@@ -1706,6 +1755,8 @@ function cargarSeguimiento() {
                             solicitudesSeguimiento[index] = { ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path };
                         }
                     });
+                    // Aplicar filtro para Vinculación Ciudadana
+                    solicitudesSeguimiento = filtrarSoloVinculacionCiudadana(solicitudesSeguimiento);
                     actualizarTablaSeguimiento();
                 });
             });
@@ -1783,14 +1834,14 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
             ? 'pendiente_vobo'
             : 'pendiente';
 
-        // Crear objeto de solicitud
+        // Crear objeto de solicitud CON EL CREADOR
         const fechaCreacion = new Date().toISOString();
         const nuevaSolicitud = {
             fechaCreacion: fechaCreacion,
             tipo: document.getElementById('canal').value,
             tiposolicitud: document.getElementById('receptor').value,
             dependencia: document.getElementById('secretaria').value,
-            estado: estadoInicial, // ← Estado modificado
+            estado: estadoInicial,
             solicitante: {
                 nombre: document.getElementById('nombre').value,
                 colonia: document.getElementById('colonia').value,
@@ -1806,7 +1857,11 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
             requiereVobo: (esVinculacionCiudadana || userEmail === CORREO_VINCULACION_CIUDADANA),
             voboAprobado: false,
             voboSecretariaGeneral: null,
-            fechaSolicitudVobo: (esVinculacionCiudadana || userEmail === CORREO_VINCULACION_CIUDADANA) ? new Date().toISOString() : null
+            fechaSolicitudVobo: (esVinculacionCiudadana || userEmail === CORREO_VINCULACION_CIUDADANA) ? new Date().toISOString() : null,
+            // NUEVO CAMPO: Guardar quién creó la solicitud
+            creadoPor: userEmail,
+            _creadoPor: userEmail,
+            usuarioCreacion: userEmail
         };
 
         // Guardar en la base de datos
@@ -2139,7 +2194,8 @@ document.addEventListener('DOMContentLoaded', async function () {
         userDependencias = [DEPENDENCIA_SECRETARIA_GENERAL];
     }
 
-    // Ocultar/mostrar pestañas según rol
+    // DECLARAR TODAS LAS VARIABLES DE NAVEGACIÓN PRIMERO
+    const dashboardLi = document.querySelector('a[data-content="dashboard"]').parentElement;
     const nuevaLi = document.querySelector('a[data-content="nueva"]').parentElement;
     const seguimientoLi = document.querySelector('a[data-content="seguimiento"]').parentElement;
     const validadasLi = document.querySelector('a[data-content="validadas"]').parentElement;
@@ -2147,75 +2203,72 @@ document.addEventListener('DOMContentLoaded', async function () {
     const navacuerdos = document.querySelector('a[data-content="acuerdo"]').parentElement;
     const navoficios = document.querySelector('a[data-content="oficio"]').parentElement;
     const navInstitucional = document.getElementById('navInstitucional');
-    const navVobo = document.getElementById('navVobo');
+    const navVobo = document.getElementById('navVobo'); // ← AHORA DECLARADO ANTES DE USAR
 
-    // Si es Vinculación Ciudadana, ocultar secciones no deseadas
+    // MODIFICACIÓN: Para Vinculación Ciudadana, mostrar solo los módulos permitidos
     if (esVinculacionCiudadana) {
-        nuevaLi.style.display = 'none';
+        // Mostrar solo los módulos permitidos (incluyendo dashboard)
+        dashboardLi.style.display = 'block';    // Dashboard
+        nuevaLi.style.display = 'block';        // Nueva Solicitud Ciudadana
+        seguimientoLi.style.display = 'block';  // Seguimiento de Solicitudes
+        validadasLi.style.display = 'block';    // Solicitudes Atendidas
+        verificacionLi.style.display = 'block'; // Solicitudes en Verificación
+        
+        // Ocultar los módulos NO permitidos
         navacuerdos.style.display = 'none';
         navoficios.style.display = 'none';
         if (navInstitucional) navInstitucional.style.display = 'none';
         if (navVobo) navVobo.style.display = 'none';
         
-        // Solo mostrar seguimiento, validadas y verificación
-        seguimientoLi.style.display = 'block';
-        validadasLi.style.display = 'block';
-        verificacionLi.style.display = 'block';
-    }
-
-    // Mostrar sección de VoBo solo para Secretaría General
-    if (userEmail === CORREO_SECRETARIA_GENERAL) {
-        if (navVobo) {
-            navVobo.style.display = 'block';
-            cargarSolicitudesVobo(); // Cargar solicitudes de VoBo
-        }
+        // Activar por defecto la pestaña de Dashboard
+        setTimeout(() => {
+            document.querySelector('a[data-content="dashboard"]').click();
+        }, 100);
     } else {
-        if (navVobo) {
-            navVobo.style.display = 'none';
+        // Comportamiento normal para otros perfiles
+        dashboardLi.style.display = 'block';
+        
+        switch (role) {
+            case 1:
+                nuevaLi.style.display = userDependencias.length > 0 ? 'block' : 'none';
+                seguimientoLi.style.display = 'block';
+                validadasLi.style.display = 'none';
+                verificacionLi.style.display = 'none';
+                navacuerdos.style.display = 'none';
+                navoficios.style.display = 'none';
+                if (navInstitucional) navInstitucional.style.display = 'none';
+                break;
+            case 2:
+                nuevaLi.style.display = 'none';
+                seguimientoLi.style.display = 'block';
+                validadasLi.style.display = 'block';
+                verificacionLi.style.display = 'none';
+                navacuerdos.style.display = 'none';
+                navoficios.style.display = 'none';
+                if (navInstitucional) navInstitucional.style.display = 'none';
+                break;
+            case 3:
+                // Mostrar acuerdo de gabinete solo si NO es Vinculación Ciudadana u Oficialía Mayor
+                if (userEmail === 'vinculacion.ciudadana@tizayuca.gob.mx' ||
+                    userEmail === 'oficialia.mayor@tizayuca.gob.mx') {
+                    navacuerdos.style.display = 'none';
+                } else {
+                    navacuerdos.style.display = 'block';
+                }
+
+                // Mostrar otros módulos normalmente
+                navoficios.style.display = 'block';
+                if (navInstitucional) navInstitucional.style.display = 'block';
+                break;
+            default:
+                nuevaLi.style.display = 'none';
+                seguimientoLi.style.display = 'none';
+                validadasLi.style.display = 'none';
+                navacuerdos.style.display = 'none';
+                navoficios.style.display = 'none';
+                if (navInstitucional) navInstitucional.style.display = 'none';
         }
     }
-
-    switch (role) {
-        case 1:
-            nuevaLi.style.display = userDependencias.length > 0 ? 'block' : 'none';
-            seguimientoLi.style.display = 'block';
-            validadasLi.style.display = 'none';
-            verificacionLi.style.display = 'none';
-            navacuerdos.style.display = 'none';
-            navoficios.style.display = 'none';
-            if (navInstitucional) navInstitucional.style.display = 'none';
-            break;
-        case 2:
-            nuevaLi.style.display = 'none';
-            seguimientoLi.style.display = 'block';
-            validadasLi.style.display = 'block';
-            verificacionLi.style.display = 'none';
-            navacuerdos.style.display = 'none';
-            navoficios.style.display = 'none';
-            if (navInstitucional) navInstitucional.style.display = 'none';
-            break;
-        case 3:
-            // Mostrar acuerdo de gabinete solo si NO es Vinculación Ciudadana u Oficialía Mayor
-            if (userEmail === 'vinculacion.ciudadana@tizayuca.gob.mx' ||
-                userEmail === 'oficialia.mayor@tizayuca.gob.mx') {
-                navacuerdos.style.display = 'none';
-            } else {
-                navacuerdos.style.display = 'block';
-            }
-
-            // Mostrar otros módulos normalmente
-            navoficios.style.display = 'block';
-            if (navInstitucional) navInstitucional.style.display = 'block';
-            break;
-        default:
-            nuevaLi.style.display = 'none';
-            seguimientoLi.style.display = 'none';
-            validadasLi.style.display = 'none';
-            navacuerdos.style.display = 'none';
-            navoficios.style.display = 'none';
-            if (navInstitucional) navInstitucional.style.display = 'none';
-    }
-
 
     // Validar pestaña activa guardada
     const savedTab = localStorage.getItem('activeTab');
@@ -2231,6 +2284,11 @@ document.addEventListener('DOMContentLoaded', async function () {
         case 3:
             allowedTabs.push('nueva', 'seguimiento', 'validadas');
             break;
+    }
+
+    // Para Vinculación Ciudadana, permitir los módulos específicos
+    if (esVinculacionCiudadana) {
+        allowedTabs.push('nueva', 'seguimiento', 'validadas', 'verificacion');
     }
 
     if (savedTab && !allowedTabs.includes(savedTab)) {
@@ -2254,15 +2312,35 @@ document.addEventListener('DOMContentLoaded', async function () {
         <option>Llamada telefónica</option>
     `;
 
-    // Mostrar/ocultar pestañas según rol
-    const voboLi = document.getElementById('navVobo');
-
-    // Mostrar VoBo solo para Secretaría General
+    // AHORA SÍ PODEMOS USAR navVobo DE FORMA SEGURA
+    // Mostrar sección de VoBo solo para Secretaría General
     if (userEmail === CORREO_SECRETARIA_GENERAL) {
-        voboLi.style.display = 'block';
-        cargarSolicitudesVobo(); // Cargar solicitudes de VoBo
+        if (navVobo) {
+            navVobo.style.display = 'block';
+            cargarSolicitudesVobo(); // Cargar solicitudes de VoBo
+        }
+        
+        // Mostrar estadística de pendientes VoBo en el dashboard
+        const statsVoboElement = document.getElementById('stats-pendientes-vobo');
+        if (statsVoboElement) {
+            const statCard = statsVoboElement.closest('.stat-card');
+            if (statCard) {
+                statCard.style.display = 'block';
+            }
+        }
     } else {
-        voboLi.style.display = 'none';
+        if (navVobo) {
+            navVobo.style.display = 'none';
+        }
+        
+        // Ocultar estadística de pendientes VoBo para otros perfiles
+        const statsVoboElement = document.getElementById('stats-pendientes-vobo');
+        if (statsVoboElement) {
+            const statCard = statsVoboElement.closest('.stat-card');
+            if (statCard) {
+                statCard.style.display = 'none';
+            }
+        }
     }
 
     // Menú móvil
@@ -2291,6 +2369,20 @@ document.addEventListener('DOMContentLoaded', async function () {
         const activeSection = document.getElementById(`${contentId}-content`);
         if (activeSection) {
             activeSection.style.display = 'block';
+            
+            // Si es Vinculación Ciudadana, aplicar filtros específicos cuando se cambie a ciertas pestañas
+            const { esVinculacionCiudadana } = obtenerFiltroEspecial();
+            if (esVinculacionCiudadana) {
+                if (contentId === 'seguimiento') {
+                    aplicarFiltrosSeguimiento();
+                } else if (contentId === 'validadas') {
+                    aplicarFiltrosValidadas();
+                } else if (contentId === 'verificacion') {
+                    aplicarFiltrosVerificacion();
+                } else if (contentId === 'vobo') {
+                    aplicarFiltrosVobo();
+                }
+            }
         }
     }
 
@@ -2744,17 +2836,32 @@ function validarArchivoInput(input, tipoDocumento) {
 let mainChart, typeChart, trendChart, statusChart;
 
 function actualizarGraficas(solicitudes) {
-    actualizarGraficaPrincipal(solicitudes);
-    actualizarGraficaTipos(solicitudes);
-    actualizarGraficaTendencias(solicitudes);
-    actualizarGraficaEstatus(solicitudes);
-    actualizarEficienciaDepartamentos(solicitudes);
-    actualizarTiemposRespuesta(solicitudes);
-    actualizarGraficaTrimestral(solicitudes);
-    actualizarGraficaCanales(solicitudes); // ← Nueva función
+    // Filtrar solicitudes para Vinculación Ciudadana si es necesario
+    const { esVinculacionCiudadana } = obtenerFiltroEspecial();
+    let solicitudesFiltradas = solicitudes;
+    
+    if (esVinculacionCiudadana) {
+        solicitudesFiltradas = filtrarSoloVinculacionCiudadana(solicitudes);
+    }
+
+    actualizarGraficaPrincipal(solicitudesFiltradas);
+    actualizarGraficaTipos(solicitudesFiltradas);
+    actualizarGraficaTendencias(solicitudesFiltradas);
+    actualizarGraficaEstatus(solicitudesFiltradas);
+    actualizarEficienciaDepartamentos(solicitudesFiltradas);
+    actualizarTiemposRespuesta(solicitudesFiltradas);
+    actualizarGraficaTrimestral(solicitudesFiltradas);
+    actualizarGraficaCanales(solicitudesFiltradas);
 }
 
 function actualizarGraficaPrincipal(solicitudes) {
+        // Filtrar para Vinculación Ciudadana si es necesario
+    const { esVinculacionCiudadana } = obtenerFiltroEspecial();
+    let solicitudesFiltradas = solicitudes;
+    
+    if (esVinculacionCiudadana) {
+        solicitudesFiltradas = filtrarSoloVinculacionCiudadana(solicitudes);
+    }
     const tiposSolicitud = obtenerTiposSolicitud(solicitudes);
 
     const datos = {
@@ -3797,9 +3904,10 @@ function actualizarGraficaCanales(solicitudes) {
 
 // También modifica cargarSolicitudesVobo para que no aplique filtros automáticamente
 function cargarSolicitudesVobo() {
-    const { esSecretariaGeneral } = obtenerFiltroEspecial();
-
-    if (!esSecretariaGeneral) {
+    const userEmail = getCookie('email');
+    
+    // Verificar explícitamente si es Secretaría General
+    if (userEmail !== CORREO_SECRETARIA_GENERAL) {
         return;
     }
 
@@ -3822,23 +3930,19 @@ function cargarSolicitudesVobo() {
             }
         });
 
-        // Aplicar filtro para Vinculación Ciudadana (si es necesario)
-        const { esVinculacionCiudadana } = obtenerFiltroEspecial();
-        if (esVinculacionCiudadana) {
-            solicitudesVobo = solicitudesVobo.filter(solicitud => 
-                solicitud.dependencia === DEPENDENCIA_SECRETARIA_GENERAL
-            );
-        }
-
         // Ordenar por fecha de solicitud
         solicitudesVobo.sort((a, b) => new Date(b.fechaSolicitudVobo || b.fechaCreacion) - new Date(a.fechaSolicitudVobo || a.fechaCreacion));
 
+        // Solo aplicar filtros si la sección de VoBo está visible
         const voboSection = document.getElementById('vobo-content');
         if (voboSection && voboSection.style.display !== 'none') {
             aplicarFiltrosVobo();
         }
 
         actualizarEstadisticasVobo(solicitudesVobo);
+        
+        // Actualizar también las estadísticas generales
+        actualizarEstadisticas(solicitudesSeguimiento);
     });
 }
 
@@ -3927,6 +4031,16 @@ function mostrarPaginaVobo(data) {
 }
 
 function actualizarEstadisticasVobo(solicitudes) {
+    // Verificar que los elementos existan antes de intentar actualizarlos
+    const statsPendientesVobo = document.getElementById('stats-pendientes-vobo');
+    const statsAprobadasHoy = document.getElementById('stats-aprobadas-hoy');
+    const statsRechazadasHoy = document.getElementById('stats-rechazadas-hoy');
+
+    // Si no existe ningún elemento, salir de la función
+    if (!statsPendientesVobo && !statsAprobadasHoy && !statsRechazadasHoy) {
+        return;
+    }
+
     const hoy = new Date().toDateString();
     const aprobadasHoy = solicitudes.filter(s =>
         s.fechaVoboAprobado && new Date(s.fechaVoboAprobado).toDateString() === hoy
@@ -3936,9 +4050,16 @@ function actualizarEstadisticasVobo(solicitudes) {
         s.fechaVoboRechazado && new Date(s.fechaVoboRechazado).toDateString() === hoy
     ).length;
 
-    document.getElementById('stats-pendientes-vobo').textContent = solicitudes.length;
-    document.getElementById('stats-aprobadas-hoy').textContent = aprobadasHoy;
-    document.getElementById('stats-rechazadas-hoy').textContent = rechazadasHoy;
+    // Actualizar solo los elementos que existen
+    if (statsPendientesVobo) {
+        statsPendientesVobo.textContent = solicitudes.length;
+    }
+    if (statsAprobadasHoy) {
+        statsAprobadasHoy.textContent = aprobadasHoy;
+    }
+    if (statsRechazadasHoy) {
+        statsRechazadasHoy.textContent = rechazadasHoy;
+    }
 }
 
 function aplicarFiltrosVobo() {
@@ -4082,6 +4203,9 @@ window.aprobarVobo = async function (folio) {
             actualizarTablaSeguimiento();
         }
 
+        // ACTUALIZACIÓN: Actualizar estadísticas después de aprobar VoBo
+        actualizarEstadisticas(solicitudesSeguimiento);
+
         mostrarExito(`VoBo aprobado para ${folio}. La solicitud ha sido turnada a la secretaría correspondiente.`);
 
     } catch (error) {
@@ -4149,10 +4273,13 @@ window.rechazarVobo = async function (folio) {
         }
 
         // Actualizar UI
-        aplicarFiltrosVobo();
+         aplicarFiltrosVobo();
         if (typeof actualizarTablaSeguimiento === 'function') {
             actualizarTablaSeguimiento();
         }
+
+        // ACTUALIZACIÓN: Actualizar estadísticas después de rechazar VoBo
+        actualizarEstadisticas(solicitudesSeguimiento);
 
         mostrarExito(`VoBo rechazado para ${folio}. La solicitud ha sido devuelta a Vinculación Ciudadana.`);
 
@@ -4292,15 +4419,20 @@ document.getElementById('reenviarVoboModal')?.addEventListener('hidden.bs.modal'
     document.getElementById('comentariosReenvio').value = '';
 });
 
-// Agregar esta función después de obtenerFiltroEspecial
-function filtrarSoloSecretariaGeneral(solicitudes) {
+// Función para filtrar solicitudes de Vinculación Ciudadana (SOLO las que ellos enviaron)
+function filtrarSoloVinculacionCiudadana(solicitudes) {
     const { esVinculacionCiudadana } = obtenerFiltroEspecial();
+    const userEmail = getCookie('email');
     
     if (!esVinculacionCiudadana) {
         return solicitudes;
     }
     
-    return solicitudes.filter(solicitud => 
-        solicitud.dependencia === DEPENDENCIA_SECRETARIA_GENERAL
-    );
+    return solicitudes.filter(solicitud => {
+        // Verificar múltiples campos donde podría estar almacenado el creador
+        return solicitud.creadoPor === userEmail || 
+               solicitud._creadoPor === userEmail ||
+               solicitud.usuarioCreacion === userEmail ||
+               solicitud.creadoPorEmail === userEmail;
+    });
 }
