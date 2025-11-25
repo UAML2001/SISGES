@@ -1769,7 +1769,7 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
     e.preventDefault();
     const form = e.target;
 
-    // Validación de campos (código existente)
+    // Validación de campos
     const camposRequeridos = [
         'receptor', 'canal', 'nombre',
         'colonia', 'telefono', 'asunto',
@@ -1825,16 +1825,16 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
         await uploadBytes(docRef, docInicialFile);
         const docUrl = await getDownloadURL(docRef);
 
-        // VERIFICACIÓN DE VINCULACIÓN CIUDADANA Y VOB0
+        // VERIFICACIÓN DE VINCULACIÓN CIUDADANA Y VoBo
         const { esVinculacionCiudadana } = obtenerFiltroEspecial();
-        const userEmail = getCookie('email');
+        const userEmail = obtenerEmailUsuario(); // ← USAR FUNCIÓN MEJORADA
 
         // Si es Vinculación Ciudadana, el estado será 'pendiente_vobo', sino 'pendiente'
         const estadoInicial = (esVinculacionCiudadana || userEmail === CORREO_VINCULACION_CIUDADANA)
             ? 'pendiente_vobo'
             : 'pendiente';
 
-        // Crear objeto de solicitud CON EL CREADOR
+        // Crear objeto de solicitud CON EL CREADOR MEJORADO
         const fechaCreacion = new Date().toISOString();
         const nuevaSolicitud = {
             fechaCreacion: fechaCreacion,
@@ -1858,11 +1858,21 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
             voboAprobado: false,
             voboSecretariaGeneral: null,
             fechaSolicitudVobo: (esVinculacionCiudadana || userEmail === CORREO_VINCULACION_CIUDADANA) ? new Date().toISOString() : null,
-            // NUEVO CAMPO: Guardar quién creó la solicitud
+            // NUEVO CAMPO: Guardar quién creó la solicitud DE FORMA SEGURA
             creadoPor: userEmail,
             _creadoPor: userEmail,
-            usuarioCreacion: userEmail
+            usuarioCreacion: userEmail,
+            _usuarioCreacion: userEmail,
+            creadoPorEmail: userEmail,
+            creadoPorNombre: obtenerNombreUsuario() // ← AGREGAR NOMBRE TAMBIÉN
         };
+
+        // Validar que no haya campos undefined
+        Object.keys(nuevaSolicitud).forEach(key => {
+            if (nuevaSolicitud[key] === undefined) {
+                nuevaSolicitud[key] = null;
+            }
+        });
 
         // Guardar en la base de datos
         await set(ref(database, `solicitudes/${folio}`), nuevaSolicitud);
@@ -2422,8 +2432,13 @@ document.addEventListener('DOMContentLoaded', async function () {
 function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
+    if (parts.length === 2) {
+        const cookieValue = parts.pop().split(';').shift();
+        return cookieValue ? decodeURIComponent(cookieValue) : '';
+    }
+    return '';
 }
+
 
 function checkSession() {
     const sessionCookie = getCookie('session');
@@ -2498,7 +2513,6 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
         // Obtener elementos del DOM
         const docInput = document.getElementById('documentoAcuerdo');
         const docFile = docInput.files[0];
-        const prefix = 'Acuerdo';
 
         // Validar campos requeridos
         const camposRequeridos = [
@@ -2543,7 +2557,9 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
         await uploadBytes(docRef, docFile);
         const docUrl = await getDownloadURL(docRef);
 
-        // Crear objeto Acuerdo
+        const userEmail = obtenerEmailUsuario(); // ← USAR FUNCIÓN MEJORADA
+
+        // Crear objeto Acuerdo CON CAMPOS DE CREADOR
         const nuevoAcuerdo = {
             tipo: 'acuerdo',
             fechaCreacion: new Date().toISOString(),
@@ -2555,8 +2571,22 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
             documentoInicial: docUrl,
             nombreDocumento: docFile.name,
             estado: 'pendiente',
-            folio: folio
+            folio: folio,
+            // CAMPOS DE CREADOR AGREGADOS
+            creadoPor: userEmail,
+            _creadoPor: userEmail,
+            usuarioCreacion: userEmail,
+            _usuarioCreacion: userEmail,
+            creadoPorEmail: userEmail,
+            creadoPorNombre: obtenerNombreUsuario()
         };
+
+        // Validar que no haya campos undefined
+        Object.keys(nuevoAcuerdo).forEach(key => {
+            if (nuevoAcuerdo[key] === undefined) {
+                nuevoAcuerdo[key] = null;
+            }
+        });
 
         // Guardar en Firebase
         await set(ref(database, `acuerdos/${folio}`), nuevoAcuerdo);
@@ -2586,6 +2616,8 @@ document.getElementById('formNuevoOficio').addEventListener('submit', async (e) 
         await uploadBytes(docRef, docFile);
         const docUrl = await getDownloadURL(docRef);
 
+        const userEmail = obtenerEmailUsuario(); // ← USAR FUNCIÓN MEJORADA
+
         const nuevoOficio = {
             tipo: 'oficio',
             fechaCreacion: new Date().toISOString(),
@@ -2598,12 +2630,26 @@ document.getElementById('formNuevoOficio').addEventListener('submit', async (e) 
             nombreDocumento: docFile.name,
             estado: 'pendiente',
             folio: folio,
-            // NUEVOS CAMPOS AQUÍ
+            // Campos del peticionario
             solicitante: {
                 nombre: document.getElementById('peticionarioOficio').value,
                 telefono: document.getElementById('telefonoOficio').value
-            }
+            },
+            // CAMPOS DE CREADOR AGREGADOS
+            creadoPor: userEmail,
+            _creadoPor: userEmail,
+            usuarioCreacion: userEmail,
+            _usuarioCreacion: userEmail,
+            creadoPorEmail: userEmail,
+            creadoPorNombre: obtenerNombreUsuario()
         };
+
+        // Validar que no haya campos undefined
+        Object.keys(nuevoOficio).forEach(key => {
+            if (nuevoOficio[key] === undefined) {
+                nuevoOficio[key] = null;
+            }
+        });
 
         await set(ref(database, `oficios/${folio}`), nuevoOficio);
         limpiarFormulario('oficio');
@@ -3366,7 +3412,7 @@ window.exportChart = (chartId, fileName = 'chart') => {
 };
 
 function obtenerFiltroEspecial() {
-    const userEmail = getCookie('email');
+    const userEmail = obtenerEmailUsuario(); // ← USAR FUNCIÓN MEJORADA
     return {
         esJefaturaGabinete: userEmail === 'jefaturadegabinete@tizayuca.gob.mx',
         esSecretariaParticular: 
@@ -3531,7 +3577,9 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
         await uploadBytes(docRef, docFile);
         const docUrl = await getDownloadURL(docRef);
 
-        // Crear objeto solicitud
+        const userEmail = obtenerEmailUsuario(); // ← USAR FUNCIÓN MEJORADA
+
+        // Crear objeto solicitud CON CAMPOS DE CREADOR
         const nuevaSolicitud = {
             tipo: 'institucional',
             fechaCreacion: new Date().toISOString(),
@@ -3551,8 +3599,22 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
             solicitante: {
                 nombre: document.getElementById('contactoInstitucional').value,
                 telefono: document.getElementById('telefonoInstitucional').value
-            }
+            },
+            // CAMPOS DE CREADOR AGREGADOS
+            creadoPor: userEmail,
+            _creadoPor: userEmail,
+            usuarioCreacion: userEmail,
+            _usuarioCreacion: userEmail,
+            creadoPorEmail: userEmail,
+            creadoPorNombre: obtenerNombreUsuario()
         };
+
+        // Validar que no haya campos undefined
+        Object.keys(nuevaSolicitud).forEach(key => {
+            if (nuevaSolicitud[key] === undefined) {
+                nuevaSolicitud[key] = null;
+            }
+        });
 
         // Guardar en Firebase (en nueva colección)
         await set(ref(database, `solicitudes_institucionales/${folio}`), nuevaSolicitud);
@@ -4422,7 +4484,7 @@ document.getElementById('reenviarVoboModal')?.addEventListener('hidden.bs.modal'
 // Función para filtrar solicitudes de Vinculación Ciudadana (SOLO las que ellos enviaron)
 function filtrarSoloVinculacionCiudadana(solicitudes) {
     const { esVinculacionCiudadana } = obtenerFiltroEspecial();
-    const userEmail = getCookie('email');
+    const userEmail = obtenerEmailUsuario(); // ← USAR FUNCIÓN MEJORADA
     
     if (!esVinculacionCiudadana) {
         return solicitudes;
@@ -4430,9 +4492,32 @@ function filtrarSoloVinculacionCiudadana(solicitudes) {
     
     return solicitudes.filter(solicitud => {
         // Verificar múltiples campos donde podría estar almacenado el creador
-        return solicitud.creadoPor === userEmail || 
-               solicitud._creadoPor === userEmail ||
-               solicitud.usuarioCreacion === userEmail ||
-               solicitud.creadoPorEmail === userEmail;
+        const camposCreador = [
+            solicitud.creadoPor,
+            solicitud._creadoPor,
+            solicitud.usuarioCreacion,
+            solicitud.creadoPorEmail,
+            solicitud._usuarioCreacion
+        ];
+        
+        return camposCreador.some(campo => campo === userEmail);
     });
+}
+
+function obtenerEmailUsuario() {
+    const email = getCookie('email');
+    if (!email || email === 'undefined' || email === 'null') {
+        console.warn('Email no encontrado en cookies, usando valor por defecto');
+        return 'usuario@tizayuca.gob.mx'; // Valor por defecto seguro
+    }
+    return email;
+}
+
+// Función para obtener el nombre del usuario de forma segura
+function obtenerNombreUsuario() {
+    const nombre = getCookie('nombre');
+    if (!nombre || nombre === 'undefined' || nombre === 'null') {
+        return 'Sistema';
+    }
+    return decodeURIComponent(nombre);
 }
