@@ -87,6 +87,120 @@ const DEPENDENCIA_SECRETARIA_GENERAL = 'secretaria-general-municipal'; // ← Ag
 
 let suppressFileInputEvents = false;
 
+// Sistema de renovación automática de sesión
+let sessionRenewalInterval = null;
+const SESSION_TIMEOUT = 9 * 60 * 1000; // 9 minutos (renovar antes de que expire a los 10)
+const ACTIVITY_CHECK_INTERVAL = 60000; // Revisar actividad cada minuto
+let lastActivityTime = Date.now();
+
+// Función para detectar actividad del usuario
+function setupActivityDetection() {
+    // Eventos que indican actividad del usuario
+    const activityEvents = [
+        'mousemove', 'mousedown', 'click', 'scroll',
+        'keypress', 'touchstart', 'touchmove'
+    ];
+
+    activityEvents.forEach(event => {
+        document.addEventListener(event, () => {
+            lastActivityTime = Date.now();
+            // Renovar sesión inmediatamente si hay actividad
+            if (shouldRenewSession()) {
+                renewSession();
+            }
+        }, { passive: true });
+    });
+
+    // Verificar actividad periódicamente
+    sessionRenewalInterval = setInterval(() => {
+        if (shouldRenewSession()) {
+            renewSession();
+        }
+        
+        // Verificar si la sesión está por expirar y hay actividad reciente
+        checkSessionExpiration();
+    }, ACTIVITY_CHECK_INTERVAL);
+}
+
+// Función para determinar si debe renovarse la sesión
+function shouldRenewSession() {
+    const timeSinceLastActivity = Date.now() - lastActivityTime;
+    const sessionAge = getSessionAge();
+    
+    // Renovar si ha habido actividad en los últimos 2 minutos
+    // y la sesión tiene más de 8 minutos (pero menos de 10)
+    return timeSinceLastActivity < 120000 && sessionAge > 8 * 60 * 1000;
+}
+
+// Calcular la edad de la sesión
+function getSessionAge() {
+    const expiresCookie = getCookie('expires');
+    if (!expiresCookie) return 0;
+    
+    const expirationDate = new Date(expiresCookie);
+    const now = new Date();
+    return expirationDate - now;
+}
+
+// Renovar la sesión
+function renewSession() {
+    try {
+        const fechaExpiracion = new Date();
+        fechaExpiracion.setMinutes(fechaExpiracion.getMinutes() + 10); // Renovar por otros 10 minutos
+        const expiresUTC = fechaExpiracion.toUTCString();
+        
+        const cookieSettings = `expires=${expiresUTC}; path=/; SameSite=Lax`;
+        
+        // Renovar todas las cookies importantes
+        const cookiesToRenew = ['session', 'email', 'nombre', 'rol', 'dependencia', 'area', 'expires'];
+        
+        cookiesToRenew.forEach(cookieName => {
+            const valor = getCookie(cookieName);
+            if (valor) {
+                document.cookie = `${cookieName}=${valor}; ${cookieSettings}`;
+            }
+        });
+        
+        // También renovar lastLogin con tiempo actual
+        document.cookie = `lastLogin=${new Date().toISOString()}; ${cookieSettings}`;
+        
+        console.log('Sesión renovada automáticamente');
+        return true;
+    } catch (error) {
+        console.error('Error renovando sesión:', error);
+        return false;
+    }
+}
+
+// Verificar expiración de sesión con actividad
+function checkSessionExpiration() {
+    const sessionCookie = getCookie('session');
+    const expiresCookie = getCookie('expires');
+    
+    if (!sessionCookie || !expiresCookie) {
+        // Redirigir si no hay cookies
+        window.location.href = 'index.html';
+        return;
+    }
+    
+    const now = new Date();
+    const expirationDate = new Date(expiresCookie);
+    const timeUntilExpiration = expirationDate - now;
+    
+    // Si la sesión expira en menos de 2 minutos y ha habido actividad reciente
+    if (timeUntilExpiration < 120000 && (Date.now() - lastActivityTime) < 30000) {
+        // Renovar automáticamente
+        renewSession();
+    }
+    
+    // Si ya expiró, redirigir
+    if (now > expirationDate) {
+        clearInterval(sessionRenewalInterval);
+        window.location.href = 'index.html';
+    }
+}
+
+
 window.mostrarModalEstado = function (folio) {
     document.getElementById('modalFolio').textContent = folio;
     new bootstrap.Modal('#statusModal').show();
@@ -485,7 +599,7 @@ async function cargarSecretarias() {
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
     const { esVinculacionCiudadana } = obtenerFiltroEspecial();
-    
+
     // Si es Vinculación Ciudadana, forzar solo Secretaría General
     if (esVinculacionCiudadana) {
         userDependencias = [DEPENDENCIA_SECRETARIA_GENERAL];
@@ -641,7 +755,7 @@ function iniciarActualizacionTiempo() {
 function actualizarEstadisticas(solicitudes) {
     const { esSecretariaGeneral, esVinculacionCiudadana } = obtenerFiltroEspecial();
     const userEmail = getCookie('email');
-    
+
     const stats = {
         pendientes: 0,
         pendientesVobo: 0,
@@ -1667,17 +1781,17 @@ function cargarSeguimiento() {
                 }, { onlyOnce: true });
             });
         })).then(results => {
-        const mergedData = [].concat(...results).reduce((acc, current) => {
-            if (!acc.find(item => item.key === current.key)) {
-                acc.push(current);
-            }
-            return acc;
-        }, []);
-        solicitudesSeguimiento = mergedData;
-        actualizarTablaSeguimiento();
-        actualizarEstadisticas(solicitudesSeguimiento); // ← AÑADIR ESTA LÍNEA
-        actualizarGraficas(solicitudesSeguimiento);     // ← Y ESTA
-    });
+            const mergedData = [].concat(...results).reduce((acc, current) => {
+                if (!acc.find(item => item.key === current.key)) {
+                    acc.push(current);
+                }
+                return acc;
+            }, []);
+            solicitudesSeguimiento = mergedData;
+            actualizarTablaSeguimiento();
+            actualizarEstadisticas(solicitudesSeguimiento); // ← AÑADIR ESTA LÍNEA
+            actualizarGraficas(solicitudesSeguimiento);     // ← Y ESTA
+        });
 
 
         // Escuchar cambios en tiempo real
@@ -2178,7 +2292,9 @@ document.getElementById('filtro-fecha-vobo')?.addEventListener('change', () => {
 
 // Sistema de navegación y UI
 document.addEventListener('DOMContentLoaded', async function () {
-    checkSession();
+        if (!checkSession()) {
+        return; // Si no hay sesión válida, salir
+    }
     showUserInfo();
     setupLogout();
 
@@ -2198,7 +2314,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
     const { esVinculacionCiudadana } = obtenerFiltroEspecial();
-    
+
     // Si es Vinculación Ciudadana, forzar solo Secretaría General
     if (esVinculacionCiudadana) {
         userDependencias = [DEPENDENCIA_SECRETARIA_GENERAL];
@@ -2223,13 +2339,13 @@ document.addEventListener('DOMContentLoaded', async function () {
         seguimientoLi.style.display = 'block';  // Seguimiento de Solicitudes
         validadasLi.style.display = 'block';    // Solicitudes Atendidas
         verificacionLi.style.display = 'block'; // Solicitudes en Verificación
-        
+
         // Ocultar los módulos NO permitidos
         navacuerdos.style.display = 'none';
         navoficios.style.display = 'none';
         if (navInstitucional) navInstitucional.style.display = 'none';
         if (navVobo) navVobo.style.display = 'none';
-        
+
         // Activar por defecto la pestaña de Dashboard
         setTimeout(() => {
             document.querySelector('a[data-content="dashboard"]').click();
@@ -2237,7 +2353,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     } else {
         // Comportamiento normal para otros perfiles
         dashboardLi.style.display = 'block';
-        
+
         switch (role) {
             case 1:
                 nuevaLi.style.display = userDependencias.length > 0 ? 'block' : 'none';
@@ -2330,7 +2446,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             navVobo.style.display = 'block';
             cargarSolicitudesVobo(); // Cargar solicitudes de VoBo
         }
-        
+
         // Mostrar estadística de pendientes VoBo en el dashboard
         const statsVoboElement = document.getElementById('stats-pendientes-vobo');
         if (statsVoboElement) {
@@ -2343,7 +2459,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (navVobo) {
             navVobo.style.display = 'none';
         }
-        
+
         // Ocultar estadística de pendientes VoBo para otros perfiles
         const statsVoboElement = document.getElementById('stats-pendientes-vobo');
         if (statsVoboElement) {
@@ -2380,7 +2496,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         const activeSection = document.getElementById(`${contentId}-content`);
         if (activeSection) {
             activeSection.style.display = 'block';
-            
+
             // Si es Vinculación Ciudadana, aplicar filtros específicos cuando se cambie a ciertas pestañas
             const { esVinculacionCiudadana } = obtenerFiltroEspecial();
             if (esVinculacionCiudadana) {
@@ -2429,15 +2545,20 @@ document.addEventListener('DOMContentLoaded', async function () {
     });
 });
 
-// Funciones de autenticación
+// Función mejorada para obtener cookies
 function getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) {
-        const cookieValue = parts.pop().split(';').shift();
-        return cookieValue ? decodeURIComponent(cookieValue) : '';
+    try {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) {
+            const cookieValue = parts.pop().split(';').shift();
+            return cookieValue ? decodeURIComponent(cookieValue) : '';
+        }
+        return '';
+    } catch (error) {
+        console.error('Error leyendo cookie:', error);
+        return '';
     }
-    return '';
 }
 
 
@@ -2446,16 +2567,34 @@ function checkSession() {
     const expiresCookie = getCookie('expires');
 
     if (!sessionCookie || !expiresCookie) {
-        window.location.href = 'index.html';
-        return;
+        // Si no hay cookies, redirigir inmediatamente
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 100);
+        return false;
     }
 
     const now = new Date();
     const expirationDate = new Date(expiresCookie);
 
     if (now > expirationDate) {
-        window.location.href = 'index.html';
+        // Si ya expiró, redirigir
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 100);
+        return false;
     }
+
+    // Iniciar el sistema de detección de actividad
+    setupActivityDetection();
+    
+    // Renovar inmediatamente si la sesión es vieja
+    const sessionAge = expirationDate - now;
+    if (sessionAge < 5 * 60 * 1000) { // Menos de 5 minutos restantes
+        renewSession();
+    }
+    
+    return true;
 }
 
 function showUserInfo() {
@@ -2474,9 +2613,16 @@ function setupLogout() {
     });
 
     confirmLogout.addEventListener('click', () => {
+        // Detener el intervalo de renovación
+        if (sessionRenewalInterval) {
+            clearInterval(sessionRenewalInterval);
+            sessionRenewalInterval = null;
+        }
+        
+        // Eliminar todas las cookies
         document.cookie.split(";").forEach(cookie => {
-            document.cookie = cookie.replace(/^ +/, "")
-                .replace(/=.*/, `=;expires=${new Date(0).toUTCString()};path=/`);
+            const name = cookie.split("=")[0].trim();
+            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
         });
 
         logoutModal.hide();
@@ -2886,7 +3032,7 @@ function actualizarGraficas(solicitudes) {
     // Filtrar solicitudes para Vinculación Ciudadana si es necesario
     const { esVinculacionCiudadana } = obtenerFiltroEspecial();
     let solicitudesFiltradas = solicitudes;
-    
+
     if (esVinculacionCiudadana) {
         solicitudesFiltradas = filtrarSoloVinculacionCiudadana(solicitudes);
     }
@@ -2902,10 +3048,10 @@ function actualizarGraficas(solicitudes) {
 }
 
 function actualizarGraficaPrincipal(solicitudes) {
-        // Filtrar para Vinculación Ciudadana si es necesario
+    // Filtrar para Vinculación Ciudadana si es necesario
     const { esVinculacionCiudadana } = obtenerFiltroEspecial();
     let solicitudesFiltradas = solicitudes;
-    
+
     if (esVinculacionCiudadana) {
         solicitudesFiltradas = filtrarSoloVinculacionCiudadana(solicitudes);
     }
@@ -3416,7 +3562,7 @@ function obtenerFiltroEspecial() {
     const userEmail = obtenerEmailUsuario(); // ← USAR FUNCIÓN MEJORADA
     return {
         esJefaturaGabinete: userEmail === 'jefaturadegabinete@tizayuca.gob.mx',
-        esSecretariaParticular: 
+        esSecretariaParticular:
             userEmail === 'oficinadepresidencia@tizayuca.gob.mx' ||
             userEmail === 'vinculacion.ciudadana@tizayuca.gob.mx',
         esOficialMayor: userEmail === 'oficialia.mayor@tizayuca.gob.mx',
@@ -3968,7 +4114,7 @@ function actualizarGraficaCanales(solicitudes) {
 // También modifica cargarSolicitudesVobo para que no aplique filtros automáticamente
 function cargarSolicitudesVobo() {
     const userEmail = getCookie('email');
-    
+
     // Verificar explícitamente si es Secretaría General
     if (userEmail !== CORREO_SECRETARIA_GENERAL) {
         return;
@@ -4003,7 +4149,7 @@ function cargarSolicitudesVobo() {
         }
 
         actualizarEstadisticasVobo(solicitudesVobo);
-        
+
         // Actualizar también las estadísticas generales
         actualizarEstadisticas(solicitudesSeguimiento);
     });
@@ -4336,7 +4482,7 @@ window.rechazarVobo = async function (folio) {
         }
 
         // Actualizar UI
-         aplicarFiltrosVobo();
+        aplicarFiltrosVobo();
         if (typeof actualizarTablaSeguimiento === 'function') {
             actualizarTablaSeguimiento();
         }
@@ -4354,18 +4500,18 @@ window.rechazarVobo = async function (folio) {
 
 window.mostrarReenvioVobo = function (folio, motivoRechazo) {
     folioReenvioVobo = folio;
-    
+
     // Mostrar el motivo de rechazo anterior
-    document.getElementById('motivoRechazoAnterior').textContent = 
+    document.getElementById('motivoRechazoAnterior').textContent =
         motivoRechazo || 'No se especificó motivo de rechazo.';
-    
+
     // Limpiar el formulario
     document.getElementById('nuevoDocumentoVobo').value = '';
-    document.getElementById('nuevoDocVoboInfo').textContent = 
+    document.getElementById('nuevoDocVoboInfo').textContent =
         'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
     document.getElementById('removeNuevoDocVobo').classList.add('d-none');
     document.getElementById('comentariosReenvio').value = '';
-    
+
     new bootstrap.Modal(document.getElementById('reenviarVoboModal')).show();
 };
 
@@ -4386,7 +4532,7 @@ async function reenviarSolicitudVobo() {
         // Si se subió un nuevo archivo, procesarlo
         if (nuevoArchivo) {
             const extension = nuevoArchivo.name.split('.').pop().toLowerCase();
-            
+
             if (!ALLOWED_INITIAL_EXTENSIONS.includes(extension)) {
                 mostrarError(`Formato no permitido: .${extension}`);
                 return;
@@ -4439,7 +4585,7 @@ async function reenviarSolicitudVobo() {
         // Cerrar modal y mostrar éxito
         bootstrap.Modal.getInstance(document.getElementById('reenviarVoboModal')).hide();
         mostrarExito('Solicitud reenviada a VoBo exitosamente.');
-        
+
         // Actualizar UI
         actualizarTablaSeguimiento();
 
@@ -4450,7 +4596,7 @@ async function reenviarSolicitudVobo() {
 }
 
 // Event listeners para el manejo del archivo en el modal de reenvío
-document.getElementById('nuevoDocumentoVobo')?.addEventListener('change', function(e) {
+document.getElementById('nuevoDocumentoVobo')?.addEventListener('change', function (e) {
     const fileInfo = document.getElementById('nuevoDocVoboInfo');
     const removeBtn = document.getElementById('removeNuevoDocVobo');
 
@@ -4486,11 +4632,11 @@ document.getElementById('reenviarVoboModal')?.addEventListener('hidden.bs.modal'
 function filtrarSoloVinculacionCiudadana(solicitudes) {
     const { esVinculacionCiudadana } = obtenerFiltroEspecial();
     const userEmail = obtenerEmailUsuario(); // ← USAR FUNCIÓN MEJORADA
-    
+
     if (!esVinculacionCiudadana) {
         return solicitudes;
     }
-    
+
     return solicitudes.filter(solicitud => {
         // Verificar múltiples campos donde podría estar almacenado el creador
         const camposCreador = [
@@ -4500,7 +4646,7 @@ function filtrarSoloVinculacionCiudadana(solicitudes) {
             solicitud.creadoPorEmail,
             solicitud._usuarioCreacion
         ];
-        
+
         return camposCreador.some(campo => campo === userEmail);
     });
 }
@@ -4509,7 +4655,7 @@ function obtenerEmailUsuario() {
     const email = getCookie('email');
     if (!email || email === 'undefined' || email === 'null') {
         console.warn('Email no encontrado en cookies, usando valor por defecto');
-        return 'usuario@tizayuca.gob.mx'; // Valor por defecto seguro
+        // return 'usuario@tizayuca.gob.mx'; // Valor por defecto seguro
     }
     return email;
 }

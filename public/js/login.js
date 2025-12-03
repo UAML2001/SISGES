@@ -94,14 +94,18 @@ document.addEventListener('DOMContentLoaded', () => {
         // Crear cookies con misma fecha de expiración
         const expiresUTC = fechaExpiracion.toUTCString();
         const loginTime = new Date().toISOString();
-        document.cookie = `lastLogin=${loginTime}; expires=${expiresUTC}; path=/`;
-        document.cookie = `session=${usuarioData.uid}; expires=${expiresUTC}; path=/`;
-        document.cookie = `email=${usuarioData.email}; expires=${expiresUTC}; path=/`;
-        document.cookie = `nombre=${encodeURIComponent(usuarioData.nombre)}; expires=${expiresUTC}; path=/`;
-        document.cookie = `rol=${encodeURIComponent(usuarioData.rol)}; expires=${expiresUTC}; path=/`;
-        document.cookie = `dependencia=${encodeURIComponent(usuarioData.dependencias)}; expires=${expiresUTC}; path=/`;
-        document.cookie = `area=${encodeURIComponent(usuarioData.area)}; expires=${expiresUTC}; path=/`;
-        document.cookie = `expires=${expiresUTC}; expires=${expiresUTC}; path=/`;
+
+        // Establecer todas las cookies con el mismo dominio y path
+        const cookieSettings = `expires=${expiresUTC}; path=/; SameSite=Lax`;
+
+        document.cookie = `lastLogin=${loginTime}; ${cookieSettings}`;
+        document.cookie = `session=${usuarioData.uid}; ${cookieSettings}`;
+        document.cookie = `email=${encodeURIComponent(usuarioData.email)}; ${cookieSettings}`;
+        document.cookie = `nombre=${encodeURIComponent(usuarioData.nombre)}; ${cookieSettings}`;
+        document.cookie = `rol=${encodeURIComponent(usuarioData.rol)}; ${cookieSettings}`;
+        document.cookie = `dependencia=${encodeURIComponent(usuarioData.dependencias)}; ${cookieSettings}`;
+        document.cookie = `area=${encodeURIComponent(usuarioData.area)}; ${cookieSettings}`;
+        document.cookie = `expires=${expiresUTC}; ${cookieSettings}`;
 
         mostrarNotificacion(' Acceso autorizado', 'success');
         setTimeout(() => window.location.href = 'dashboard.html', 1500);
