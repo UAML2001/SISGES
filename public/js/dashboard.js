@@ -378,8 +378,8 @@ function cargarValidadas() {
         }
     });
     
-    // Aplicar filtro para Esmeralda Merchan - NO mostrar solicitudes de Vinculación Ciudadana
-    solicitudesValidadas = filtrarSolicitudesVinculacionCiudadana(solicitudesValidadas);
+    // Aplicar filtro por perfil
+    solicitudesValidadas = filtrarPorPerfil(solicitudesValidadas);
     
     // Ordenar por fecha de atención
     solicitudesValidadas.sort((a, b) =>
@@ -515,8 +515,8 @@ function aplicarFiltrosValidadas() {
     const canal = document.getElementById('filtro-canal-validadas').value;
     const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
     
-    // Primero filtrar las solicitudes para Esmeralda Merchan
-    let filtradas = filtrarSolicitudesVinculacionCiudadana(solicitudesValidadas);
+    // Primero aplicar filtro por perfil (para seguridad adicional)
+    let filtradas = filtrarPorPerfil(solicitudesValidadas);
     
     filtradas = filtradas.filter(doc => {
         const esAcuerdoAtendido = (doc.tipo === 'Acuerdo' && doc.estado === 'atendida');
@@ -542,8 +542,8 @@ function aplicarFiltrosSeguimiento() {
     const estado = document.getElementById('filtro-estado-seguimiento').value;
     const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
     
-    // Primero filtrar las solicitudes para Esmeralda Merchan
-    let filtradas = filtrarSolicitudesVinculacionCiudadana(solicitudesSeguimiento);
+    // Primero aplicar filtro por perfil (para seguridad adicional)
+    let filtradas = filtrarPorPerfil(solicitudesSeguimiento);
     
     // Luego aplicar los otros filtros
     filtradas = filtradas.filter(s => {
@@ -1205,7 +1205,7 @@ function cargarVerificacion() {
             return;
         }
 
-       onValue(q, (snapshot) => {
+onValue(q, (snapshot) => {
     solicitudesVerificacion = solicitudesVerificacion.filter(s => s.tipoPath !== path);
 
     snapshot.forEach(childSnapshot => {
@@ -1219,8 +1219,8 @@ function cargarVerificacion() {
         solicitudesVerificacion.push(solicitud);
     });
     
-    // Aplicar filtro para Esmeralda Merchan - NO mostrar solicitudes de Vinculación Ciudadana
-    solicitudesVerificacion = filtrarSolicitudesVinculacionCiudadana(solicitudesVerificacion);
+    // Aplicar filtro por perfil
+    solicitudesVerificacion = filtrarPorPerfil(solicitudesVerificacion);
     
     aplicarFiltrosVerificacion();
 });
@@ -1769,55 +1769,55 @@ function cargarSeguimiento() {
 
     if (userRol === 3) {
         // Admin: cargar todas las solicitudes
-        Promise.all(paths.map(path => {
-            return new Promise((resolve) => {
-                const q = query(ref(database, path), orderByChild('fechaCreacion'));
-                onValue(q, (snapshot) => {
-                    const datos = [];
-                    snapshot.forEach(childSnapshot => {
-                        const solicitud = childSnapshot.val();
-                        solicitud.key = childSnapshot.key;
-                        solicitud.motivoRechazo = solicitud.motivoRechazo || null;
-                        solicitud.tipoPath = path;
-                        datos.push(solicitud);
-                    });
-                    // Aplicar filtro para Vinculación Ciudadana - SOLO SUS SOLICITUDES
-                    const datosFiltrados = filtrarSoloVinculacionCiudadana(datos);
-                    resolve(datosFiltrados);
-                }, { onlyOnce: true });
+// En la sección de Promise.all (admin):
+Promise.all(paths.map(path => {
+    return new Promise((resolve) => {
+        const q = query(ref(database, path), orderByChild('fechaCreacion'));
+        onValue(q, (snapshot) => {
+            const datos = [];
+            snapshot.forEach(childSnapshot => {
+                const solicitud = childSnapshot.val();
+                solicitud.key = childSnapshot.key;
+                solicitud.motivoRechazo = solicitud.motivoRechazo || null;
+                solicitud.tipoPath = path;
+                datos.push(solicitud);
             });
-        })).then(results => {
-            const mergedData = [].concat(...results).reduce((acc, current) => {
-                if (!acc.find(item => item.key === current.key)) {
-                    acc.push(current);
-                }
-                return acc;
-            }, []);
-            solicitudesSeguimiento = mergedData;
-            actualizarTablaSeguimiento();
-            actualizarEstadisticas(solicitudesSeguimiento); // ← AÑADIR ESTA LÍNEA
-            actualizarGraficas(solicitudesSeguimiento);     // ← Y ESTA
-        });
+            // Aplicar filtro por perfil
+            const datosFiltrados = filtrarPorPerfil(datos);
+            resolve(datosFiltrados);
+        }, { onlyOnce: true });
+    });
+})).then(results => {
+    const mergedData = [].concat(...results).reduce((acc, current) => {
+        if (!acc.find(item => item.key === current.key)) {
+            acc.push(current);
+        }
+        return acc;
+    }, []);
+    solicitudesSeguimiento = mergedData;
+    actualizarTablaSeguimiento();
+    actualizarEstadisticas(solicitudesSeguimiento);
+    actualizarGraficas(solicitudesSeguimiento);
+});
 
-
-        // Escuchar cambios en tiempo real
-        paths.forEach(path => {
-            const refPath = ref(database, path);
-            onValue(refPath, (snapshot) => {
-                snapshot.forEach(childSnapshot => {
-                    const nuevaSolicitud = childSnapshot.val();
-                    const index = solicitudesSeguimiento.findIndex(s => s.key === childSnapshot.key);
-                    if (index === -1) {
-                        solicitudesSeguimiento.push({ ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path });
-                    } else {
-                        solicitudesSeguimiento[index] = { ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path };
-                    }
-                });
-                // Aplicar filtro para Vinculación Ciudadana
-                solicitudesSeguimiento = filtrarSoloVinculacionCiudadana(solicitudesSeguimiento);
-                actualizarTablaSeguimiento();
-            });
+// En el listener en tiempo real (admin):
+paths.forEach(path => {
+    const refPath = ref(database, path);
+    onValue(refPath, (snapshot) => {
+        snapshot.forEach(childSnapshot => {
+            const nuevaSolicitud = childSnapshot.val();
+            const index = solicitudesSeguimiento.findIndex(s => s.key === childSnapshot.key);
+            if (index === -1) {
+                solicitudesSeguimiento.push({ ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path });
+            } else {
+                solicitudesSeguimiento[index] = { ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path };
+            }
         });
+        // Aplicar filtro por perfil
+        solicitudesSeguimiento = filtrarPorPerfil(solicitudesSeguimiento);
+        actualizarTablaSeguimiento();
+    });
+});
     } else {
         // No admin: cargar solo las dependencias del usuario
         const allPromises = [];
@@ -3040,13 +3040,8 @@ function validarArchivoInput(input, tipoDocumento) {
 let mainChart, typeChart, trendChart, statusChart;
 
 function actualizarGraficas(solicitudes) {
-    const { esSecretariaParticular } = obtenerFiltroEspecial();
-    let solicitudesFiltradas = solicitudes;
-    
-    // Si es Esmeralda Merchan, filtrar solicitudes de Vinculación Ciudadana
-    if (esSecretariaParticular && obtenerEmailUsuario() === 'oficinadepresidencia@tizayuca.gob.mx') {
-        solicitudesFiltradas = filtrarSolicitudesVinculacionCiudadana(solicitudes);
-    }
+    // Aplicar filtro por perfil
+    let solicitudesFiltradas = filtrarPorPerfil(solicitudes);
     
     actualizarGraficaPrincipal(solicitudesFiltradas);
     actualizarGraficaTipos(solicitudesFiltradas);
@@ -4698,5 +4693,56 @@ function filtrarSolicitudesVinculacionCiudadana(solicitudes) {
             return true;
         });
     }
+    return solicitudes;
+}
+
+// Función para filtrar solicitudes según el perfil del usuario
+function filtrarPorPerfil(solicitudes) {
+    const { esVinculacionCiudadana, esSecretariaParticular } = obtenerFiltroEspecial();
+    const userEmail = obtenerEmailUsuario();
+    
+    // Si no es ninguno de estos perfiles especiales, retornar todas las solicitudes
+    if (!esVinculacionCiudadana && !esSecretariaParticular) {
+        return solicitudes;
+    }
+    
+    // Para Vinculación Ciudadana: SOLO solicitudes con canal "Vinculación Ciudadana" y creadas por ellos
+    if (esVinculacionCiudadana) {
+        return solicitudes.filter(solicitud => {
+            // Verificar que sea del canal "Vinculación Ciudadana"
+            const esCanalVinculacion = solicitud.tipo === 'Vinculación Ciudadana';
+            
+            // Verificar múltiples campos donde podría estar almacenado el creador
+            const camposCreador = [
+                solicitud.creadoPor,
+                solicitud._creadoPor,
+                solicitud.usuarioCreacion,
+                solicitud.creadoPorEmail,
+                solicitud._usuarioCreacion
+            ];
+            
+            const esCreadaPorVinculacion = camposCreador.some(campo => campo === userEmail);
+            
+            return esCanalVinculacion && esCreadaPorVinculacion;
+        });
+    }
+    
+    // Para Oficina de Presidencia: EXCLUIR solicitudes con canal "Vinculación Ciudadana"
+    if (esSecretariaParticular && userEmail === 'oficinadepresidencia@tizayuca.gob.mx') {
+        return solicitudes.filter(solicitud => {
+            // Excluir si el canal es "Vinculación Ciudadana"
+            if (solicitud.tipo === 'Vinculación Ciudadana') {
+                return false;
+            }
+            // Excluir si fue creada por Vinculación Ciudadana
+            if (solicitud.creadoPor === CORREO_VINCULACION_CIUDADANA ||
+                solicitud._creadoPor === CORREO_VINCULACION_CIUDADANA ||
+                solicitud.usuarioCreacion === CORREO_VINCULACION_CIUDADANA) {
+                return false;
+            }
+            return true;
+        });
+    }
+    
     return solicitudes;
 }
