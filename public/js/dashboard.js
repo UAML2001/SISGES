@@ -87,39 +87,208 @@ const DEPENDENCIA_SECRETARIA_GENERAL = 'secretaria-general-municipal'; // ← Ag
 
 let suppressFileInputEvents = false;
 
-// Sistema de renovación automática de sesión
+// Sistema de renovación automática de sesión - VERSIÓN MEJORADA
 let sessionRenewalInterval = null;
+let activityMonitorInterval = null;
 const SESSION_TIMEOUT = 9 * 60 * 1000; // 9 minutos (renovar antes de que expire a los 10)
-const ACTIVITY_CHECK_INTERVAL = 60000; // Revisar actividad cada minuto
+const ACTIVITY_CHECK_INTERVAL = 30000; // Revisar actividad cada 30 segundos (más frecuente)
 let lastActivityTime = Date.now();
+let sessionWarningShown = false;
 
 // Función para detectar actividad del usuario
 function setupActivityDetection() {
+    // Limpiar intervalos anteriores si existen
+    if (sessionRenewalInterval) clearInterval(sessionRenewalInterval);
+    if (activityMonitorInterval) clearInterval(activityMonitorInterval);
+    
     // Eventos que indican actividad del usuario
     const activityEvents = [
         'mousemove', 'mousedown', 'click', 'scroll',
-        'keypress', 'touchstart', 'touchmove'
+        'keypress', 'touchstart', 'touchmove', 'input',
+        'change', 'focus', 'submit'
     ];
 
     activityEvents.forEach(event => {
         document.addEventListener(event, () => {
             lastActivityTime = Date.now();
-            // Renovar sesión inmediatamente si hay actividad
-            if (shouldRenewSession()) {
-                renewSession();
-            }
+            sessionWarningShown = false; // Resetear advertencia
         }, { passive: true });
     });
 
-    // Verificar actividad periódicamente
-    sessionRenewalInterval = setInterval(() => {
-        if (shouldRenewSession()) {
-            renewSession();
-        }
-        
-        // Verificar si la sesión está por expirar y hay actividad reciente
-        checkSessionExpiration();
+    // Monitorear actividad periódicamente
+    activityMonitorInterval = setInterval(() => {
+        checkSessionStatus();
     }, ACTIVITY_CHECK_INTERVAL);
+
+    // Iniciar renovación periódica
+    sessionRenewalInterval = setInterval(() => {
+        renewSessionIfNeeded();
+    }, 60000); // Revisar cada minuto
+}
+
+// Función mejorada para renovar sesión cuando sea necesario
+function renewSessionIfNeeded() {
+    const expiresCookie = getCookie('expires');
+    if (!expiresCookie) return false;
+    
+    const expirationDate = new Date(expiresCookie);
+    const now = new Date();
+    const timeUntilExpiration = expirationDate - now;
+    
+    // Renovar si quedan menos de 5 minutos y ha habido actividad reciente
+    if (timeUntilExpiration < 300000 && (Date.now() - lastActivityTime) < 180000) {
+        return renewSession();
+    }
+    
+    return false;
+}
+
+// Función mejorada para verificar estado de sesión
+function checkSessionStatus() {
+    const sessionCookie = getCookie('session');
+    const expiresCookie = getCookie('expires');
+    
+    if (!sessionCookie || !expiresCookie) {
+        redirectToLogin();
+        return;
+    }
+    
+    const now = new Date();
+    const expirationDate = new Date(expiresCookie);
+    const timeUntilExpiration = expirationDate - now;
+    
+    // Mostrar advertencia 2 minutos antes de expirar
+    if (timeUntilExpiration < 120000 && !sessionWarningShown) {
+        showSessionWarning();
+        sessionWarningShown = true;
+    }
+    
+    // Si ya expiró o está muy cerca (menos de 30 segundos)
+    if (timeUntilExpiration < 30000) {
+        if (Date.now() - lastActivityTime < 60000) {
+            // Si hay actividad reciente, renovar inmediatamente
+            forceRenewSession();
+        } else {
+            // Si no hay actividad, redirigir
+            redirectToLogin();
+        }
+    }
+}
+
+// Función para forzar renovación inmediata
+function forceRenewSession() {
+    try {
+        const fechaExpiracion = new Date();
+        fechaExpiracion.setMinutes(fechaExpiracion.getMinutes() + 10);
+        const expiresUTC = fechaExpiracion.toUTCString();
+        
+        const cookieSettings = `expires=${expiresUTC}; path=/; SameSite=Lax; Secure`;
+        
+        // Renovar todas las cookies importantes
+        const cookiesToRenew = ['session', 'email', 'nombre', 'rol', 'dependencia', 'area', 'expires'];
+        
+        cookiesToRenew.forEach(cookieName => {
+            const valor = getCookie(cookieName);
+            if (valor) {
+                document.cookie = `${cookieName}=${encodeURIComponent(valor)}; ${cookieSettings}`;
+            }
+        });
+        
+        // También renovar lastLogin con tiempo actual
+        document.cookie = `lastLogin=${new Date().toISOString()}; ${cookieSettings}`;
+        
+        sessionWarningShown = false;
+        console.log('Sesión renovada forzosamente');
+        return true;
+    } catch (error) {
+        console.error('Error forzando renovación de sesión:', error);
+        return false;
+    }
+}
+
+// Mostrar advertencia de sesión
+function showSessionWarning() {
+    // Crear o actualizar notificación
+    let warningDiv = document.getElementById('session-warning');
+    if (!warningDiv) {
+        warningDiv = document.createElement('div');
+        warningDiv.id = 'session-warning';
+        warningDiv.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #ff9800;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            z-index: 9999;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 300px;
+        `;
+        document.body.appendChild(warningDiv);
+    }
+    
+    warningDiv.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-exclamation-triangle" style="font-size: 20px;"></i>
+            <div>
+                <strong>Sesión por expirar</strong><br>
+                <small>Tu sesión expirará en 2 minutos. Realiza alguna acción para renovarla.</small>
+            </div>
+        </div>
+    `;
+    
+    // Auto-ocultar después de 10 segundos
+    setTimeout(() => {
+        if (warningDiv.parentNode) {
+            warningDiv.style.opacity = '0';
+            warningDiv.style.transition = 'opacity 0.5s';
+            setTimeout(() => {
+                if (warningDiv.parentNode) {
+                    warningDiv.remove();
+                }
+            }, 500);
+        }
+    }, 10000);
+}
+
+// Redirección mejorada a login
+function redirectToLogin() {
+    // Limpiar intervalos
+    if (sessionRenewalInterval) clearInterval(sessionRenewalInterval);
+    if (activityMonitorInterval) clearInterval(activityMonitorInterval);
+    
+    // Mostrar mensaje
+    const message = document.createElement('div');
+    message.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.8);
+        color: white;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+        font-family: Arial, sans-serif;
+    `;
+    message.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <i class="fas fa-hourglass-end" style="font-size: 50px; margin-bottom: 20px;"></i>
+            <h2>Sesión Expirada</h2>
+            <p>Tu sesión ha expirado por inactividad.</p>
+            <p>Redirigiendo al inicio de sesión...</p>
+        </div>
+    `;
+    document.body.appendChild(message);
+    
+    // Redirigir después de 2 segundos
+    setTimeout(() => {
+        window.location.href = 'index.html';
+    }, 2000);
 }
 
 // Función para determinar si debe renovarse la sesión
@@ -146,26 +315,35 @@ function getSessionAge() {
 function renewSession() {
     try {
         const fechaExpiracion = new Date();
-        fechaExpiracion.setMinutes(fechaExpiracion.getMinutes() + 10); // Renovar por otros 10 minutos
+        fechaExpiracion.setMinutes(fechaExpiracion.getMinutes() + 10);
         const expiresUTC = fechaExpiracion.toUTCString();
         
-        const cookieSettings = `expires=${expiresUTC}; path=/; SameSite=Lax`;
+        const cookieSettings = `expires=${expiresUTC}; path=/; SameSite=Lax; Secure`;
+        
+        // Solo renovar si las cookies existen
+        const sessionCookie = getCookie('session');
+        if (!sessionCookie) {
+            console.warn('No hay sesión para renovar');
+            return false;
+        }
         
         // Renovar todas las cookies importantes
         const cookiesToRenew = ['session', 'email', 'nombre', 'rol', 'dependencia', 'area', 'expires'];
         
+        let renewed = false;
         cookiesToRenew.forEach(cookieName => {
             const valor = getCookie(cookieName);
             if (valor) {
-                document.cookie = `${cookieName}=${valor}; ${cookieSettings}`;
+                document.cookie = `${cookieName}=${encodeURIComponent(valor)}; ${cookieSettings}`;
+                renewed = true;
             }
         });
         
-        // También renovar lastLogin con tiempo actual
-        document.cookie = `lastLogin=${new Date().toISOString()}; ${cookieSettings}`;
-        
-        console.log('Sesión renovada automáticamente');
-        return true;
+        if (renewed) {
+            console.log('Sesión renovada automáticamente a las', new Date().toLocaleTimeString());
+            return true;
+        }
+        return false;
     } catch (error) {
         console.error('Error renovando sesión:', error);
         return false;
@@ -173,31 +351,34 @@ function renewSession() {
 }
 
 // Verificar expiración de sesión con actividad
-function checkSessionExpiration() {
+// Modificar la función checkSession inicial
+function checkSession() {
     const sessionCookie = getCookie('session');
     const expiresCookie = getCookie('expires');
-    
+
     if (!sessionCookie || !expiresCookie) {
-        // Redirigir si no hay cookies
-        window.location.href = 'index.html';
-        return;
+        redirectToLogin();
+        return false;
     }
-    
+
     const now = new Date();
     const expirationDate = new Date(expiresCookie);
-    const timeUntilExpiration = expirationDate - now;
+
+    if (now > expirationDate) {
+        redirectToLogin();
+        return false;
+    }
+
+    // Iniciar el sistema de detección de actividad mejorado
+    setupActivityDetection();
     
-    // Si la sesión expira en menos de 2 minutos y ha habido actividad reciente
-    if (timeUntilExpiration < 120000 && (Date.now() - lastActivityTime) < 30000) {
-        // Renovar automáticamente
+    // Renovar inmediatamente si la sesión es vieja
+    const sessionAge = expirationDate - now;
+    if (sessionAge < 5 * 60 * 1000) { // Menos de 5 minutos restantes
         renewSession();
     }
     
-    // Si ya expiró, redirigir
-    if (now > expirationDate) {
-        clearInterval(sessionRenewalInterval);
-        window.location.href = 'index.html';
-    }
+    return true;
 }
 
 
@@ -2573,40 +2754,40 @@ function getCookie(name) {
 }
 
 
-function checkSession() {
-    const sessionCookie = getCookie('session');
-    const expiresCookie = getCookie('expires');
+// function checkSession() {
+//     const sessionCookie = getCookie('session');
+//     const expiresCookie = getCookie('expires');
 
-    if (!sessionCookie || !expiresCookie) {
-        // Si no hay cookies, redirigir inmediatamente
-        setTimeout(() => {
-            window.location.href = 'index.html';
-        }, 100);
-        return false;
-    }
+//     if (!sessionCookie || !expiresCookie) {
+//         // Si no hay cookies, redirigir inmediatamente
+//         setTimeout(() => {
+//             window.location.href = 'index.html';
+//         }, 100);
+//         return false;
+//     }
 
-    const now = new Date();
-    const expirationDate = new Date(expiresCookie);
+//     const now = new Date();
+//     const expirationDate = new Date(expiresCookie);
 
-    if (now > expirationDate) {
-        // Si ya expiró, redirigir
-        setTimeout(() => {
-            window.location.href = 'index.html';
-        }, 100);
-        return false;
-    }
+//     if (now > expirationDate) {
+//         // Si ya expiró, redirigir
+//         setTimeout(() => {
+//             window.location.href = 'index.html';
+//         }, 100);
+//         return false;
+//     }
 
-    // Iniciar el sistema de detección de actividad
-    setupActivityDetection();
+//     // Iniciar el sistema de detección de actividad
+//     setupActivityDetection();
     
-    // Renovar inmediatamente si la sesión es vieja
-    const sessionAge = expirationDate - now;
-    if (sessionAge < 5 * 60 * 1000) { // Menos de 5 minutos restantes
-        renewSession();
-    }
+//     // Renovar inmediatamente si la sesión es vieja
+//     const sessionAge = expirationDate - now;
+//     if (sessionAge < 5 * 60 * 1000) { // Menos de 5 minutos restantes
+//         renewSession();
+//     }
     
-    return true;
-}
+//     return true;
+// }
 
 function showUserInfo() {
     const nombre = decodeURIComponent(getCookie('nombre') || 'Usuario');
@@ -2624,20 +2805,33 @@ function setupLogout() {
     });
 
     confirmLogout.addEventListener('click', () => {
-        // Detener el intervalo de renovación
+        // Detener todos los intervalos
         if (sessionRenewalInterval) {
             clearInterval(sessionRenewalInterval);
             sessionRenewalInterval = null;
         }
+        if (activityMonitorInterval) {
+            clearInterval(activityMonitorInterval);
+            activityMonitorInterval = null;
+        }
         
-        // Eliminar todas las cookies
-        document.cookie.split(";").forEach(cookie => {
-            const name = cookie.split("=")[0].trim();
-            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
-        });
-
+        // Eliminar todas las cookies de forma segura
+        const cookies = document.cookie.split(";");
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i];
+            const eqPos = cookie.indexOf("=");
+            const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+            document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Lax";
+        }
+        
+        // También limpiar localStorage y sessionStorage
+        localStorage.clear();
+        sessionStorage.clear();
+        
         logoutModal.hide();
-        setTimeout(() => window.location.href = 'index.html', 300);
+        
+        // Redirigir inmediatamente
+        window.location.href = 'index.html';
     });
 }
 
@@ -4746,3 +4940,9 @@ function filtrarPorPerfil(solicitudes) {
     
     return solicitudes;
 }
+
+// Añadir esta función para limpiar intervalos al salir
+window.addEventListener('beforeunload', () => {
+    if (sessionRenewalInterval) clearInterval(sessionRenewalInterval);
+    if (activityMonitorInterval) clearInterval(activityMonitorInterval);
+});
