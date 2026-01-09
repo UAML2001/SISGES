@@ -2629,6 +2629,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         <option>Redes sociales</option>
         <option>Llamada telefónica</option>
         <option>Vinculación Ciudadana</option>
+        <option>Eventos Públicos</option>
     `;
 
     // AHORA SÍ PODEMOS USAR navVobo DE FORMA SEGURA
