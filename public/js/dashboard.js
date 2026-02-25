@@ -1616,7 +1616,7 @@ const estados = {
     'en_proceso': { texto: 'En Proceso', color: coloresGraficas.info },
     'verificacion': { texto: 'En Verificación', color: coloresGraficas.warning },
     'atendida': { texto: 'Atendida', color: coloresGraficas.success },
-    'atrasada': { texto: 'Atrasada', color: coloresGraficas.danger }
+    'atrasada': { texto: 'No Atendidas', color: coloresGraficas.danger }
 };
 
 
@@ -3325,7 +3325,7 @@ function actualizarGraficaPrincipal(solicitudes) {
                     barThickness: 35
                 },
                 {
-                    label: 'Atrasadas',
+                    label: 'No Atendidas',
                     data: datos.atrasada,
                     backgroundColor: coloresGraficas.danger,
                     borderColor: coloresGraficas.danger,
@@ -4176,7 +4176,7 @@ function actualizarGraficaCanales(solicitudes) {
         { id: 'pendiente', label: 'Pendientes', color: '#491F42' },
         { id: 'en_proceso', label: 'En Proceso', color: '#ae9074' },
         { id: 'por_vencer', label: 'Por Vencer', color: '#720F36' },
-        { id: 'atrasada', label: 'Vencidas', color: '#a90000' },
+        { id: 'atrasada', label: 'No Atendidas', color: '#a90000' },
         { id: 'verificacion', label: 'En Verificación', color: '#FFA500' }
     ];
 
