@@ -1632,6 +1632,8 @@ function crearFilaSolicitud(solicitud) {
         'institucional': 'Solicitud Institucional'
     };
 
+    const userRol = parseInt(getCookie('rol')) || 0;
+
     const estado = estados[solicitud.estado] || { texto: 'Desconocido', color: '#666' };
     const dependenciaNombre = dependenciasMap[solicitud.dependencia] || 'Desconocida';
 
@@ -1665,28 +1667,29 @@ function crearFilaSolicitud(solicitud) {
         <td>${solicitud.estado === 'atendida' ? 'Atendida' : solicitud.estado === 'verificacion' ? 'En Verificación' : solicitud.estado === 'pendiente_vobo' ? 'Esperando VoBo' : solicitud.estado === 'rechazado_vobo' ? 'VoBo Rechazado' : calcularTiempoRestante(solicitud.fechaLimite)}</td>
         <td>
             <div class="d-flex gap-2 flex-wrap">
-                ${solicitud.documentoInicial ? `
-                    <button class="btn btn-sm btn-documento" 
-                            onclick="mostrarDocumentoInicial('${solicitud.folio}', '${solicitud.nombreDocumento}', '${solicitud.documentoInicial}')">
-                        <i class="fas fa-file-alt me-1"></i>Documento Inicial
-                    </button>
-                ` : ''}
-                
-                <!-- Botón para VoBo (solo visible para Secretaría General) -->
-                ${solicitud.estado === 'pendiente_vobo' && obtenerFiltroEspecial().esSecretariaGeneral ? `
-                    <button class="btn btn-sm btn-success" 
-                            onclick="aprobarVobo('${solicitud.folio}')">
-                        <i class="fas fa-check me-1"></i> Dar VoBo
-                    </button>
-                ` : ''}
-                
-                ${botonReenvio}
-                
-                <button class="btn btn-sm btn-proceso" 
-                    ${deshabilitarBotones ? 'disabled' : ''}
-                    onclick="${!deshabilitarBotones ? `mostrarConfirmacionProceso('${solicitud.folio}')` : ''}">
-                    <i class="fas fa-sync-alt"></i> ${solicitud.estado === 'en_proceso' ? 'En Proceso' : 'Marcar Proceso'}
-                </button>
+${solicitud.documentoInicial ? `
+    <button class="btn btn-sm btn-documento" 
+            onclick="mostrarDocumentoInicial('${solicitud.folio}', '${solicitud.nombreDocumento}', '${solicitud.documentoInicial}')">
+        <i class="fas fa-file-alt me-1"></i>Documento Inicial
+    </button>
+` : ''}
+
+<!-- Botón para VoBo (solo visible para Secretaría General) -->
+${solicitud.estado === 'pendiente_vobo' && obtenerFiltroEspecial().esSecretariaGeneral ? `
+    <button class="btn btn-sm btn-success" 
+            onclick="aprobarVobo('${solicitud.folio}')">
+        <i class="fas fa-check me-1"></i> Dar VoBo
+    </button>
+` : ''}
+
+${botonReenvio}
+
+${userRol === 3 && !deshabilitarBotones ? `
+    <button class="btn btn-sm btn-proceso" 
+            onclick="mostrarConfirmacionProceso('${solicitud.folio}')">
+        <i class="fas fa-sync-alt"></i> ${solicitud.estado === 'en_proceso' ? 'En Proceso' : 'Marcar Proceso'}
+    </button>
+` : ''}
                 
                 <button class="btn btn-sm btn-verificacion" 
                     ${deshabilitarBotones ? 'disabled' : ''}
