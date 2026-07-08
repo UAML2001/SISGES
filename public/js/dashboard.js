@@ -141,7 +141,7 @@ function setupActivityDetection() {
     // Limpiar intervalos anteriores si existen
     if (sessionRenewalInterval) clearInterval(sessionRenewalInterval);
     if (activityMonitorInterval) clearInterval(activityMonitorInterval);
-    
+
     // Eventos que indican actividad del usuario
     const activityEvents = [
         'mousemove', 'mousedown', 'click', 'scroll',
@@ -171,16 +171,16 @@ function setupActivityDetection() {
 function renewSessionIfNeeded() {
     const expiresCookie = getCookie('expires');
     if (!expiresCookie) return false;
-    
+
     const expirationDate = new Date(expiresCookie);
     const now = new Date();
     const timeUntilExpiration = expirationDate - now;
-    
+
     // Renovar si quedan menos de 5 minutos y ha habido actividad reciente
     if (timeUntilExpiration < 300000 && (Date.now() - lastActivityTime) < 180000) {
         return renewSession();
     }
-    
+
     return false;
 }
 
@@ -188,22 +188,22 @@ function renewSessionIfNeeded() {
 function checkSessionStatus() {
     const sessionCookie = getCookie('session');
     const expiresCookie = getCookie('expires');
-    
+
     if (!sessionCookie || !expiresCookie) {
         redirectToLogin();
         return;
     }
-    
+
     const now = new Date();
     const expirationDate = new Date(expiresCookie);
     const timeUntilExpiration = expirationDate - now;
-    
+
     // Mostrar advertencia 2 minutos antes de expirar
     if (timeUntilExpiration < 120000 && !sessionWarningShown) {
         showSessionWarning();
         sessionWarningShown = true;
     }
-    
+
     // Si ya expiró o está muy cerca (menos de 30 segundos)
     if (timeUntilExpiration < 30000) {
         if (Date.now() - lastActivityTime < 60000) {
@@ -222,22 +222,22 @@ function forceRenewSession() {
         const fechaExpiracion = new Date();
         fechaExpiracion.setMinutes(fechaExpiracion.getMinutes() + 10);
         const expiresUTC = fechaExpiracion.toUTCString();
-        
+
         const cookieSettings = `expires=${expiresUTC}; path=/; SameSite=Lax; Secure`;
-        
+
         // Renovar todas las cookies importantes
         const cookiesToRenew = ['session', 'email', 'nombre', 'rol', 'dependencia', 'area', 'expires'];
-        
+
         cookiesToRenew.forEach(cookieName => {
             const valor = getCookie(cookieName);
             if (valor) {
                 document.cookie = `${cookieName}=${encodeURIComponent(valor)}; ${cookieSettings}`;
             }
         });
-        
+
         // También renovar lastLogin con tiempo actual
         document.cookie = `lastLogin=${new Date().toISOString()}; ${cookieSettings}`;
-        
+
         sessionWarningShown = false;
         console.log('Sesión renovada forzosamente');
         return true;
@@ -268,7 +268,7 @@ function showSessionWarning() {
         `;
         document.body.appendChild(warningDiv);
     }
-    
+
     warningDiv.innerHTML = `
         <div style="display: flex; align-items: center; gap: 10px;">
             <i class="fas fa-exclamation-triangle" style="font-size: 20px;"></i>
@@ -278,7 +278,7 @@ function showSessionWarning() {
             </div>
         </div>
     `;
-    
+
     // Auto-ocultar después de 10 segundos
     setTimeout(() => {
         if (warningDiv.parentNode) {
@@ -298,7 +298,7 @@ function redirectToLogin() {
     // Limpiar intervalos
     if (sessionRenewalInterval) clearInterval(sessionRenewalInterval);
     if (activityMonitorInterval) clearInterval(activityMonitorInterval);
-    
+
     // Mostrar mensaje
     const message = document.createElement('div');
     message.style.cssText = `
@@ -325,7 +325,7 @@ function redirectToLogin() {
         </div>
     `;
     document.body.appendChild(message);
-    
+
     // Redirigir después de 2 segundos
     setTimeout(() => {
         window.location.href = 'index.html';
@@ -336,7 +336,7 @@ function redirectToLogin() {
 function shouldRenewSession() {
     const timeSinceLastActivity = Date.now() - lastActivityTime;
     const sessionAge = getSessionAge();
-    
+
     // Renovar si ha habido actividad en los últimos 2 minutos
     // y la sesión tiene más de 8 minutos (pero menos de 10)
     return timeSinceLastActivity < 120000 && sessionAge > 8 * 60 * 1000;
@@ -346,7 +346,7 @@ function shouldRenewSession() {
 function getSessionAge() {
     const expiresCookie = getCookie('expires');
     if (!expiresCookie) return 0;
-    
+
     const expirationDate = new Date(expiresCookie);
     const now = new Date();
     return expirationDate - now;
@@ -358,19 +358,19 @@ function renewSession() {
         const fechaExpiracion = new Date();
         fechaExpiracion.setMinutes(fechaExpiracion.getMinutes() + 10);
         const expiresUTC = fechaExpiracion.toUTCString();
-        
+
         const cookieSettings = `expires=${expiresUTC}; path=/; SameSite=Lax; Secure`;
-        
+
         // Solo renovar si las cookies existen
         const sessionCookie = getCookie('session');
         if (!sessionCookie) {
             console.warn('No hay sesión para renovar');
             return false;
         }
-        
+
         // Renovar todas las cookies importantes
         const cookiesToRenew = ['session', 'email', 'nombre', 'rol', 'dependencia', 'area', 'expires'];
-        
+
         let renewed = false;
         cookiesToRenew.forEach(cookieName => {
             const valor = getCookie(cookieName);
@@ -379,7 +379,7 @@ function renewSession() {
                 renewed = true;
             }
         });
-        
+
         if (renewed) {
             console.log('Sesión renovada automáticamente a las', new Date().toLocaleTimeString());
             return true;
@@ -412,13 +412,13 @@ function checkSession() {
 
     // Iniciar el sistema de detección de actividad mejorado
     setupActivityDetection();
-    
+
     // Renovar inmediatamente si la sesión es vieja
     const sessionAge = expirationDate - now;
     if (sessionAge < 5 * 60 * 1000) { // Menos de 5 minutos restantes
         renewSession();
     }
-    
+
     return true;
 }
 
@@ -576,40 +576,40 @@ function cargarValidadas() {
         }
 
         onValue(q, (snapshot) => {
-    solicitudesValidadas = solicitudesValidadas.filter(s => s.tipoPath !== path);
+            solicitudesValidadas = solicitudesValidadas.filter(s => s.tipoPath !== path);
 
-    snapshot.forEach(childSnapshot => {
-        const doc = childSnapshot.val();
-        
-        // Filtrar por dependencia si no es admin ni presidenta
-        if (userRol !== 3 && userRol !== 4 && !userDependencias.includes(doc.dependencia)) return;
-        
-        // Solo agregar atendidas
-        if (doc.estado !== 'atendida') return;
-        
-        // Asegurar datos mínimos
-        const solicitud = {
-            key: childSnapshot.key,
-            tipoPath: path,
-            ...doc
-        };
-        
-        // Asegurar que no esté duplicada
-        if (!solicitudesValidadas.some(s => s.key === solicitud.key)) {
-            solicitudesValidadas.push(solicitud);
-        }
-    });
-    
-    // Aplicar filtro por perfil
-    solicitudesValidadas = filtrarPorPerfil(solicitudesValidadas);
-    
-    // Ordenar por fecha de atención
-    solicitudesValidadas.sort((a, b) =>
-        new Date(b.fechaAtencion || b.fechaCreacion) - new Date(a.fechaAtencion || a.fechaCreacion)
-    );
-    
-    aplicarFiltrosValidadas();
-});
+            snapshot.forEach(childSnapshot => {
+                const doc = childSnapshot.val();
+
+                // Filtrar por dependencia si no es admin ni presidenta
+                if (userRol !== 3 && userRol !== 4 && !userDependencias.includes(doc.dependencia)) return;
+
+                // Solo agregar atendidas
+                if (doc.estado !== 'atendida') return;
+
+                // Asegurar datos mínimos
+                const solicitud = {
+                    key: childSnapshot.key,
+                    tipoPath: path,
+                    ...doc
+                };
+
+                // Asegurar que no esté duplicada
+                if (!solicitudesValidadas.some(s => s.key === solicitud.key)) {
+                    solicitudesValidadas.push(solicitud);
+                }
+            });
+
+            // Aplicar filtro por perfil
+            solicitudesValidadas = filtrarPorPerfil(solicitudesValidadas);
+
+            // Ordenar por fecha de atención
+            solicitudesValidadas.sort((a, b) =>
+                new Date(b.fechaAtencion || b.fechaCreacion) - new Date(a.fechaAtencion || a.fechaCreacion)
+            );
+
+            aplicarFiltrosValidadas();
+        });
     });
 }
 
@@ -739,26 +739,26 @@ function aplicarFiltrosValidadas() {
     const secretaria = document.getElementById('filtro-secretaria-validadas').value;
     const canal = document.getElementById('filtro-canal-validadas').value;
     const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
-    
+
     // Primero aplicar filtro por perfil (para seguridad adicional)
     let filtradas = filtrarPorPerfil(solicitudesValidadas);
-    
+
     filtradas = filtradas.filter(doc => {
         const esAcuerdoAtendido = (doc.tipo === 'Acuerdo' && doc.estado === 'atendida');
-        
+
         if (esJefaturaGabinete && !esAcuerdoAtendido && doc.tipo !== 'acuerdo')
             return false;
-            
+
         if (esSecretariaParticular && !esAcuerdoAtendido && doc.tipo === 'acuerdo')
             return false;
-            
+
         const texto = `${doc.key} ${doc.asunto} ${dependenciasMap[doc.dependencia]} ${doc.tipo}`.toLowerCase();
         const coincideSecretaria = !secretaria || doc.dependencia === secretaria;
         const coincideCanal = !canal || (doc.tipo || '').toLowerCase().includes(canal.toLowerCase());
-        
+
         return texto.includes(busqueda) && coincideSecretaria && coincideCanal;
     });
-    
+
     mostrarPaginaValidadas(filtradas);
 }
 
@@ -766,22 +766,22 @@ function aplicarFiltrosSeguimiento() {
     const busqueda = document.getElementById('busqueda-seguimiento').value.toLowerCase();
     const estado = document.getElementById('filtro-estado-seguimiento').value;
     const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
-    
+
     // Primero aplicar filtro por perfil (para seguridad adicional)
     let filtradas = filtrarPorPerfil(solicitudesSeguimiento);
-    
+
     // Luego aplicar los otros filtros
     filtradas = filtradas.filter(s => {
         if (esJefaturaGabinete && s.tipoPath !== 'acuerdos') return false;
         if (esSecretariaParticular && s.tipoPath === 'acuerdos') return false;
         // Excluir atendidas y aplicar otros filtros
         if (s.estado === 'atendida') return false;
-        
+
         const texto = `${s.key} ${s.asunto} ${dependenciasMap[s.dependencia]}`.toLowerCase();
         const coincideEstado = !estado || s.estado === estado;
         return texto.includes(busqueda) && coincideEstado;
     });
-    
+
     mostrarPaginaSeguimiento(filtradas);
 }
 
@@ -891,7 +891,20 @@ window.mostrarEvidenciaModal = function (folio, tipoDocumento, urlDocumento, sec
     document.getElementById('nombreArchivoCompleto').textContent = `${tipoDocumento}: ${nombreArchivo}`;
     document.getElementById('folioEvidencia').textContent = folio;
     document.getElementById('secretariaEvidencia').textContent = secretaria || 'No especificada';
-    document.getElementById('fechaEvidencia').textContent = new Date().toLocaleDateString('es-MX');
+
+    const solicitud =
+        solicitudesSeguimiento.find(s => s.folio === folio) ||
+        solicitudesValidadas.find(s => s.folio === folio || s.key === folio) ||
+        solicitudesVerificacion.find(s => s.folio === folio);
+
+    document.getElementById('fechaEvidencia').textContent =
+        solicitud?.fechaCreacion
+            ? new Date(solicitud.fechaCreacion).toLocaleDateString('es-MX', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            })
+            : '-';
 
     // Cargar contenido después de 300ms
     setTimeout(() => {
@@ -1442,25 +1455,25 @@ function cargarVerificacion() {
             return;
         }
 
-onValue(q, (snapshot) => {
-    solicitudesVerificacion = solicitudesVerificacion.filter(s => s.tipoPath !== path);
+        onValue(q, (snapshot) => {
+            solicitudesVerificacion = solicitudesVerificacion.filter(s => s.tipoPath !== path);
 
-    snapshot.forEach(childSnapshot => {
-        const solicitud = childSnapshot.val();
-        if (userRol !== 3 && userRol !== 4 && !userDependencias.includes(solicitud.dependencia)) return;
-        if (solicitud.estado !== 'verificacion') return;
+            snapshot.forEach(childSnapshot => {
+                const solicitud = childSnapshot.val();
+                if (userRol !== 3 && userRol !== 4 && !userDependencias.includes(solicitud.dependencia)) return;
+                if (solicitud.estado !== 'verificacion') return;
 
-        solicitud.key = childSnapshot.key;
-        solicitud.tipoPath = path;
-        solicitud.folio = solicitud.folio || childSnapshot.key;
-        solicitudesVerificacion.push(solicitud);
-    });
-    
-    // Aplicar filtro por perfil
-    solicitudesVerificacion = filtrarPorPerfil(solicitudesVerificacion);
-    
-    aplicarFiltrosVerificacion();
-});
+                solicitud.key = childSnapshot.key;
+                solicitud.tipoPath = path;
+                solicitud.folio = solicitud.folio || childSnapshot.key;
+                solicitudesVerificacion.push(solicitud);
+            });
+
+            // Aplicar filtro por perfil
+            solicitudesVerificacion = filtrarPorPerfil(solicitudesVerificacion);
+
+            aplicarFiltrosVerificacion();
+        });
     });
 }
 
@@ -1718,10 +1731,21 @@ function crearFilaSolicitud(solicitud) {
     tr.innerHTML = `
         <td>${solicitud.folio}</td>
         <td>${nombresTipos[solicitud.tipo] || solicitud.tipo}</td>
+        <td>
+    ${solicitud.fechaCreacion
+            ? new Date(solicitud.fechaCreacion).toLocaleDateString('es-MX', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            })
+            : '-'
+        }
+</td>
         <td>${solicitud.asunto}</td>
         <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
         <td>${solicitud.solicitante?.nombre || solicitud.contacto || 'N/A'}</td>
         <td>${solicitud.solicitante?.telefono || solicitud.telefono || 'N/A'}</td>
+
         <td><span class="status-badge" style="background:${estado.color}">${estado.texto}</span></td>
         <td>${solicitud.estado === 'atendida' ? 'Atendida' : solicitud.estado === 'verificacion' ? 'En Verificación' : solicitud.estado === 'pendiente_vobo' ? 'Esperando VoBo' : solicitud.estado === 'rechazado_vobo' ? 'VoBo Rechazado' : calcularTiempoRestante(solicitud.fechaLimite)}</td>
         <td>
@@ -1784,6 +1808,24 @@ ${userRol === 3 && !deshabilitarBotones ? `
 }
 
 window.mostrarDocumentoInicial = function (folio, nombreArchivo, url, secretariaOrigen) {
+    const solicitud = solicitudesSeguimiento.find(s => s.folio === folio);
+
+const fechaDocumento = solicitud?.fechaCreacion
+    ? new Date(solicitud.fechaCreacion).toLocaleDateString('es-MX', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    })
+    : '-';
+
+    document.getElementById('fechaEvidencia').textContent =
+        solicitud?.fechaCreacion
+            ? new Date(solicitud.fechaCreacion).toLocaleDateString('es-MX', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            })
+            : fechaActual;
     const modal = new bootstrap.Modal(document.getElementById('evidenciaModal'));
     const loading = document.getElementById('loadingPreview');
     const pdfContainer = document.getElementById('pdfContainer');
@@ -1819,7 +1861,7 @@ window.mostrarDocumentoInicial = function (folio, nombreArchivo, url, secretaria
     document.getElementById('nombreArchivoCompleto').textContent = nombre;
     document.getElementById('folioEvidencia').textContent = folio;
     document.getElementById('secretariaEvidencia').textContent = '-';
-    document.getElementById('fechaEvidencia').textContent = fechaActual;
+    document.getElementById('fechaEvidencia').textContent = fechaDocumento;
 
     // Configurar eventos del modal
     const modalShownHandler = () => {
@@ -1857,7 +1899,7 @@ window.mostrarDocumentoInicial = function (folio, nombreArchivo, url, secretaria
             };
         } else if (fileExt === 'pdf') {
             pdfContainer.classList.remove('d-none');
-            document.getElementById('pdfMeta').textContent = `${nombre} | ${fechaActual}`;
+            document.getElementById('pdfMeta').textContent = `${nombre} | ${fechaDocumento}`;
             pdfViewer.dataset.tempSrc = `${url}#view=FitH`;
             window.addEventListener('resize', resizeHandler);
             setTimeout(resizeHandler, 50);
@@ -2015,60 +2057,60 @@ function cargarSeguimiento() {
 
     if (userRol === 3) {
         // Admin: cargar todas las solicitudes
-// En la sección de Promise.all (admin):
-Promise.all(paths.map(path => {
-    return new Promise((resolve) => {
-        const q = query(ref(database, path), orderByChild('fechaCreacion'));
-        onValue(q, (snapshot) => {
-            const datos = [];
-            snapshot.forEach(childSnapshot => {
-                const solicitud = childSnapshot.val();
-                solicitud.key = childSnapshot.key;
-                solicitud.motivoRechazo = solicitud.motivoRechazo || null;
-                solicitud.tipoPath = path;
-                datos.push(solicitud);
+        // En la sección de Promise.all (admin):
+        Promise.all(paths.map(path => {
+            return new Promise((resolve) => {
+                const q = query(ref(database, path), orderByChild('fechaCreacion'));
+                onValue(q, (snapshot) => {
+                    const datos = [];
+                    snapshot.forEach(childSnapshot => {
+                        const solicitud = childSnapshot.val();
+                        solicitud.key = childSnapshot.key;
+                        solicitud.motivoRechazo = solicitud.motivoRechazo || null;
+                        solicitud.tipoPath = path;
+                        datos.push(solicitud);
+                    });
+                    // Aplicar filtro por perfil
+                    const datosFiltrados = filtrarPorPerfil(datos);
+                    resolve(datosFiltrados);
+                }, { onlyOnce: true });
             });
-            // Aplicar filtro por perfil
-            const datosFiltrados = filtrarPorPerfil(datos);
-            resolve(datosFiltrados);
-        }, { onlyOnce: true });
-    });
-})).then(results => {
-    const mergedData = [].concat(...results).reduce((acc, current) => {
-        if (!acc.find(item => item.key === current.key)) {
-            acc.push(current);
-        }
-        return acc;
-    }, []);
-    solicitudesSeguimiento = mergedData;
-    actualizarTablaSeguimiento();
-    actualizarEstadisticas(solicitudesSeguimiento);
-    actualizarGraficas(solicitudesSeguimiento);
-});
-
-// En el listener en tiempo real (admin):
-// OPTIMIZACIÓN: throttle con rAF para no re-renderizar la tabla en cada evento
-// de Firebase (pueden llegar varios en ráfaga al inicio)
-const _actualizarTablaSeguimientoThrottled = rafThrottle(() => {
-    solicitudesSeguimiento = filtrarPorPerfil(solicitudesSeguimiento);
-    actualizarTablaSeguimiento();
-});
-
-paths.forEach(path => {
-    const refPath = ref(database, path);
-    onValue(refPath, (snapshot) => {
-        snapshot.forEach(childSnapshot => {
-            const nuevaSolicitud = childSnapshot.val();
-            const index = solicitudesSeguimiento.findIndex(s => s.key === childSnapshot.key);
-            if (index === -1) {
-                solicitudesSeguimiento.push({ ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path });
-            } else {
-                solicitudesSeguimiento[index] = { ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path };
-            }
+        })).then(results => {
+            const mergedData = [].concat(...results).reduce((acc, current) => {
+                if (!acc.find(item => item.key === current.key)) {
+                    acc.push(current);
+                }
+                return acc;
+            }, []);
+            solicitudesSeguimiento = mergedData;
+            actualizarTablaSeguimiento();
+            actualizarEstadisticas(solicitudesSeguimiento);
+            actualizarGraficas(solicitudesSeguimiento);
         });
-        _actualizarTablaSeguimientoThrottled();
-    });
-});
+
+        // En el listener en tiempo real (admin):
+        // OPTIMIZACIÓN: throttle con rAF para no re-renderizar la tabla en cada evento
+        // de Firebase (pueden llegar varios en ráfaga al inicio)
+        const _actualizarTablaSeguimientoThrottled = rafThrottle(() => {
+            solicitudesSeguimiento = filtrarPorPerfil(solicitudesSeguimiento);
+            actualizarTablaSeguimiento();
+        });
+
+        paths.forEach(path => {
+            const refPath = ref(database, path);
+            onValue(refPath, (snapshot) => {
+                snapshot.forEach(childSnapshot => {
+                    const nuevaSolicitud = childSnapshot.val();
+                    const index = solicitudesSeguimiento.findIndex(s => s.key === childSnapshot.key);
+                    if (index === -1) {
+                        solicitudesSeguimiento.push({ ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path });
+                    } else {
+                        solicitudesSeguimiento[index] = { ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path };
+                    }
+                });
+                _actualizarTablaSeguimientoThrottled();
+            });
+        });
     } else {
         // No admin: cargar solo las dependencias del usuario
         const allPromises = [];
@@ -2097,21 +2139,21 @@ paths.forEach(path => {
                 allPromises.push(promise);
             });
         });
-       Promise.all(allPromises).then(results => {
-    const mergedData = [].concat(...results).reduce((acc, current) => {
-        if (!acc.find(item => item.key === current.key)) {
-            acc.push(current);
-        }
-        return acc;
-    }, []);
-    
-    // Aplicar filtro para Esmeralda Merchan
-    solicitudesSeguimiento = filtrarSolicitudesVinculacionCiudadana(mergedData);
-    
-    actualizarTablaSeguimiento();
-    actualizarEstadisticas(solicitudesSeguimiento);
-    actualizarGraficas(solicitudesSeguimiento);
-});
+        Promise.all(allPromises).then(results => {
+            const mergedData = [].concat(...results).reduce((acc, current) => {
+                if (!acc.find(item => item.key === current.key)) {
+                    acc.push(current);
+                }
+                return acc;
+            }, []);
+
+            // Aplicar filtro para Esmeralda Merchan
+            solicitudesSeguimiento = filtrarSolicitudesVinculacionCiudadana(mergedData);
+
+            actualizarTablaSeguimiento();
+            actualizarEstadisticas(solicitudesSeguimiento);
+            actualizarGraficas(solicitudesSeguimiento);
+        });
 
         // Escuchar cambios en tiempo real para cada dependencia y path
         // OPTIMIZACIÓN: reutilizar el mismo throttle declarado arriba
@@ -2565,7 +2607,7 @@ document.getElementById('filtro-fecha-vobo')?.addEventListener('change', () => {
 
 // Sistema de navegación y UI
 document.addEventListener('DOMContentLoaded', async function () {
-        if (!checkSession()) {
+    if (!checkSession()) {
         return; // Si no hay sesión válida, salir
     }
     showUserInfo();
@@ -2861,13 +2903,13 @@ function getCookie(name) {
 
 //     // Iniciar el sistema de detección de actividad
 //     setupActivityDetection();
-    
+
 //     // Renovar inmediatamente si la sesión es vieja
 //     const sessionAge = expirationDate - now;
 //     if (sessionAge < 5 * 60 * 1000) { // Menos de 5 minutos restantes
 //         renewSession();
 //     }
-    
+
 //     return true;
 // }
 
@@ -2896,7 +2938,7 @@ function setupLogout() {
             clearInterval(activityMonitorInterval);
             activityMonitorInterval = null;
         }
-        
+
         // Eliminar todas las cookies de forma segura
         const cookies = document.cookie.split(";");
         for (let i = 0; i < cookies.length; i++) {
@@ -2905,13 +2947,13 @@ function setupLogout() {
             const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
             document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Lax";
         }
-        
+
         // También limpiar localStorage y sessionStorage
         localStorage.clear();
         sessionStorage.clear();
-        
+
         logoutModal.hide();
-        
+
         // Redirigir inmediatamente
         window.location.href = 'index.html';
     });
@@ -4975,7 +5017,7 @@ function obtenerNombreUsuario() {
 function filtrarSolicitudesVinculacionCiudadana(solicitudes) {
     const { esSecretariaParticular } = obtenerFiltroEspecial();
     const userEmail = obtenerEmailUsuario();
-    
+
     // Si es el perfil de Esmeralda Merchan, excluir solicitudes de Vinculación Ciudadana
     if (esSecretariaParticular && userEmail === 'oficinadepresidencia@tizayuca.gob.mx') {
         return solicitudes.filter(solicitud => {
@@ -4999,18 +5041,18 @@ function filtrarSolicitudesVinculacionCiudadana(solicitudes) {
 function filtrarPorPerfil(solicitudes) {
     const { esVinculacionCiudadana, esSecretariaParticular } = obtenerFiltroEspecial();
     const userEmail = obtenerEmailUsuario();
-    
+
     // Si no es ninguno de estos perfiles especiales, retornar todas las solicitudes
     if (!esVinculacionCiudadana && !esSecretariaParticular) {
         return solicitudes;
     }
-    
+
     // Para Vinculación Ciudadana: SOLO solicitudes con canal "Vinculación Ciudadana" y creadas por ellos
     if (esVinculacionCiudadana) {
         return solicitudes.filter(solicitud => {
             // Verificar que sea del canal "Vinculación Ciudadana"
             const esCanalVinculacion = solicitud.tipo === 'Vinculación Ciudadana';
-            
+
             // Verificar múltiples campos donde podría estar almacenado el creador
             const camposCreador = [
                 solicitud.creadoPor,
@@ -5019,13 +5061,13 @@ function filtrarPorPerfil(solicitudes) {
                 solicitud.creadoPorEmail,
                 solicitud._usuarioCreacion
             ];
-            
+
             const esCreadaPorVinculacion = camposCreador.some(campo => campo === userEmail);
-            
+
             return esCanalVinculacion && esCreadaPorVinculacion;
         });
     }
-    
+
     // Para Oficina de Presidencia: EXCLUIR solicitudes con canal "Vinculación Ciudadana"
     if (esSecretariaParticular && userEmail === 'oficinadepresidencia@tizayuca.gob.mx') {
         return solicitudes.filter(solicitud => {
@@ -5042,7 +5084,7 @@ function filtrarPorPerfil(solicitudes) {
             return true;
         });
     }
-    
+
     return solicitudes;
 }
 
