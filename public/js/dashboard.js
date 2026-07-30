@@ -8,7 +8,7 @@ import {
     onValue,
     query,
     orderByChild,
-    equalTo // ← Agregar esta importación
+    equalTo
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 import {
     getStorage,
@@ -31,7 +31,6 @@ const firebaseConfig = {
     measurementId: "G-PBV4WW41D6"
 };
 
-// Inicializa Firebase Storage
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 const storage = getStorage(app);
@@ -45,32 +44,26 @@ let charts = {
     efficiencyChart: null,
     departmentChart: null,
     quarterlyChart: null,
-    channelChart: null  // ← Nueva gráfica de canales
+    channelChart: null
 };
 
-
-let tipoActual = ''; // ← Agregar esta línea
-
+let tipoActual = '';
 let solicitudesSeguimiento = [];
 let solicitudesValidadas = [];
 let solicitudesVerificacion = [];
 const itemsPerPage = 5;
 let currentPageSeguimiento = 1;
 let currentPageValidadas = 1;
-let currentPageVerificacion = 1; // ← Añadir esta línea con las demás variables de paginación
+let currentPageVerificacion = 1;
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
-// Agregar con las otras variables globales
 let solicitudesVobo = [];
 let currentPageVobo = 1;
-
 let folioReenvioVobo = '';
 
-// Agregar estas constantes al inicio
 const MAX_INITIAL_FILE_SIZE_MB = 10;
 const MAX_INITIAL_FILE_SIZE_BYTES = MAX_INITIAL_FILE_SIZE_MB * 1024 * 1024;
-// Actualizar constantes
 const ALLOWED_INITIAL_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
 const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'zip', 'rar'];
 
@@ -80,16 +73,11 @@ const MAX_OFICIO_SIZE_MB = 10;
 const navLinks = document.querySelectorAll('.nav-link');
 const contentSections = document.querySelectorAll('.content-section');
 
-// Agregar después de las otras constantes
 const CORREO_VINCULACION_CIUDADANA = 'vinculacion.ciudadana@tizayuca.gob.mx';
 const CORREO_SECRETARIA_GENERAL = 'secretariamunicipal@tizayuca.gob.mx';
-const DEPENDENCIA_SECRETARIA_GENERAL = 'secretaria-general-municipal'; // ← Agregar esta línea
+const DEPENDENCIA_SECRETARIA_GENERAL = 'secretaria-general-municipal';
 
-// ── OPTIMIZACIÓN: Utilidades de rendimiento ──────────────────────────────────
-/**
- * Debounce: retrasa la ejecución hasta que el usuario deje de escribir.
- * Evita llamadas repetidas a Firebase/DOM en cada pulsación de tecla.
- */
+// ── Utilidades de rendimiento ────────────────────────────────────────────────
 function debounce(fn, delay = 300) {
     let timer;
     return function (...args) {
@@ -98,11 +86,6 @@ function debounce(fn, delay = 300) {
     };
 }
 
-/**
- * requestAnimationFrame throttle: agrupa actualizaciones del DOM en el
- * siguiente frame disponible del navegador (≈ 16 ms), ideal para tablas
- * que se re-pintan frecuentemente.
- */
 function rafThrottle(fn) {
     let rafId = null;
     return function (...args) {
@@ -114,35 +97,26 @@ function rafThrottle(fn) {
     };
 }
 
-/**
- * Construye un DocumentFragment con varias filas y las inserta en un solo
- * reflow, en lugar de un appendChild por fila.
- */
 function appendRowsToTable(tabla, rows) {
     const frag = document.createDocumentFragment();
     rows.forEach(r => frag.appendChild(r));
     tabla.appendChild(frag);
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
 let suppressFileInputEvents = false;
 
-// Sistema de renovación automática de sesión - VERSIÓN MEJORADA
+// ── Sistema de sesión ──────────────────────────────────────────────────────
 let sessionRenewalInterval = null;
 let activityMonitorInterval = null;
-const SESSION_TIMEOUT = 9 * 60 * 1000; // 9 minutos (renovar antes de que expire a los 10)
-// OPTIMIZACIÓN: revisar actividad cada 60 segundos (antes 30 s) - reduce timers en CPU débil
+const SESSION_TIMEOUT = 9 * 60 * 1000;
 const ACTIVITY_CHECK_INTERVAL = 60000;
 let lastActivityTime = Date.now();
 let sessionWarningShown = false;
 
-// Función para detectar actividad del usuario
 function setupActivityDetection() {
-    // Limpiar intervalos anteriores si existen
     if (sessionRenewalInterval) clearInterval(sessionRenewalInterval);
     if (activityMonitorInterval) clearInterval(activityMonitorInterval);
 
-    // Eventos que indican actividad del usuario
     const activityEvents = [
         'mousemove', 'mousedown', 'click', 'scroll',
         'keypress', 'touchstart', 'touchmove', 'input',
@@ -152,22 +126,19 @@ function setupActivityDetection() {
     activityEvents.forEach(event => {
         document.addEventListener(event, () => {
             lastActivityTime = Date.now();
-            sessionWarningShown = false; // Resetear advertencia
+            sessionWarningShown = false;
         }, { passive: true });
     });
 
-    // Monitorear actividad periódicamente
     activityMonitorInterval = setInterval(() => {
         checkSessionStatus();
     }, ACTIVITY_CHECK_INTERVAL);
 
-    // Iniciar renovación periódica
     sessionRenewalInterval = setInterval(() => {
         renewSessionIfNeeded();
-    }, 60000); // Revisar cada minuto
+    }, 60000);
 }
 
-// Función mejorada para renovar sesión cuando sea necesario
 function renewSessionIfNeeded() {
     const expiresCookie = getCookie('expires');
     if (!expiresCookie) return false;
@@ -176,15 +147,12 @@ function renewSessionIfNeeded() {
     const now = new Date();
     const timeUntilExpiration = expirationDate - now;
 
-    // Renovar si quedan menos de 5 minutos y ha habido actividad reciente
     if (timeUntilExpiration < 300000 && (Date.now() - lastActivityTime) < 180000) {
         return renewSession();
     }
-
     return false;
 }
 
-// Función mejorada para verificar estado de sesión
 function checkSessionStatus() {
     const sessionCookie = getCookie('session');
     const expiresCookie = getCookie('expires');
@@ -198,46 +166,35 @@ function checkSessionStatus() {
     const expirationDate = new Date(expiresCookie);
     const timeUntilExpiration = expirationDate - now;
 
-    // Mostrar advertencia 2 minutos antes de expirar
     if (timeUntilExpiration < 120000 && !sessionWarningShown) {
         showSessionWarning();
         sessionWarningShown = true;
     }
 
-    // Si ya expiró o está muy cerca (menos de 30 segundos)
     if (timeUntilExpiration < 30000) {
         if (Date.now() - lastActivityTime < 60000) {
-            // Si hay actividad reciente, renovar inmediatamente
             forceRenewSession();
         } else {
-            // Si no hay actividad, redirigir
             redirectToLogin();
         }
     }
 }
 
-// Función para forzar renovación inmediata
 function forceRenewSession() {
     try {
         const fechaExpiracion = new Date();
         fechaExpiracion.setMinutes(fechaExpiracion.getMinutes() + 10);
         const expiresUTC = fechaExpiracion.toUTCString();
-
         const cookieSettings = `expires=${expiresUTC}; path=/; SameSite=Lax; Secure`;
 
-        // Renovar todas las cookies importantes
         const cookiesToRenew = ['session', 'email', 'nombre', 'rol', 'dependencia', 'area', 'expires'];
-
         cookiesToRenew.forEach(cookieName => {
             const valor = getCookie(cookieName);
             if (valor) {
                 document.cookie = `${cookieName}=${encodeURIComponent(valor)}; ${cookieSettings}`;
             }
         });
-
-        // También renovar lastLogin con tiempo actual
         document.cookie = `lastLogin=${new Date().toISOString()}; ${cookieSettings}`;
-
         sessionWarningShown = false;
         console.log('Sesión renovada forzosamente');
         return true;
@@ -247,9 +204,7 @@ function forceRenewSession() {
     }
 }
 
-// Mostrar advertencia de sesión
 function showSessionWarning() {
-    // Crear o actualizar notificación
     let warningDiv = document.getElementById('session-warning');
     if (!warningDiv) {
         warningDiv = document.createElement('div');
@@ -279,7 +234,6 @@ function showSessionWarning() {
         </div>
     `;
 
-    // Auto-ocultar después de 10 segundos
     setTimeout(() => {
         if (warningDiv.parentNode) {
             warningDiv.style.opacity = '0';
@@ -293,13 +247,10 @@ function showSessionWarning() {
     }, 10000);
 }
 
-// Redirección mejorada a login
 function redirectToLogin() {
-    // Limpiar intervalos
     if (sessionRenewalInterval) clearInterval(sessionRenewalInterval);
     if (activityMonitorInterval) clearInterval(activityMonitorInterval);
 
-    // Mostrar mensaje
     const message = document.createElement('div');
     message.style.cssText = `
         position: fixed;
@@ -325,52 +276,39 @@ function redirectToLogin() {
         </div>
     `;
     document.body.appendChild(message);
-
-    // Redirigir después de 2 segundos
     setTimeout(() => {
         window.location.href = 'index.html';
     }, 2000);
 }
 
-// Función para determinar si debe renovarse la sesión
 function shouldRenewSession() {
     const timeSinceLastActivity = Date.now() - lastActivityTime;
     const sessionAge = getSessionAge();
-
-    // Renovar si ha habido actividad en los últimos 2 minutos
-    // y la sesión tiene más de 8 minutos (pero menos de 10)
     return timeSinceLastActivity < 120000 && sessionAge > 8 * 60 * 1000;
 }
 
-// Calcular la edad de la sesión
 function getSessionAge() {
     const expiresCookie = getCookie('expires');
     if (!expiresCookie) return 0;
-
     const expirationDate = new Date(expiresCookie);
     const now = new Date();
     return expirationDate - now;
 }
 
-// Renovar la sesión
 function renewSession() {
     try {
         const fechaExpiracion = new Date();
         fechaExpiracion.setMinutes(fechaExpiracion.getMinutes() + 10);
         const expiresUTC = fechaExpiracion.toUTCString();
-
         const cookieSettings = `expires=${expiresUTC}; path=/; SameSite=Lax; Secure`;
 
-        // Solo renovar si las cookies existen
         const sessionCookie = getCookie('session');
         if (!sessionCookie) {
             console.warn('No hay sesión para renovar');
             return false;
         }
 
-        // Renovar todas las cookies importantes
         const cookiesToRenew = ['session', 'email', 'nombre', 'rol', 'dependencia', 'area', 'expires'];
-
         let renewed = false;
         cookiesToRenew.forEach(cookieName => {
             const valor = getCookie(cookieName);
@@ -391,8 +329,6 @@ function renewSession() {
     }
 }
 
-// Verificar expiración de sesión con actividad
-// Modificar la función checkSession inicial
 function checkSession() {
     const sessionCookie = getCookie('session');
     const expiresCookie = getCookie('expires');
@@ -410,18 +346,15 @@ function checkSession() {
         return false;
     }
 
-    // Iniciar el sistema de detección de actividad mejorado
     setupActivityDetection();
 
-    // Renovar inmediatamente si la sesión es vieja
     const sessionAge = expirationDate - now;
-    if (sessionAge < 5 * 60 * 1000) { // Menos de 5 minutos restantes
+    if (sessionAge < 5 * 60 * 1000) {
         renewSession();
     }
 
     return true;
 }
-
 
 window.mostrarModalEstado = function (folio) {
     document.getElementById('modalFolio').textContent = folio;
@@ -440,12 +373,10 @@ function calcularFechaLimite(fechaCreacion) {
 
     while (diasAgregados < 5) {
         fechaLimite.setDate(fechaLimite.getDate() + 1);
-        // Saltar sábado (6) y domingo (0)
-        if (fechaLimite.getDay() !== 0 && fechaLimite.getDate() !== 6) {
+        if (fechaLimite.getDay() !== 0 && fechaLimite.getDay() !== 6) {
             diasAgregados++;
         }
     }
-
     return fechaLimite.toISOString();
 }
 
@@ -453,23 +384,20 @@ function calcularDiasRestantes(fechaLimite) {
     const ahora = ajustarHoraMexico(new Date());
     const limite = ajustarHoraMexico(new Date(fechaLimite));
 
-    // Si ya expiró, retornar valor negativo
     if (ahora >= limite) {
         const diffMs = ahora - limite;
-        return Math.floor(diffMs / (1000 * 60 * 60 * 24)) * -1; // Días expirados como negativo
+        return Math.floor(diffMs / (1000 * 60 * 60 * 24)) * -1;
     }
 
     let diasRestantes = 0;
     const current = new Date(ahora);
 
-    // Calcular días hábiles restantes
     while (current < limite) {
         current.setDate(current.getDate() + 1);
-        if (current.getDay() !== 0 && current.getDay() !== 6) { // Excluir fines de semana
+        if (current.getDay() !== 0 && current.getDay() !== 6) {
             diasRestantes++;
         }
     }
-
     return diasRestantes;
 }
 
@@ -480,13 +408,10 @@ function calcularTiempoRestante(fechaLimite) {
     if (ahora >= limite) return 'Expirado';
 
     let tiempoRestante = limite - ahora;
-
-    // Restar tiempo de fines de semana
     let current = new Date(ahora);
     while (current < limite) {
-        // Si es fin de semana, restar 24 horas
         if (current.getDay() === 0 || current.getDay() === 6) {
-            tiempoRestante -= 86400000; // 24h en milisegundos
+            tiempoRestante -= 86400000;
         }
         current.setDate(current.getDate() + 1);
     }
@@ -509,13 +434,12 @@ function obtenerFechaHoy() {
 }
 
 function ajustarHoraMexico(fecha) {
-    const offsetMexico = -6 * 60; // UTC-6
+    const offsetMexico = -6 * 60;
     const nuevaFecha = new Date(fecha);
     nuevaFecha.setMinutes(nuevaFecha.getMinutes() + nuevaFecha.getTimezoneOffset() + offsetMexico);
     return nuevaFecha;
 }
 
-// Funciones de Firebase
 async function generarFolio(tipo = 'solicitud') {
     const tipoFolio = {
         'acuerdo': 'ultimoFolioAcuerdo',
@@ -538,7 +462,6 @@ async function generarFolio(tipo = 'solicitud') {
     return `${prefijos[tipo]}${nuevoFolio.toString().padStart(4, '0')}`;
 }
 
-// Función para cargar solicitudes validadas
 function cargarValidadas() {
     const userRol = parseInt(getCookie('rol')) || 0;
     const userDependencias = getCookie('dependencia') ?
@@ -557,7 +480,6 @@ function cargarValidadas() {
 
     solicitudesValidadas = [];
 
-    // Obtener datos de Firebase usando onValue para cada path
     paths.forEach(path => {
         let q;
         if (userRol === 3 || userRol === 4) {
@@ -567,7 +489,6 @@ function cargarValidadas() {
                 equalTo('atendida')
             );
         } else {
-            // Para otros roles, filtrar por dependencias
             q = query(
                 ref(database, path),
                 orderByChild('estado'),
@@ -581,29 +502,22 @@ function cargarValidadas() {
             snapshot.forEach(childSnapshot => {
                 const doc = childSnapshot.val();
 
-                // Filtrar por dependencia si no es admin ni presidenta
                 if (userRol !== 3 && userRol !== 4 && !userDependencias.includes(doc.dependencia)) return;
-
-                // Solo agregar atendidas
                 if (doc.estado !== 'atendida') return;
 
-                // Asegurar datos mínimos
                 const solicitud = {
                     key: childSnapshot.key,
                     tipoPath: path,
                     ...doc
                 };
 
-                // Asegurar que no esté duplicada
                 if (!solicitudesValidadas.some(s => s.key === solicitud.key)) {
                     solicitudesValidadas.push(solicitud);
                 }
             });
 
-            // Aplicar filtro por perfil
             solicitudesValidadas = filtrarPorPerfil(solicitudesValidadas);
 
-            // Ordenar por fecha de atención
             solicitudesValidadas.sort((a, b) =>
                 new Date(b.fechaAtencion || b.fechaCreacion) - new Date(a.fechaAtencion || a.fechaCreacion)
             );
@@ -613,7 +527,6 @@ function cargarValidadas() {
     });
 }
 
-// Función para mostrar página en validadas
 function mostrarPaginaValidadas(data) {
     const start = (currentPageValidadas - 1) * itemsPerPage;
     const end = start + itemsPerPage;
@@ -636,10 +549,8 @@ function mostrarPaginaValidadas(data) {
 
     const items = data.slice(start, end);
 
-    // OPTIMIZACIÓN: DocumentFragment para un solo reflow
     const frag = document.createDocumentFragment();
     items.forEach(solicitud => {
-        // Determinar tipo basado en la colección
         let tipoDocumento = 'Solicitud';
         if (solicitud.tipoPath === 'acuerdos') tipoDocumento = 'Acuerdo';
         if (solicitud.tipoPath === 'oficios') tipoDocumento = 'Oficio';
@@ -648,7 +559,7 @@ function mostrarPaginaValidadas(data) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${solicitud.key}</td>
-            <td>${solicitud.tipo || tipoDocumento}</td> <!-- Mostrar el canal -->
+            <td>${solicitud.tipo || tipoDocumento}</td>
             <td>${solicitud.asunto}</td>
             <td>${dependenciasMap[solicitud.dependencia] || 'Desconocida'}</td>
             <td>${solicitud.solicitante?.nombre || solicitud.contacto || 'N/A'}</td>
@@ -677,7 +588,6 @@ function mostrarPaginaValidadas(data) {
     actualizarPaginacion('validadas', data.length);
 }
 
-// Función genérica para actualizar paginación
 function actualizarPaginacion(tipo, totalItems) {
     const totalPages = Math.ceil(totalItems / itemsPerPage);
     const container = document.querySelector(`.paginacion-${tipo}`);
@@ -689,7 +599,6 @@ function actualizarPaginacion(tipo, totalItems) {
         return;
     }
 
-    // Asegurar que currentPage no exceda el límite
     if (currentPage > totalPages) {
         currentPage = totalPages;
         if (tipo === 'seguimiento') {
@@ -713,7 +622,6 @@ function actualizarPaginacion(tipo, totalItems) {
 
     container.innerHTML = paginationHTML;
 
-    // Event listeners
     container.querySelector('.anterior')?.addEventListener('click', () => {
         if (tipo === 'seguimiento') {
             currentPageSeguimiento = Math.max(1, currentPageSeguimiento - 1);
@@ -733,14 +641,12 @@ function actualizarPaginacion(tipo, totalItems) {
     });
 }
 
-// Función para aplicar filtros a validadas
 function aplicarFiltrosValidadas() {
     const busqueda = document.getElementById('busqueda-validadas').value.toLowerCase();
     const secretaria = document.getElementById('filtro-secretaria-validadas').value;
     const canal = document.getElementById('filtro-canal-validadas').value;
     const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
 
-    // Primero aplicar filtro por perfil (para seguridad adicional)
     let filtradas = filtrarPorPerfil(solicitudesValidadas);
 
     filtradas = filtradas.filter(doc => {
@@ -767,14 +673,11 @@ function aplicarFiltrosSeguimiento() {
     const estado = document.getElementById('filtro-estado-seguimiento').value;
     const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
 
-    // Primero aplicar filtro por perfil (para seguridad adicional)
     let filtradas = filtrarPorPerfil(solicitudesSeguimiento);
 
-    // Luego aplicar los otros filtros
     filtradas = filtradas.filter(s => {
         if (esJefaturaGabinete && s.tipoPath !== 'acuerdos') return false;
         if (esSecretariaParticular && s.tipoPath === 'acuerdos') return false;
-        // Excluir atendidas y aplicar otros filtros
         if (s.estado === 'atendida') return false;
 
         const texto = `${s.key} ${s.asunto} ${dependenciasMap[s.dependencia]}`.toLowerCase();
@@ -785,7 +688,6 @@ function aplicarFiltrosSeguimiento() {
     mostrarPaginaSeguimiento(filtradas);
 }
 
-// Función para mostrar página en seguimiento
 function mostrarPaginaSeguimiento(data) {
     const start = (currentPageSeguimiento - 1) * itemsPerPage;
     const end = start + itemsPerPage;
@@ -813,7 +715,6 @@ function mostrarPaginaSeguimiento(data) {
         return mostrarPaginaSeguimiento(data);
     }
 
-    // OPTIMIZACIÓN: DocumentFragment para un solo reflow
     const frag = document.createDocumentFragment();
     items.forEach(solicitud => frag.appendChild(crearFilaSolicitud(solicitud)));
     tabla.appendChild(frag);
@@ -832,7 +733,6 @@ async function cargarSecretarias() {
 
     const { esVinculacionCiudadana } = obtenerFiltroEspecial();
 
-    // Si es Vinculación Ciudadana, forzar solo Secretaría General
     if (esVinculacionCiudadana) {
         userDependencias = [DEPENDENCIA_SECRETARIA_GENERAL];
     }
@@ -847,7 +747,6 @@ async function cargarSecretarias() {
 
             if (!dependencia || typeof dependencia.nombre !== 'string') return;
 
-            // Filtrar por rol
             if (userRol !== 3 && !userDependencias.includes(dependenciaKey)) return;
 
             const nombre = dependencia.nombre.trim();
@@ -861,6 +760,55 @@ async function cargarSecretarias() {
     });
 }
 
+// ===================== NUEVA FUNCIÓN PARA DESCARGAR CON FETCH =====================
+async function descargarArchivoConFetch(url, nombreArchivo) {
+    try {
+        Toastify({
+            text: 'Descargando archivo...',
+            duration: 2000,
+            className: "toastify-info",
+        }).showToast();
+
+        const response = await fetch(url, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-cache',
+            credentials: 'omit'
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error al descargar: ${response.status} ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = nombreArchivo || 'archivo_descargado';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        setTimeout(() => {
+            URL.revokeObjectURL(link.href);
+        }, 100);
+
+        Toastify({
+            text: 'Descarga completada',
+            duration: 2000,
+            className: "toastify-success",
+        }).showToast();
+
+    } catch (error) {
+        console.error('Error en la descarga:', error);
+        mostrarError(`No se pudo descargar el archivo: ${error.message}. Intenta abrirlo en una nueva pestaña.`);
+        window.open(url, '_blank');
+    }
+}
+// ========================================================================
+
+// ===================== FUNCIONES MEJORADAS PARA VISOR DE DOCUMENTOS =====================
+// Siempre muestran el botón de descarga y manejan errores de carga, y ahora descargan con fetch
+
 window.mostrarEvidenciaModal = function (folio, tipoDocumento, urlDocumento, secretaria = '') {
     const modal = new bootstrap.Modal(document.getElementById('evidenciaModal'));
     const loading = document.getElementById('loadingPreview');
@@ -868,95 +816,240 @@ window.mostrarEvidenciaModal = function (folio, tipoDocumento, urlDocumento, sec
     const imagenContainer = document.getElementById('imagenContainer');
     const visorNoSoportado = document.getElementById('visorNoSoportado');
     const pdfViewer = document.getElementById('pdfViewer');
+    const descargarBtn = document.getElementById('descargarEvidencia');
 
-    // Resetear visores
+    // Resetear
     [loading, pdfContainer, imagenContainer, visorNoSoportado].forEach(el => el.classList.add('d-none'));
     loading.classList.remove('d-none');
     pdfViewer.src = '';
+    pdfViewer.onerror = null;
+    pdfViewer.onload = null;
+    descargarBtn.classList.add('d-none');
 
-    // Extraer nombre de archivo
     let nombreArchivo = 'Sin documento';
     let extension = '';
-
     if (urlDocumento) {
         try {
             nombreArchivo = decodeURIComponent(urlDocumento.split('/').pop().split('?')[0]);
             extension = nombreArchivo.split('.').pop().toLowerCase();
-        } catch (error) {
-            console.error('Error procesando URL:', error);
+        } catch (e) {
+            console.error('Error procesando URL:', e);
         }
     }
 
-    // Configurar metadatos
+    // Metadatos
     document.getElementById('nombreArchivoCompleto').textContent = `${tipoDocumento}: ${nombreArchivo}`;
     document.getElementById('folioEvidencia').textContent = folio;
     document.getElementById('secretariaEvidencia').textContent = secretaria || 'No especificada';
+    document.getElementById('fechaEvidencia').textContent = new Date().toLocaleDateString('es-MX');
 
-    const solicitud =
-        solicitudesSeguimiento.find(s => s.folio === folio) ||
-        solicitudesValidadas.find(s => s.folio === folio || s.key === folio) ||
-        solicitudesVerificacion.find(s => s.folio === folio);
+    // Configurar el botón de descarga con fetch
+    descargarBtn.classList.remove('d-none');
+    descargarBtn.textContent = 'Descargar archivo';
+    descargarBtn.onclick = function (e) {
+        e.preventDefault();
+        if (urlDocumento) {
+            descargarArchivoConFetch(urlDocumento, nombreArchivo);
+        } else {
+            mostrarError('No hay archivo para descargar.');
+        }
+    };
 
-    document.getElementById('fechaEvidencia').textContent =
-        solicitud?.fechaCreacion
-            ? new Date(solicitud.fechaCreacion).toLocaleDateString('es-MX', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-            })
-            : '-';
+    // Función para manejar error de carga
+    function handleLoadError() {
+        loading.classList.add('d-none');
+        visorNoSoportado.classList.remove('d-none');
+        document.getElementById('tipoArchivo').textContent = extension || 'documento';
+        descargarBtn.classList.remove('d-none');
+        mostrarError('No se pudo cargar el documento. Puedes descargarlo manualmente.');
+    }
 
-    // Cargar contenido después de 300ms
+    // Mostrar según extensión
     setTimeout(() => {
         loading.classList.add('d-none');
 
         if (!urlDocumento) {
             visorNoSoportado.classList.remove('d-none');
             document.getElementById('tipoArchivo').textContent = 'Documento no disponible';
+            descargarBtn.classList.add('d-none');
             return;
         }
 
-        if (['pdf'].includes(extension)) {
+        if (extension === 'pdf') {
             pdfContainer.classList.remove('d-none');
-            pdfViewer.src = `${urlDocumento}#view=FitH&toolbar=0`;
             document.getElementById('pdfMeta').textContent = `${nombreArchivo} | ${tipoDocumento}`;
-        }
-        else if (['jpg', 'jpeg', 'png'].includes(extension)) {
+            pdfViewer.style.minHeight = '500px';
+            pdfViewer.onerror = handleLoadError;
+            pdfViewer.onload = function() { };
+            pdfViewer.src = urlDocumento + '#view=FitH&toolbar=0';
+        } else if (['jpg', 'jpeg', 'png', 'gif'].includes(extension)) {
             imagenContainer.classList.remove('d-none');
             const img = document.getElementById('visorImagen');
             img.src = urlDocumento;
             img.onload = () => {
-                document.getElementById('imagenDimensions').textContent =
-                    `${img.naturalWidth}px × ${img.naturalHeight}px`;
+                document.getElementById('imagenDimensions').textContent = `${img.naturalWidth}px × ${img.naturalHeight}px`;
             };
-        }
-        else {
+            img.onerror = handleLoadError;
+        } else {
             visorNoSoportado.classList.remove('d-none');
             document.getElementById('tipoArchivo').textContent = `.${extension}`;
-            const downloadBtn = document.getElementById('descargarEvidencia');
-            downloadBtn.href = urlDocumento;
-            downloadBtn.download = nombreArchivo;
         }
     }, 300);
 
     modal.show();
 };
 
+window.mostrarDocumentoInicial = function (folio, nombreArchivo, url, secretariaOrigen) {
+    const solicitud = solicitudesSeguimiento.find(s => s.folio === folio);
+
+    const fechaDocumento = solicitud?.fechaCreacion
+        ? new Date(solicitud.fechaCreacion).toLocaleDateString('es-MX', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        })
+        : '-';
+
+    const modal = new bootstrap.Modal(document.getElementById('evidenciaModal'));
+    const loading = document.getElementById('loadingPreview');
+    const pdfContainer = document.getElementById('pdfContainer');
+    const imagenContainer = document.getElementById('imagenContainer');
+    const visorNoSoportado = document.getElementById('visorNoSoportado');
+    const pdfViewer = document.getElementById('pdfViewer');
+    const descargarBtn = document.getElementById('descargarEvidencia');
+    const modalElement = document.getElementById('evidenciaModal');
+
+    // Resetear estado inicial
+    [loading, pdfContainer, imagenContainer, visorNoSoportado].forEach(el => {
+        el.classList.add('d-none');
+    });
+    loading.classList.remove('d-none');
+    pdfViewer.src = '';
+    pdfViewer.removeAttribute('data-temp-src');
+    descargarBtn.classList.add('d-none');
+
+    // Configurar nombre de archivo
+    const extractFileName = (url) => {
+        try {
+            const decodedUrl = decodeURIComponent(url);
+            return decodedUrl.split('/').pop().split(/[?#]/)[0];
+        } catch (error) {
+            console.error('Error al extraer nombre:', error);
+            return 'archivo-desconocido';
+        }
+    };
+
+    const nombre = nombreArchivo || extractFileName(url);
+    const fileExt = nombre.split('.').pop().toLowerCase();
+
+    // Actualizar metadatos
+    document.getElementById('nombreArchivoCompleto').textContent = nombre;
+    document.getElementById('folioEvidencia').textContent = folio;
+    document.getElementById('secretariaEvidencia').textContent = secretariaOrigen || '-';
+    document.getElementById('fechaEvidencia').textContent = fechaDocumento;
+
+    // Configurar el botón de descarga con fetch
+    descargarBtn.classList.remove('d-none');
+    descargarBtn.textContent = 'Descargar archivo';
+    descargarBtn.onclick = function (e) {
+        e.preventDefault();
+        if (url) {
+            descargarArchivoConFetch(url, nombre);
+        } else {
+            mostrarError('No hay archivo para descargar.');
+        }
+    };
+
+    // Función para manejar error de carga
+    function handleLoadError() {
+        loading.classList.add('d-none');
+        visorNoSoportado.classList.remove('d-none');
+        document.getElementById('tipoArchivo').textContent = fileExt || 'documento';
+        descargarBtn.classList.remove('d-none');
+        mostrarError('No se pudo cargar el documento. Puedes descargarlo manualmente.');
+    }
+
+    // Configurar eventos del modal
+    const modalShownHandler = () => {
+        if (pdfViewer.dataset.tempSrc) {
+            const container = pdfViewer.parentElement;
+            pdfViewer.style.height = `${container.clientHeight}px`;
+
+            setTimeout(() => {
+                pdfViewer.src = pdfViewer.dataset.tempSrc;
+                delete pdfViewer.dataset.tempSrc;
+            }, 100);
+        }
+    };
+
+    const resizeHandler = () => {
+        if (pdfViewer && pdfContainer.classList.contains('d-none') === false) {
+            const container = pdfViewer.parentElement;
+            const newHeight = Math.max(400, container.clientHeight);
+            pdfViewer.style.height = `${newHeight}px`;
+        }
+    };
+
+    // Configurar visores
+    setTimeout(() => {
+        loading.classList.add('d-none');
+
+        if (!url) {
+            visorNoSoportado.classList.remove('d-none');
+            document.getElementById('tipoArchivo').textContent = 'Documento no disponible';
+            descargarBtn.classList.add('d-none');
+            return;
+        }
+
+        if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExt)) {
+            imagenContainer.classList.remove('d-none');
+            const img = document.getElementById('visorImagen');
+            img.src = url;
+            img.onload = () => {
+                document.getElementById('imagenDimensions').textContent =
+                    `${img.naturalWidth}px × ${img.naturalHeight}px`;
+            };
+            img.onerror = handleLoadError;
+        } else if (fileExt === 'pdf') {
+            pdfContainer.classList.remove('d-none');
+            document.getElementById('pdfMeta').textContent = `${nombre} | ${fechaDocumento}`;
+            pdfViewer.dataset.tempSrc = `${url}#view=FitH`;
+            pdfViewer.onerror = handleLoadError;
+            window.addEventListener('resize', resizeHandler);
+            setTimeout(resizeHandler, 50);
+        } else {
+            visorNoSoportado.classList.remove('d-none');
+            document.getElementById('tipoArchivo').textContent = `.${fileExt}`;
+        }
+    }, 300);
+
+    // Evento de zoom para imágenes
+    document.getElementById('visorImagen').onclick = function () {
+        this.classList.toggle('img-zoom');
+    };
+
+    // Manejar eventos del modal
+    modalElement.addEventListener('shown.bs.modal', modalShownHandler);
+    modalElement.addEventListener('hidden.bs.modal', () => {
+        window.removeEventListener('resize', resizeHandler);
+        modalElement.removeEventListener('shown.bs.modal', modalShownHandler);
+        pdfViewer.src = '';
+    });
+
+    modal.show();
+};
+// ===================== FIN FUNCIONES MEJORADAS =====================
+
 // 1. Crear un mapa global de dependencias
 let dependenciasMap = {};
-
-// OPTIMIZACIÓN: caché en memoria para no volver a leer Firebase si ya se cargaron
 let _dependenciasCargadas = false;
 
-// 2. Cargar dependencias al inicio
 async function cargarDependencias() {
-    // OPTIMIZACIÓN: si ya se cargaron en esta sesión, reutilizar
     if (_dependenciasCargadas) return;
 
     const dependenciasRef = ref(database, 'dependencias');
     const snapshot = await get(dependenciasRef);
 
-    // Mapeo de claves a nombres oficiales
     const mapeoOficial = {
         'presidencia-municipal-constitucional': 'Presidencia Municipal Constitucional',
         'secretaria-bienestar-social': 'Secretaría de Bienestar Social',
@@ -976,23 +1069,16 @@ async function cargarDependencias() {
     _dependenciasCargadas = true;
 }
 
-// 1. Variable para controlar el intervalo
 let intervaloActualizacionGlobal = null;
 
-// 2. Función de actualización de tiempos (¡NUEVA!)
-// Función para actualización visual de tiempos (sin afectar estados reales)
 function iniciarActualizacionTiempo() {
     if (intervaloActualizacionGlobal) clearInterval(intervaloActualizacionGlobal);
 
-    // OPTIMIZACIÓN: actualizar cada 5 minutos en lugar de cada 1 minuto.
-    // Los tiempos hábiles cambian en escala de horas, no segundos; esto reduce
-    // carga de CPU en PCs de bajos recursos sin pérdida de precisión perceptible.
     intervaloActualizacionGlobal = setInterval(() => {
         document.querySelectorAll('#lista-seguimiento tr').forEach(fila => {
             const estado = fila.dataset.estado;
             const celdaTiempo = fila.cells[7];
 
-            // Congelar visualización para estos estados
             if (['verificacion', 'atendida'].includes(estado)) {
                 celdaTiempo.textContent = estado === 'verificacion'
                     ? 'En Verificación'
@@ -1000,13 +1086,11 @@ function iniciarActualizacionTiempo() {
                 return;
             }
 
-            // Actualizar solo la visualización del tiempo
             const fechaLimite = fila.dataset.fechaLimite;
             celdaTiempo.textContent = calcularTiempoRestante(fechaLimite);
         });
-    }, 300000); // OPTIMIZACIÓN: cada 5 minutos (antes: cada 1 minuto)
+    }, 300000);
 }
-
 
 function actualizarEstadisticas(solicitudes) {
     const { esSecretariaGeneral, esVinculacionCiudadana } = obtenerFiltroEspecial();
@@ -1023,9 +1107,7 @@ function actualizarEstadisticas(solicitudes) {
         total: 0
     };
 
-    // Si es Secretaría General, contar pendientes de VoBo de todas las dependencias
     if (esSecretariaGeneral || userEmail === CORREO_SECRETARIA_GENERAL) {
-        // Contar pendientes de VoBo específicamente
         solicitudesVobo.forEach(s => {
             if (s.estado === 'pendiente_vobo') {
                 stats.pendientesVobo++;
@@ -1033,7 +1115,6 @@ function actualizarEstadisticas(solicitudes) {
         });
     }
 
-    // Filtrar solicitudes para Vinculación Ciudadana si es necesario
     let solicitudesFiltradas = solicitudes;
     if (esVinculacionCiudadana) {
         solicitudesFiltradas = filtrarSoloVinculacionCiudadana(solicitudes);
@@ -1048,8 +1129,6 @@ function actualizarEstadisticas(solicitudes) {
                 stats.pendientes++;
                 break;
             case 'pendiente_vobo':
-                // Para perfiles normales, contar como pendiente normal
-                // Para Secretaría General, ya lo contamos arriba específicamente
                 if (!esSecretariaGeneral && userEmail !== CORREO_SECRETARIA_GENERAL) {
                     stats.pendientes++;
                 }
@@ -1072,7 +1151,6 @@ function actualizarEstadisticas(solicitudes) {
         }
     });
 
-    // Actualizar DOM - verificar que los elementos existan antes de actualizar
     const elements = {
         'stats-pendientes': stats.pendientes,
         'stats-vencer': stats.porVencer,
@@ -1090,14 +1168,12 @@ function actualizarEstadisticas(solicitudes) {
         }
     });
 
-    // Calcular y mostrar eficiencia
     const eficienciaElement = document.getElementById('stats-eficiencia');
     if (eficienciaElement) {
         const eficiencia = (stats.atendidas / (stats.total || 1)) * 100;
         eficienciaElement.textContent = `${Math.round(eficiencia)}%`;
     }
 
-    // Mostrar/ocultar el elemento de VoBo según el perfil
     const statsVoboElement = document.getElementById('stats-pendientes-vobo');
     if (statsVoboElement) {
         const statCard = statsVoboElement.closest('.stat-card');
@@ -1115,12 +1191,9 @@ function actualizarTablaSeguimiento() {
     const tabla = document.getElementById('lista-seguimiento');
     const foliosUnicos = new Set();
 
-    // Limpiar tabla completamente
     tabla.innerHTML = '';
 
-    // OPTIMIZACIÓN: construir todas las filas en un DocumentFragment (un solo reflow)
     const frag = document.createDocumentFragment();
-    // Iterar en copia para no mutar el array original con reverse()
     [...solicitudesSeguimiento].reverse().forEach(solicitud => {
         if (!foliosUnicos.has(solicitud.key)) {
             foliosUnicos.add(solicitud.key);
@@ -1129,30 +1202,24 @@ function actualizarTablaSeguimiento() {
     });
     tabla.appendChild(frag);
 
-    // OPTIMIZACIÓN: eliminar llamadas duplicadas (iniciarActualizacionTiempo,
-    // actualizarEstadisticas y actualizarGraficas se llamaban 2-3 veces cada una)
     iniciarActualizacionTiempo();
     aplicarFiltrosSeguimiento();
     actualizarEstadisticas(solicitudesSeguimiento);
     actualizarGraficas(solicitudesSeguimiento);
 }
 
-// Modificar la función cambiarEstado para hacerla global
 let accionActual = '';
 
 window.cambiarEstado = async function (folio, nuevoEstado, motivo = '', justificacion = '') {
     try {
-        // 1. Buscar en datos locales primero para optimizar
         const solicitudExistente = solicitudesSeguimiento.find(s => s.key === folio);
 
         if (!solicitudExistente) {
             throw new Error('Documento no encontrado en datos locales');
         }
 
-        // 2. Determinar path CORRECTAMENTE - SOLUCIÓN PARA INSTITUCIONALES
         let path = solicitudExistente.tipoPath || 'solicitudes';
 
-        // Si es institucional pero no tiene tipoPath, determinar por folio
         if (path === 'solicitudes' && folio.startsWith('SI-')) {
             path = 'solicitudes_institucionales';
         }
@@ -1163,21 +1230,17 @@ window.cambiarEstado = async function (folio, nuevoEstado, motivo = '', justific
                 path === 'oficios' ? 'Oficio' :
                     path === 'solicitudes_institucionales' ? 'Institucional' : 'Documento';
 
-        // 3. Obtener datos actualizados directamente de Firebase
         const snapshot = await get(docRef);
         const datos = snapshot.val();
 
-        // 4. Manejo de evidencias con validación mejorada
         if (nuevoEstado === 'pendiente' && datos.evidencias) {
             try {
-                // Extraer path desde la URL de descarga
                 const urlParts = datos.evidencias.split('/');
                 const index = urlParts.indexOf('o') + 1;
                 const pathStorage = decodeURIComponent(urlParts[index]).split('?')[0];
                 const evidenciaRef = storageRef(storage, pathStorage);
 
-                // Verificar existencia antes de eliminar
-                await getDownloadURL(evidenciaRef); // Lanza error si no existe
+                await getDownloadURL(evidenciaRef);
                 await deleteObject(evidenciaRef);
             } catch (error) {
                 if (error.code === 'storage/object-not-found') {
@@ -1190,40 +1253,35 @@ window.cambiarEstado = async function (folio, nuevoEstado, motivo = '', justific
         }
 
         if (nuevoEstado === 'pendiente' && !motivo) {
-            // mostrarError("Error crítico: Motivo requerido no proporcionado");
             return;
         }
-        // 5. Preparar actualización optimizada
+
         const actualizacion = {
             estado: nuevoEstado,
             ultimaActualizacion: new Date().toISOString(),
             evidencias: nuevoEstado === 'pendiente' ? null : datos.evidencias || null,
             _actualizadoPor: getCookie('nombre') || 'Sistema',
-            motivoRechazo: nuevoEstado === 'pendiente' ? motivo : null, // Asegurar motivo
+            motivoRechazo: nuevoEstado === 'pendiente' ? motivo : null,
             fechaRechazo: nuevoEstado === 'pendiente' ? new Date().toISOString() : null,
             justificacionProceso: nuevoEstado === 'en_proceso' ? justificacion : null
         };
 
-        // 6. Agregar marcas de tiempo específicas
         if (nuevoEstado === 'atendida') {
             actualizacion.fechaAtencion = new Date().toISOString();
         } else if (nuevoEstado === 'verificacion') {
             actualizacion.fechaVerificacion = new Date().toISOString();
         }
 
-        // 7. Actualización atómica en Firebase
         await update(docRef, actualizacion);
 
-        // 8. Actualización local inmediata sin recargar toda la data
         const index = solicitudesSeguimiento.findIndex(s => s.key === folio);
         if (index !== -1) {
             solicitudesSeguimiento[index] = {
                 ...solicitudesSeguimiento[index],
                 ...actualizacion,
-                tipoPath: path // Asegurar que mantenga el tipoPath correcto
+                tipoPath: path
             };
 
-            // Actualizar UI específica
             if (typeof actualizarTablaSeguimiento === 'function') {
                 actualizarTablaSeguimiento();
             } else {
@@ -1234,7 +1292,6 @@ window.cambiarEstado = async function (folio, nuevoEstado, motivo = '', justific
             cargarValidadas();
         }
 
-        // 9. Mensajes de éxito contextuales
         const mensajes = {
             'en_proceso': `${tipoDocumento} marcada en proceso`,
             'verificacion': `${tipoDocumento} enviada a verificación`,
@@ -1261,7 +1318,7 @@ window.cambiarEstado = async function (folio, nuevoEstado, motivo = '', justific
     }
 };
 
-// Modifica el event listener del input de archivo
+// Event listeners para inputs de archivo
 document.getElementById('evidenciaFile').addEventListener('change', function (e) {
     const fileInfo = document.getElementById('fileInfo');
     const removeBtn = document.getElementById('removeFile');
@@ -1270,7 +1327,6 @@ document.getElementById('evidenciaFile').addEventListener('change', function (e)
         const file = this.files[0];
         const extension = file.name.split('.').pop().toLowerCase();
 
-        // Validar extensión
         if (!ALLOWED_EXTENSIONS.includes(extension)) {
             mostrarError(`Formato no permitido: .${extension}`);
             this.value = '';
@@ -1279,7 +1335,6 @@ document.getElementById('evidenciaFile').addEventListener('change', function (e)
             return;
         }
 
-        // Validar tamaño
         if (file.size > MAX_FILE_SIZE_BYTES) {
             mostrarError(`El archivo excede el tamaño máximo de ${MAX_FILE_SIZE_MB}MB`);
             this.value = '';
@@ -1300,7 +1355,6 @@ document.getElementById('evidenciaFile').addEventListener('change', function (e)
     }
 });
 
-// Agrega evento para el botón de remover archivo
 document.getElementById('removeFile').addEventListener('click', () => {
     const fileInput = document.getElementById('evidenciaFile');
     fileInput.value = '';
@@ -1329,7 +1383,6 @@ fileDropArea.addEventListener('drop', (e) => {
     input.dispatchEvent(new Event('change'));
 });
 
-// Función para subir evidencia y cambiar estado
 window.subirEvidenciaYCambiarEstado = async function () {
     const fileInput = document.getElementById('evidenciaFile');
     const file = fileInput.files[0];
@@ -1343,31 +1396,18 @@ window.subirEvidenciaYCambiarEstado = async function () {
         return;
     }
 
-    // Validar extensión nuevamente (por si el usuario modificó el input)
     const extension = file.name.split('.').pop().toLowerCase();
     if (!ALLOWED_EXTENSIONS.includes(extension)) {
         mostrarError(`Formato no permitido: .${extension}`);
         return;
     }
 
-    // Validar tamaño
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-        mostrarError(`El archivo excede el tamaño máximo de ${MAX_FILE_SIZE_MB}MB`);
-        return;
-    }
-
-    // Validar tamaño del archivo
     if (file.size > MAX_FILE_SIZE_BYTES) {
         mostrarError(`El archivo excede el tamaño máximo de ${MAX_FILE_SIZE_MB}MB`);
         return;
     }
 
     try {
-        const metadata = {
-            contentType: file.type,
-            cacheControl: 'public, max-age=31536000',
-        };
-
         const storagePath = `${folioActual}/Evidencia/${file.name}`;
         const refArchivo = storageRef(storage, storagePath);
         await uploadBytes(refArchivo, file);
@@ -1379,7 +1419,6 @@ window.subirEvidenciaYCambiarEstado = async function () {
             fechaVerificacion: new Date().toISOString()
         });
 
-        // Actualizar UI
         fileInput.value = '';
         bootstrap.Modal.getInstance('#confirmarAtendidaModal').hide();
         mostrarExito("Evidencia subida correctamente");
@@ -1389,7 +1428,6 @@ window.subirEvidenciaYCambiarEstado = async function () {
         mostrarError(`Error técnico: ${error.code} - ${error.message}`);
     }
 };
-
 
 // Funciones de utilidad
 function mostrarError(mensaje) {
@@ -1417,7 +1455,7 @@ function cargarVerificacion() {
     } else if (esSecretariaParticular) {
         paths = ['solicitudes', 'oficios'];
     } else if (esOficialMayor) {
-        paths = ['solicitudes_institucionales']; // Solo institucionales
+        paths = ['solicitudes_institucionales'];
     }
 
     solicitudesVerificacion = [];
@@ -1426,7 +1464,6 @@ function cargarVerificacion() {
     const userDependencias = getCookie('dependencia') ?
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
-    // Corregir: Validar si hay dependencias para no-admin
     if (userRol !== 3 && userDependencias.length === 0) {
         mostrarPaginaVerificacion([]);
         return;
@@ -1469,7 +1506,6 @@ function cargarVerificacion() {
                 solicitudesVerificacion.push(solicitud);
             });
 
-            // Aplicar filtro por perfil
             solicitudesVerificacion = filtrarPorPerfil(solicitudesVerificacion);
 
             aplicarFiltrosVerificacion();
@@ -1542,10 +1578,8 @@ function mostrarPaginaVerificacion(data) {
 
     const items = data.slice(start, end);
 
-    // OPTIMIZACIÓN: DocumentFragment para un solo reflow
     const frag = document.createDocumentFragment();
     items.forEach(solicitud => {
-        // Determinar tipoDocumento basado en la colección
         let tipoDocumento = 'Solicitud';
         if (solicitud.tipoPath === 'acuerdos') tipoDocumento = 'Acuerdo';
         if (solicitud.tipoPath === 'oficios') tipoDocumento = 'Oficio';
@@ -1619,7 +1653,6 @@ window.mostrarConfirmacion = function (folio, accion, tipo) {
     new bootstrap.Modal(document.querySelector(modalId)).show();
 };
 
-// Evento modificado para cambio de archivo
 document.getElementById('documentoInicial').addEventListener('change', function (e) {
     if (suppressFileInputEvents) return;
 
@@ -1658,14 +1691,13 @@ document.getElementById('documentoInicial').addEventListener('change', function 
     }
 });
 
-// Agregar evento para remover documento inicial
 document.getElementById('removeDocInicial').addEventListener('click', () => {
     const fileInput = document.getElementById('documentoInicial');
     fileInput.value = '';
     fileInput.dispatchEvent(new Event('change'));
 });
 
-// Agregar al inicio del archivo, después de las constantes
+// Colores y estados
 const coloresGraficas = {
     primary: '#491F42',
     secondary: '#720F36',
@@ -1679,7 +1711,6 @@ const coloresGraficas = {
     rechazado_vobo: '#DC3545'
 };
 
-// Actualizar el objeto estados
 const estados = {
     'pendiente': { texto: 'Pendiente', color: coloresGraficas.primary },
     'pendiente_vobo': { texto: 'Pendiente VoBo', color: coloresGraficas.pendiente_vobo },
@@ -1690,7 +1721,6 @@ const estados = {
     'atendida': { texto: 'Atendida', color: coloresGraficas.success },
     'atrasada': { texto: 'No Atendidas', color: coloresGraficas.danger }
 };
-
 
 function crearFilaSolicitud(solicitud) {
     const tr = document.createElement('tr');
@@ -1709,18 +1739,15 @@ function crearFilaSolicitud(solicitud) {
     const estado = estados[solicitud.estado] || { texto: 'Desconocido', color: '#666' };
     const dependenciaNombre = dependenciasMap[solicitud.dependencia] || 'Desconocida';
 
-    // Verificar si es Vinculación Ciudadana
     const userEmail = getCookie('email');
     const esVinculacionCiudadana = userEmail === CORREO_VINCULACION_CIUDADANA;
 
-    // Deshabilitar botones cuando está en pendiente_vobo o verificación/atendida
     const pendienteVobo = solicitud.estado === 'pendiente_vobo';
     const enVerificacion = solicitud.estado === 'verificacion';
     const atendida = solicitud.estado === 'atendida';
     const rechazadaVobo = solicitud.estado === 'rechazado_vobo';
     const deshabilitarBotones = pendienteVobo || enVerificacion || atendida;
 
-    // Botón de reenvío solo para Vinculación Ciudadana y estado rechazado_vobo
     const botonReenvio = (esVinculacionCiudadana && rechazadaVobo) ? `
         <button class="btn btn-sm btn-warning" 
                 onclick="mostrarReenvioVobo('${solicitud.folio}', '${solicitud.motivoRechazoVobo || ''}')">
@@ -1757,7 +1784,6 @@ ${solicitud.documentoInicial ? `
     </button>
 ` : ''}
 
-<!-- Botón para VoBo (solo visible para Secretaría General) -->
 ${solicitud.estado === 'pendiente_vobo' && obtenerFiltroEspecial().esSecretariaGeneral ? `
     <button class="btn btn-sm btn-success" 
             onclick="aprobarVobo('${solicitud.folio}')">
@@ -1807,138 +1833,16 @@ ${userRol === 3 && !deshabilitarBotones ? `
     return tr;
 }
 
-window.mostrarDocumentoInicial = function (folio, nombreArchivo, url, secretariaOrigen) {
-    const solicitud = solicitudesSeguimiento.find(s => s.folio === folio);
-
-const fechaDocumento = solicitud?.fechaCreacion
-    ? new Date(solicitud.fechaCreacion).toLocaleDateString('es-MX', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-    })
-    : '-';
-
-    document.getElementById('fechaEvidencia').textContent =
-        solicitud?.fechaCreacion
-            ? new Date(solicitud.fechaCreacion).toLocaleDateString('es-MX', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-            })
-            : fechaActual;
-    const modal = new bootstrap.Modal(document.getElementById('evidenciaModal'));
-    const loading = document.getElementById('loadingPreview');
-    const pdfContainer = document.getElementById('pdfContainer');
-    const imagenContainer = document.getElementById('imagenContainer');
-    const visorNoSoportado = document.getElementById('visorNoSoportado');
-    const pdfViewer = document.getElementById('pdfViewer');
-    const modalElement = document.getElementById('evidenciaModal');
-
-    // Resetear estado inicial
-    [loading, pdfContainer, imagenContainer, visorNoSoportado].forEach(el => {
-        el.classList.add('d-none');
-    });
-    loading.classList.remove('d-none');
-    pdfViewer.src = '';
-    pdfViewer.removeAttribute('data-temp-src');
-
-    // Configurar nombre de archivo
-    const extractFileName = (url) => {
-        try {
-            const decodedUrl = decodeURIComponent(url);
-            return decodedUrl.split('/').pop().split(/[?#]/)[0];
-        } catch (error) {
-            console.error('Error al extraer nombre:', error);
-            return 'archivo-desconocido';
-        }
-    };
-
-    const nombre = nombreArchivo || extractFileName(url);
-    const fileExt = nombre.split('.').pop().toLowerCase();
-    const fechaActual = new Date().toLocaleDateString('es-MX');
-
-    // Actualizar metadatos
-    document.getElementById('nombreArchivoCompleto').textContent = nombre;
-    document.getElementById('folioEvidencia').textContent = folio;
-    document.getElementById('secretariaEvidencia').textContent = '-';
-    document.getElementById('fechaEvidencia').textContent = fechaDocumento;
-
-    // Configurar eventos del modal
-    const modalShownHandler = () => {
-        if (pdfViewer.dataset.tempSrc) {
-            const container = pdfViewer.parentElement;
-            pdfViewer.style.height = `${container.clientHeight}px`;
-
-            setTimeout(() => {
-                pdfViewer.src = pdfViewer.dataset.tempSrc;
-                delete pdfViewer.dataset.tempSrc;
-            }, 100);
-        }
-    };
-
-    const resizeHandler = () => {
-        if (pdfViewer && pdfContainer.classList.contains('d-none') === false) {
-            const container = pdfViewer.parentElement;
-            const newHeight = Math.max(400, container.clientHeight);
-            pdfViewer.style.height = `${newHeight}px`;
-        }
-    };
-
-    // Configurar visores
-    // OPTIMIZACIÓN: reducir el timeout de 300ms a 100ms para respuesta más ágil
-    setTimeout(() => {
-        loading.classList.add('d-none');
-
-        if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExt)) {
-            imagenContainer.classList.remove('d-none');
-            const img = document.getElementById('visorImagen');
-            img.src = url;
-            img.onload = () => {
-                document.getElementById('imagenDimensions').textContent =
-                    `${img.naturalWidth}px × ${img.naturalHeight}px`;
-            };
-        } else if (fileExt === 'pdf') {
-            pdfContainer.classList.remove('d-none');
-            document.getElementById('pdfMeta').textContent = `${nombre} | ${fechaDocumento}`;
-            pdfViewer.dataset.tempSrc = `${url}#view=FitH`;
-            window.addEventListener('resize', resizeHandler);
-            setTimeout(resizeHandler, 50);
-        } else {
-            visorNoSoportado.classList.remove('d-none');
-            document.getElementById('tipoArchivo').textContent = `.${fileExt}`;
-            const downloadBtn = document.getElementById('descargarEvidencia');
-            downloadBtn.href = url;
-            downloadBtn.download = nombre;
-        }
-    }, 300);
-
-    // Evento de zoom para imágenes
-    document.getElementById('visorImagen').onclick = function () {
-        this.classList.toggle('img-zoom');
-    };
-
-    // Manejar eventos del modal
-    modalElement.addEventListener('shown.bs.modal', modalShownHandler);
-    modalElement.addEventListener('hidden.bs.modal', () => {
-        window.removeEventListener('resize', resizeHandler);
-        modalElement.removeEventListener('shown.bs.modal', modalShownHandler);
-        pdfViewer.src = '';
-    });
-
-    modal.show();
-};
-
 async function obtenerNombreDependencia(dependenciaKey) {
     const dependenciaRef = ref(database, `dependencias/${dependenciaKey}`);
     const snapshot = await get(dependenciaRef);
     return snapshot.val()?.nombre || 'Desconocida';
 }
 
-// 1. Variables de control
+// Actualización automática de estados
 let actualizacionEnCurso = false;
-const DIAS_ADVERTENCIA = 1; // Días previos para marcar como "por vencer"
+const DIAS_ADVERTENCIA = 1;
 
-// 2. Función optimizada para actualización de estados
 async function actualizarEstadosAutomaticos() {
     if (actualizacionEnCurso) return;
     actualizacionEnCurso = true;
@@ -1948,13 +1852,11 @@ async function actualizarEstadosAutomaticos() {
         const updates = {};
         const paths = ['solicitudes', 'acuerdos', 'oficios'];
 
-        // Obtener datos directamente de Firebase
         const allDocs = await Promise.all(paths.map(async (path) => {
             const snapshot = await get(query(ref(database, path)));
             return snapshot.val() || {};
         }));
 
-        // Procesar cada documento
         paths.forEach((path, index) => {
             const docs = allDocs[index];
             Object.entries(docs).forEach(([key, doc]) => {
@@ -1965,7 +1867,6 @@ async function actualizarEstadosAutomaticos() {
 
                 let nuevoEstado = doc.estado;
 
-                // Lógica mejorada de transición de estados
                 if (diasRestantes === 0) {
                     nuevoEstado = 'atrasada';
                 } else if (diasRestantes <= DIAS_ADVERTENCIA && doc.estado === 'pendiente') {
@@ -1981,11 +1882,9 @@ async function actualizarEstadosAutomaticos() {
             });
         });
 
-        // Ejecutar actualizaciones si hay cambios
         if (Object.keys(updates).length > 0) {
             await update(ref(database), updates);
 
-            // Actualizar datos locales sin recargar toda la lista
             Object.entries(updates).forEach(([path, value]) => {
                 const [collection, key, field] = path.split('/');
                 const index = solicitudesSeguimiento.findIndex(s =>
@@ -2005,7 +1904,6 @@ async function actualizarEstadosAutomaticos() {
     }
 }
 
-// 3. Función mejorada para cálculo de días hábiles
 function calcularDiasHabilesRestantes(fechaInicio, fechaLimite) {
     let dias = 0;
     const fechaActual = new Date(fechaInicio);
@@ -2020,12 +1918,10 @@ function calcularDiasHabilesRestantes(fechaInicio, fechaLimite) {
     return dias;
 }
 
-// 4. Configurar intervalo de actualización (cada 12 horas)
-setInterval(actualizarEstadosAutomaticos, 43200000); // 12 horas
-// OPTIMIZACIÓN: diferir la primera ejecución 3 segundos para no competir con la
-// carga inicial de datos y gráficas en PCs lentas
+setInterval(actualizarEstadosAutomaticos, 43200000);
 document.addEventListener('DOMContentLoaded', () => setTimeout(actualizarEstadosAutomaticos, 3000));
 
+// ===================== CARGA DE SEGUIMIENTO (CORREGIDA) =====================
 function cargarSeguimiento() {
     const {
         esJefaturaGabinete,
@@ -2049,6 +1945,15 @@ function cargarSeguimiento() {
     const userDependencias = getCookie('dependencia') ?
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
+    // ─── DEFINICIÓN ÚNICA DEL THROTTLE (ámbito de función) ───
+    const _actualizarTablaSeguimientoThrottled = rafThrottle(() => {
+        solicitudesSeguimiento = filtrarPorPerfil(solicitudesSeguimiento);
+        if (obtenerFiltroEspecial().esVinculacionCiudadana) {
+            solicitudesSeguimiento = filtrarSoloVinculacionCiudadana(solicitudesSeguimiento);
+        }
+        actualizarTablaSeguimiento();
+    });
+
     // Limpiar listeners anteriores
     paths.forEach(path => {
         const refPath = ref(database, path);
@@ -2057,7 +1962,6 @@ function cargarSeguimiento() {
 
     if (userRol === 3) {
         // Admin: cargar todas las solicitudes
-        // En la sección de Promise.all (admin):
         Promise.all(paths.map(path => {
             return new Promise((resolve) => {
                 const q = query(ref(database, path), orderByChild('fechaCreacion'));
@@ -2070,7 +1974,6 @@ function cargarSeguimiento() {
                         solicitud.tipoPath = path;
                         datos.push(solicitud);
                     });
-                    // Aplicar filtro por perfil
                     const datosFiltrados = filtrarPorPerfil(datos);
                     resolve(datosFiltrados);
                 }, { onlyOnce: true });
@@ -2088,14 +1991,7 @@ function cargarSeguimiento() {
             actualizarGraficas(solicitudesSeguimiento);
         });
 
-        // En el listener en tiempo real (admin):
-        // OPTIMIZACIÓN: throttle con rAF para no re-renderizar la tabla en cada evento
-        // de Firebase (pueden llegar varios en ráfaga al inicio)
-        const _actualizarTablaSeguimientoThrottled = rafThrottle(() => {
-            solicitudesSeguimiento = filtrarPorPerfil(solicitudesSeguimiento);
-            actualizarTablaSeguimiento();
-        });
-
+        // Escuchar cambios en tiempo real (admin)
         paths.forEach(path => {
             const refPath = ref(database, path);
             onValue(refPath, (snapshot) => {
@@ -2131,7 +2027,6 @@ function cargarSeguimiento() {
                             solicitud.motivoRechazo = solicitud.motivoRechazo || null;
                             datos.push(solicitud);
                         });
-                        // Aplicar filtro para Vinculación Ciudadana - SOLO SUS SOLICITUDES
                         const datosFiltrados = filtrarSoloVinculacionCiudadana(datos);
                         resolve(datosFiltrados);
                     }, { onlyOnce: true });
@@ -2146,17 +2041,13 @@ function cargarSeguimiento() {
                 }
                 return acc;
             }, []);
-
-            // Aplicar filtro para Esmeralda Merchan
             solicitudesSeguimiento = filtrarSolicitudesVinculacionCiudadana(mergedData);
-
             actualizarTablaSeguimiento();
             actualizarEstadisticas(solicitudesSeguimiento);
             actualizarGraficas(solicitudesSeguimiento);
         });
 
-        // Escuchar cambios en tiempo real para cada dependencia y path
-        // OPTIMIZACIÓN: reutilizar el mismo throttle declarado arriba
+        // Escuchar cambios en tiempo real (no admin)
         paths.forEach(path => {
             userDependencias.forEach(dependencia => {
                 const q = query(
@@ -2174,7 +2065,6 @@ function cargarSeguimiento() {
                             solicitudesSeguimiento[index] = { ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path };
                         }
                     });
-                    // Aplicar filtro para Vinculación Ciudadana
                     solicitudesSeguimiento = filtrarSoloVinculacionCiudadana(solicitudesSeguimiento);
                     _actualizarTablaSeguimientoThrottled();
                 });
@@ -2182,13 +2072,13 @@ function cargarSeguimiento() {
         });
     }
 }
+// ===================== FIN DE CARGA DE SEGUIMIENTO =====================
 
 // Manejo del formulario corregido
 document.getElementById('formNuevaSolicitud').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
 
-    // Validación de campos
     const camposRequeridos = [
         'receptor', 'canal', 'nombre',
         'colonia', 'telefono', 'asunto',
@@ -2204,7 +2094,6 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
         }
     });
 
-    // Validar formato de teléfono
     const telefono = document.getElementById('telefono');
     if (!/^\d{10}$/.test(telefono.value)) {
         validado = false;
@@ -2214,14 +2103,11 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
     if (!validado) return;
 
     try {
-        // Generar folio primero
         const folio = await generarFolio();
 
-        // Manejar documento inicial
         const docInicialInput = document.getElementById('documentoInicial');
         const docInicialFile = docInicialInput.files[0];
 
-        // Validar archivo
         if (!docInicialFile) {
             mostrarError("Debes subir un documento inicial");
             return;
@@ -2238,26 +2124,21 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
             return;
         }
 
-        // OPTIMIZACIÓN: deshabilitar botón de envío para evitar doble clic en conexiones lentas
         const submitBtn = e.target.querySelector('[type="submit"]') || e.submitter;
         if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Guardando…'; }
 
-        // Subir documento a Storage
         const storagePath = `${folio}/Documento Inicial/${docInicialFile.name}`;
         const docRef = storageRef(storage, storagePath);
         await uploadBytes(docRef, docInicialFile);
         const docUrl = await getDownloadURL(docRef);
 
-        // VERIFICACIÓN DE VINCULACIÓN CIUDADANA Y VoBo
         const { esVinculacionCiudadana } = obtenerFiltroEspecial();
-        const userEmail = obtenerEmailUsuario(); // ← USAR FUNCIÓN MEJORADA
+        const userEmail = obtenerEmailUsuario();
 
-        // Si es Vinculación Ciudadana, el estado será 'pendiente_vobo', sino 'pendiente'
         const estadoInicial = (esVinculacionCiudadana || userEmail === CORREO_VINCULACION_CIUDADANA)
             ? 'pendiente_vobo'
             : 'pendiente';
 
-        // Crear objeto de solicitud CON EL CREADOR MEJORADO
         const fechaCreacion = new Date().toISOString();
         const nuevaSolicitud = {
             fechaCreacion: fechaCreacion,
@@ -2276,43 +2157,36 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
             documentoInicial: docUrl,
             nombreDocumento: docInicialFile.name,
             folio: folio,
-            // Campos adicionales para control de VoBo
             requiereVobo: (esVinculacionCiudadana || userEmail === CORREO_VINCULACION_CIUDADANA),
             voboAprobado: false,
             voboSecretariaGeneral: null,
             fechaSolicitudVobo: (esVinculacionCiudadana || userEmail === CORREO_VINCULACION_CIUDADANA) ? new Date().toISOString() : null,
-            // NUEVO CAMPO: Guardar quién creó la solicitud DE FORMA SEGURA
             creadoPor: userEmail,
             _creadoPor: userEmail,
             usuarioCreacion: userEmail,
             _usuarioCreacion: userEmail,
             creadoPorEmail: userEmail,
-            creadoPorNombre: obtenerNombreUsuario() // ← AGREGAR NOMBRE TAMBIÉN
+            creadoPorNombre: obtenerNombreUsuario()
         };
 
-        // Validar que no haya campos undefined
         Object.keys(nuevaSolicitud).forEach(key => {
             if (nuevaSolicitud[key] === undefined) {
                 nuevaSolicitud[key] = null;
             }
         });
 
-        // Guardar en la base de datos
         await set(ref(database, `solicitudes/${folio}`), nuevaSolicitud);
 
-        // Limpiar formulario sin triggerear alertas
         suppressFileInputEvents = true;
         form.reset();
         document.getElementById('fecha').value = obtenerFechaHoy();
         docInicialInput.value = '';
 
-        // Restaurar UI manualmente
         document.getElementById('docInicialInfo').textContent =
             'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
         document.getElementById('removeDocInicial').classList.add('d-none');
         suppressFileInputEvents = false;
 
-        // Mensaje diferente según si requiere VoBo o no
         if (estadoInicial === 'pendiente_vobo') {
             mostrarExito("Solicitud creada exitosamente! Esperando VoBo de Secretaría General.");
         } else {
@@ -2323,13 +2197,12 @@ document.getElementById('formNuevaSolicitud').addEventListener('submit', async (
         console.error("Error al guardar:", error);
         mostrarError(`Error al crear la solicitud: ${error.message}`);
     } finally {
-        // OPTIMIZACIÓN: re-habilitar botón en cualquier caso (éxito o error)
         const submitBtn = e.target.querySelector('[type="submit"]') || e.submitter;
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Guardar Solicitud'; }
     }
 });
 
-// Añadir al inicio con las constantes
+// Colores para gráficas
 const coloresEstatus = {
     pendiente: '#491F42',
     vencer: '#720F36',
@@ -2339,15 +2212,14 @@ const coloresEstatus = {
     verificacion: '#FFA500'
 };
 
-// Paleta de énfasis visual
 const coloresSecundarios = {
-    texto: '#37474F',        // Gris oscuro para texto
-    fondo: '#FFFFFF',        // Fondo blanco
-    linea: '#B0BEC5',        // Líneas grises claras
-    destacado: '#D32F2F'     // Rojo para elementos destacados
+    texto: '#37474F',
+    fondo: '#FFFFFF',
+    linea: '#B0BEC5',
+    destacado: '#D32F2F'
 };
 
-// Añadir después de actualizarEstadisticas
+// Gráficas
 let myChart = null;
 
 function obtenerTiposSolicitud(solicitudes) {
@@ -2363,7 +2235,7 @@ function actualizarGrafica(solicitudes) {
 
     const datos = {
         pendiente: new Array(tiposSolicitud.length).fill(0),
-        pendiente_vobo: new Array(tiposSolicitud.length).fill(0), // ← Nuevo dataset
+        pendiente_vobo: new Array(tiposSolicitud.length).fill(0),
         por_vencer: new Array(tiposSolicitud.length).fill(0),
         en_proceso: new Array(tiposSolicitud.length).fill(0),
         atrasada: new Array(tiposSolicitud.length).fill(0),
@@ -2401,7 +2273,7 @@ function actualizarGrafica(solicitudes) {
                     barThickness: 35
                 },
                 {
-                    label: 'Pendientes VoBo', // ← Nueva serie
+                    label: 'Pendientes VoBo',
                     data: datos.pendiente_vobo,
                     backgroundColor: coloresEstatus.pendiente_vobo,
                     borderColor: coloresSecundarios.linea,
@@ -2545,7 +2417,7 @@ function actualizarGrafica(solicitudes) {
                 }
             },
             animation: {
-                duration: 400, // OPTIMIZACIÓN: reducido de 800ms a 400ms
+                duration: 400,
                 easing: 'easeOutQuart'
             }
         }
@@ -2553,7 +2425,6 @@ function actualizarGrafica(solicitudes) {
 }
 
 // Event listeners para filtros
-// OPTIMIZACIÓN: debounce en búsquedas para no disparar filtros en cada pulsación
 document.getElementById('busqueda-seguimiento').addEventListener('input', debounce(() => {
     currentPageSeguimiento = 1;
     aplicarFiltrosSeguimiento();
@@ -2569,13 +2440,11 @@ document.getElementById('busqueda-validadas').addEventListener('input', debounce
     aplicarFiltrosValidadas();
 }, 300));
 
-// En DOMContentLoaded, después de cargar dependencias:
 document.getElementById('filtro-secretaria-validadas').addEventListener('change', () => {
     currentPageValidadas = 1;
     aplicarFiltrosValidadas();
 });
 
-// En DOMContentLoaded, después de cargar dependencias:
 document.getElementById('filtro-canal-validadas').addEventListener('change', () => {
     currentPageValidadas = 1;
     aplicarFiltrosValidadas();
@@ -2587,8 +2456,6 @@ document.getElementById('confirmarAtendidaModal').addEventListener('hidden.bs.mo
     fileInput.dispatchEvent(new Event('change'));
 });
 
-// Agregar en el DOMContentLoaded, después de los otros event listeners
-// OPTIMIZACIÓN: debounce en búsqueda VoBo
 document.getElementById('busqueda-vobo')?.addEventListener('input', debounce(() => {
     currentPageVobo = 1;
     aplicarFiltrosVobo();
@@ -2599,7 +2466,6 @@ document.getElementById('filtro-secretaria-vobo')?.addEventListener('change', ()
     aplicarFiltrosVobo();
 });
 
-// En el DOMContentLoaded, agregar este event listener
 document.getElementById('filtro-fecha-vobo')?.addEventListener('change', () => {
     currentPageVobo = 1;
     aplicarFiltrosVobo();
@@ -2608,21 +2474,18 @@ document.getElementById('filtro-fecha-vobo')?.addEventListener('change', () => {
 // Sistema de navegación y UI
 document.addEventListener('DOMContentLoaded', async function () {
     if (!checkSession()) {
-        return; // Si no hay sesión válida, salir
+        return;
     }
     showUserInfo();
     setupLogout();
 
-    // Cargar primero las dependencias
     await cargarDependencias();
 
-    // Luego cargar otros componentes
     cargarSecretarias();
     cargarSeguimiento();
     cargarValidadas();
     cargarVerificacion();
 
-    // Obtener email del usuario PRIMERO
     const userEmail = getCookie('email');
     const role = parseInt(getCookie('rol')) || 0;
     let userDependencias = getCookie('dependencia') ?
@@ -2630,12 +2493,10 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     const { esVinculacionCiudadana } = obtenerFiltroEspecial();
 
-    // Si es Vinculación Ciudadana, forzar solo Secretaría General
     if (esVinculacionCiudadana) {
         userDependencias = [DEPENDENCIA_SECRETARIA_GENERAL];
     }
 
-    // DECLARAR TODAS LAS VARIABLES DE NAVEGACIÓN PRIMERO
     const dashboardLi = document.querySelector('a[data-content="dashboard"]').parentElement;
     const nuevaLi = document.querySelector('a[data-content="nueva"]').parentElement;
     const seguimientoLi = document.querySelector('a[data-content="seguimiento"]').parentElement;
@@ -2644,29 +2505,24 @@ document.addEventListener('DOMContentLoaded', async function () {
     const navacuerdos = document.querySelector('a[data-content="acuerdo"]').parentElement;
     const navoficios = document.querySelector('a[data-content="oficio"]').parentElement;
     const navInstitucional = document.getElementById('navInstitucional');
-    const navVobo = document.getElementById('navVobo'); // ← AHORA DECLARADO ANTES DE USAR
+    const navVobo = document.getElementById('navVobo');
 
-    // MODIFICACIÓN: Para Vinculación Ciudadana, mostrar solo los módulos permitidos
     if (esVinculacionCiudadana) {
-        // Mostrar solo los módulos permitidos (incluyendo dashboard)
-        dashboardLi.style.display = 'block';    // Dashboard
-        nuevaLi.style.display = 'block';        // Nueva Solicitud Ciudadana
-        seguimientoLi.style.display = 'block';  // Seguimiento de Solicitudes
-        validadasLi.style.display = 'block';    // Solicitudes Atendidas
-        verificacionLi.style.display = 'block'; // Solicitudes en Verificación
+        dashboardLi.style.display = 'block';
+        nuevaLi.style.display = 'block';
+        seguimientoLi.style.display = 'block';
+        validadasLi.style.display = 'block';
+        verificacionLi.style.display = 'block';
 
-        // Ocultar los módulos NO permitidos
         navacuerdos.style.display = 'none';
         navoficios.style.display = 'none';
         if (navInstitucional) navInstitucional.style.display = 'none';
         if (navVobo) navVobo.style.display = 'none';
 
-        // Activar por defecto la pestaña de Dashboard
         setTimeout(() => {
             document.querySelector('a[data-content="dashboard"]').click();
         }, 100);
     } else {
-        // Comportamiento normal para otros perfiles
         dashboardLi.style.display = 'block';
 
         switch (role) {
@@ -2689,7 +2545,6 @@ document.addEventListener('DOMContentLoaded', async function () {
                 if (navInstitucional) navInstitucional.style.display = 'none';
                 break;
             case 3:
-                // Mostrar acuerdo de gabinete solo si NO es Vinculación Ciudadana u Oficialía Mayor
                 if (userEmail === 'vinculacion.ciudadana@tizayuca.gob.mx' ||
                     userEmail === 'oficialia.mayor@tizayuca.gob.mx') {
                     navacuerdos.style.display = 'none';
@@ -2697,7 +2552,6 @@ document.addEventListener('DOMContentLoaded', async function () {
                     navacuerdos.style.display = 'block';
                 }
 
-                // Mostrar otros módulos normalmente
                 navoficios.style.display = 'block';
                 if (navInstitucional) navInstitucional.style.display = 'block';
                 break;
@@ -2711,7 +2565,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
     }
 
-    // Validar pestaña activa guardada
     const savedTab = localStorage.getItem('activeTab');
     const allowedTabs = ['dashboard'];
 
@@ -2727,7 +2580,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             break;
     }
 
-    // Para Vinculación Ciudadana, permitir los módulos específicos
     if (esVinculacionCiudadana) {
         allowedTabs.push('nueva', 'seguimiento', 'validadas', 'verificacion');
     }
@@ -2738,7 +2590,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         document.querySelector('.nav-link[data-content="dashboard"]').classList.add('active');
     }
 
-    // Configurar fecha actual
     document.getElementById('fecha').value = obtenerFechaHoy();
 
     const canalSelect = document.getElementById('canal');
@@ -2755,15 +2606,12 @@ document.addEventListener('DOMContentLoaded', async function () {
         <option>Eventos Públicos</option>
     `;
 
-    // AHORA SÍ PODEMOS USAR navVobo DE FORMA SEGURA
-    // Mostrar sección de VoBo solo para Secretaría General
     if (userEmail === CORREO_SECRETARIA_GENERAL) {
         if (navVobo) {
             navVobo.style.display = 'block';
-            cargarSolicitudesVobo(); // Cargar solicitudes de VoBo
+            cargarSolicitudesVobo();
         }
 
-        // Mostrar estadística de pendientes VoBo en el dashboard
         const statsVoboElement = document.getElementById('stats-pendientes-vobo');
         if (statsVoboElement) {
             const statCard = statsVoboElement.closest('.stat-card');
@@ -2776,7 +2624,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             navVobo.style.display = 'none';
         }
 
-        // Ocultar estadística de pendientes VoBo para otros perfiles
         const statsVoboElement = document.getElementById('stats-pendientes-vobo');
         if (statsVoboElement) {
             const statCard = statsVoboElement.closest('.stat-card');
@@ -2786,7 +2633,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
     }
 
-    // Menú móvil
     const sidebar = document.querySelector('.sidebar');
     const menuToggle = document.querySelector('.menu-toggle');
 
@@ -2803,7 +2649,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
     });
 
-    // 2. Función para cambiar pestañas
     function switchTab(contentId) {
         contentSections.forEach(section => {
             section.style.display = 'none';
@@ -2813,7 +2658,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (activeSection) {
             activeSection.style.display = 'block';
 
-            // Si es Vinculación Ciudadana, aplicar filtros específicos cuando se cambie a ciertas pestañas
             const { esVinculacionCiudadana } = obtenerFiltroEspecial();
             if (esVinculacionCiudadana) {
                 if (contentId === 'seguimiento') {
@@ -2829,13 +2673,11 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
     }
 
-    // Event listeners para los navLinks
     navLinks.forEach(link => {
         link.addEventListener('click', function (e) {
             e.preventDefault();
             const contentId = this.getAttribute('data-content');
             if (contentId === 'vobo') {
-                // Asegurarse de que los datos de VoBo estén cargados
                 aplicarFiltrosVobo();
             }
 
@@ -2845,7 +2687,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         });
     });
 
-    // Agregar event listeners para los botones de confirmación
     document.getElementById('confirmarAprobar')?.addEventListener('click', async () => {
         if (folioActual) {
             await cambiarEstado(folioActual, 'atendida');
@@ -2877,42 +2718,6 @@ function getCookie(name) {
     }
 }
 
-
-// function checkSession() {
-//     const sessionCookie = getCookie('session');
-//     const expiresCookie = getCookie('expires');
-
-//     if (!sessionCookie || !expiresCookie) {
-//         // Si no hay cookies, redirigir inmediatamente
-//         setTimeout(() => {
-//             window.location.href = 'index.html';
-//         }, 100);
-//         return false;
-//     }
-
-//     const now = new Date();
-//     const expirationDate = new Date(expiresCookie);
-
-//     if (now > expirationDate) {
-//         // Si ya expiró, redirigir
-//         setTimeout(() => {
-//             window.location.href = 'index.html';
-//         }, 100);
-//         return false;
-//     }
-
-//     // Iniciar el sistema de detección de actividad
-//     setupActivityDetection();
-
-//     // Renovar inmediatamente si la sesión es vieja
-//     const sessionAge = expirationDate - now;
-//     if (sessionAge < 5 * 60 * 1000) { // Menos de 5 minutos restantes
-//         renewSession();
-//     }
-
-//     return true;
-// }
-
 function showUserInfo() {
     const nombre = decodeURIComponent(getCookie('nombre') || 'Usuario');
     document.getElementById('nombreUsuario').textContent = nombre;
@@ -2929,7 +2734,6 @@ function setupLogout() {
     });
 
     confirmLogout.addEventListener('click', () => {
-        // Detener todos los intervalos
         if (sessionRenewalInterval) {
             clearInterval(sessionRenewalInterval);
             sessionRenewalInterval = null;
@@ -2939,7 +2743,6 @@ function setupLogout() {
             activityMonitorInterval = null;
         }
 
-        // Eliminar todas las cookies de forma segura
         const cookies = document.cookie.split(";");
         for (let i = 0; i < cookies.length; i++) {
             const cookie = cookies[i];
@@ -2948,13 +2751,10 @@ function setupLogout() {
             document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Lax";
         }
 
-        // También limpiar localStorage y sessionStorage
         localStorage.clear();
         sessionStorage.clear();
 
         logoutModal.hide();
-
-        // Redirigir inmediatamente
         window.location.href = 'index.html';
     });
 }
@@ -2974,7 +2774,6 @@ window.mostrarConfirmacionAtendida = function (folio) {
 window.confirmarCambioEstado = function (nuevoEstado) {
     cambiarEstado(folioActual, nuevoEstado);
 
-    // Cerrar ambos modales de confirmación
     ['#confirmarProcesoModal', '#confirmarAtendidaModal'].forEach(modalId => {
         const modal = bootstrap.Modal.getInstance(document.querySelector(modalId));
         if (modal) modal.hide();
@@ -2986,11 +2785,9 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
     e.preventDefault();
 
     try {
-        // Obtener elementos del DOM
         const docInput = document.getElementById('documentoAcuerdo');
         const docFile = docInput.files[0];
 
-        // Validar campos requeridos
         const camposRequeridos = [
             'asuntoAcuerdo',
             'descripcionAcuerdo',
@@ -3007,7 +2804,6 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
             }
         });
 
-        // Validar archivo
         if (!docFile) {
             mostrarError("Debes subir un documento para el Acuerdo");
             valido = false;
@@ -3026,10 +2822,8 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
 
         if (!valido) return;
 
-        // Generar folio y subir documento
         const folio = await generarFolio('acuerdo');
 
-        // OPTIMIZACIÓN: bloquear botón durante la operación de red
         const submitBtn = e.target.querySelector('[type="submit"]') || e.submitter;
         if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Guardando…'; }
 
@@ -3038,9 +2832,8 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
         await uploadBytes(docRef, docFile);
         const docUrl = await getDownloadURL(docRef);
 
-        const userEmail = obtenerEmailUsuario(); // ← USAR FUNCIÓN MEJORADA
+        const userEmail = obtenerEmailUsuario();
 
-        // Crear objeto Acuerdo CON CAMPOS DE CREADOR
         const nuevoAcuerdo = {
             tipo: 'acuerdo',
             fechaCreacion: new Date().toISOString(),
@@ -3053,7 +2846,6 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
             nombreDocumento: docFile.name,
             estado: 'pendiente',
             folio: folio,
-            // CAMPOS DE CREADOR AGREGADOS
             creadoPor: userEmail,
             _creadoPor: userEmail,
             usuarioCreacion: userEmail,
@@ -3062,17 +2854,14 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
             creadoPorNombre: obtenerNombreUsuario()
         };
 
-        // Validar que no haya campos undefined
         Object.keys(nuevoAcuerdo).forEach(key => {
             if (nuevoAcuerdo[key] === undefined) {
                 nuevoAcuerdo[key] = null;
             }
         });
 
-        // Guardar en Firebase
         await set(ref(database, `acuerdos/${folio}`), nuevoAcuerdo);
 
-        // Limpiar formulario
         limpiarFormulario('acuerdo');
         mostrarExito("Acuerdo creado exitosamente!");
 
@@ -3085,7 +2874,7 @@ document.getElementById('formNuevoAcuerdo').addEventListener('submit', async (e)
     }
 });
 
-// Configurar formulario Oficio (similar a Acuerdo)
+// Configurar formulario Oficio
 document.getElementById('formNuevoOficio').addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -3095,7 +2884,6 @@ document.getElementById('formNuevoOficio').addEventListener('submit', async (e) 
 
         if (!validarDocumento(docFile, true)) return;
 
-        // OPTIMIZACIÓN: bloquear botón durante la operación de red
         const submitBtn = e.target.querySelector('[type="submit"]') || e.submitter;
         if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Guardando…'; }
 
@@ -3104,7 +2892,7 @@ document.getElementById('formNuevoOficio').addEventListener('submit', async (e) 
         await uploadBytes(docRef, docFile);
         const docUrl = await getDownloadURL(docRef);
 
-        const userEmail = obtenerEmailUsuario(); // ← USAR FUNCIÓN MEJORADA
+        const userEmail = obtenerEmailUsuario();
 
         const nuevoOficio = {
             tipo: 'oficio',
@@ -3118,12 +2906,10 @@ document.getElementById('formNuevoOficio').addEventListener('submit', async (e) 
             nombreDocumento: docFile.name,
             estado: 'pendiente',
             folio: folio,
-            // Campos del peticionario
             solicitante: {
                 nombre: document.getElementById('peticionarioOficio').value,
                 telefono: document.getElementById('telefonoOficio').value
             },
-            // CAMPOS DE CREADOR AGREGADOS
             creadoPor: userEmail,
             _creadoPor: userEmail,
             usuarioCreacion: userEmail,
@@ -3132,7 +2918,6 @@ document.getElementById('formNuevoOficio').addEventListener('submit', async (e) 
             creadoPorNombre: obtenerNombreUsuario()
         };
 
-        // Validar que no haya campos undefined
         Object.keys(nuevoOficio).forEach(key => {
             if (nuevoOficio[key] === undefined) {
                 nuevoOficio[key] = null;
@@ -3191,10 +2976,8 @@ function limpiarFormulario(tipo) {
     const prefix = tipo.charAt(0).toUpperCase() + tipo.slice(1);
     const form = document.getElementById(`formNuevo${prefix}`);
 
-    // Resetear campos
     form.reset();
 
-    // Limpiar file input y UI
     const fileInput = document.getElementById(`documento${prefix}`);
     const fileInfo = document.getElementById(`doc${prefix}Info`);
     const removeBtn = document.getElementById(`removeDoc${prefix}`);
@@ -3203,16 +2986,14 @@ function limpiarFormulario(tipo) {
     fileInfo.textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
     removeBtn.classList.add('d-none');
 
-    // Restablecer fecha
     document.getElementById(`fecha${prefix}`).value = obtenerFechaHoy();
 
-    // Limpiar nuevos campos específicos para oficio
     if (tipo === 'oficio') {
         document.getElementById('peticionarioOficio').value = '';
         document.getElementById('telefonoOficio').value = '';
     }
 }
-// Configurar eventos para los documentos
+
 ['Acuerdo', 'Oficio'].forEach(tipo => {
     const docInput = document.getElementById(`documento${tipo}`);
     const removeBtn = document.getElementById(`removeDoc${tipo}`);
@@ -3239,20 +3020,14 @@ function limpiarFormulario(tipo) {
     });
 });
 
-// En DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
-    // Configurar fechas
     document.getElementById('fechaAcuerdo').value = obtenerFechaHoy();
     document.getElementById('fechaOficio').value = obtenerFechaHoy();
 
-    // Obtener email del usuario
     const userEmail = getCookie('email');
-
-    // Mostrar módulos solo para rol 3, excepto para los correos específicos
     const role = parseInt(getCookie('rol'));
 
     if (role === 3) {
-        // Ocultar acuerdo de gabinete para los correos específicos
         if (userEmail === 'vinculacion.ciudadana@tizayuca.gob.mx' ||
             userEmail === 'oficialia.mayor@tizayuca.gob.mx') {
             document.getElementById('navAcuerdo').style.display = 'none';
@@ -3260,7 +3035,6 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('navAcuerdo').style.display = 'block';
         }
 
-        // Mostrar otros módulos normalmente
         document.getElementById('navOficio').style.display = 'block';
         document.getElementById('navInstitucional').style.display = 'block';
     } else {
@@ -3277,7 +3051,6 @@ function validarFormulario(tipo) {
         'oficio': ['asuntoOficio', 'descripcionOficio', 'secretariaOficio', 'documentoOficio']
     };
 
-    // Validar campos requeridos
     let valido = true;
     camposRequeridos[tipo].forEach(id => {
         const campo = document.getElementById(id);
@@ -3288,7 +3061,6 @@ function validarFormulario(tipo) {
         }
     });
 
-    // Validar archivo
     const fileInput = document.getElementById(`documento${prefix}`);
     const file = fileInput.files[0];
 
@@ -3304,7 +3076,7 @@ function validarFormulario(tipo) {
             valido = false;
         }
 
-        if (file.size > 10 * 1024 * 1024) { // 10MB
+        if (file.size > 10 * 1024 * 1024) {
             mostrarError(`El archivo excede el tamaño máximo de 10MB para ${prefix}`);
             valido = false;
         }
@@ -3313,23 +3085,19 @@ function validarFormulario(tipo) {
     return valido;
 }
 
-// Configurar validación en tiempo real para Acuerdos
 document.getElementById('documentoAcuerdo').addEventListener('change', function (e) {
     validarArchivoInput(this, 'Acuerdo');
 });
 
-// Configurar validación en tiempo real para Oficios
 document.getElementById('documentoOficio').addEventListener('change', function (e) {
     validarArchivoInput(this, 'Oficio');
 });
 
-// Función de validación unificada para archivos
 function validarArchivoInput(input, tipoDocumento) {
     const file = input.files[0];
     const fileInfo = input.parentElement.querySelector('.file-info');
     const removeBtn = input.parentElement.querySelector('.remove-file');
 
-    // Resetear estado
     input.classList.remove('is-invalid');
     fileInfo.classList.remove('text-danger');
 
@@ -3339,7 +3107,6 @@ function validarArchivoInput(input, tipoDocumento) {
         return;
     }
 
-    // Validar extensión
     const extension = file.name.split('.').pop().toLowerCase();
     if (!ALLOWED_INITIAL_EXTENSIONS.includes(extension)) {
         input.value = '';
@@ -3349,7 +3116,6 @@ function validarArchivoInput(input, tipoDocumento) {
         return;
     }
 
-    // Validar tamaño
     if (file.size > MAX_INITIAL_FILE_SIZE_BYTES) {
         input.value = '';
         fileInfo.textContent = `El archivo excede ${MAX_INITIAL_FILE_SIZE_MB}MB`;
@@ -3358,7 +3124,6 @@ function validarArchivoInput(input, tipoDocumento) {
         return;
     }
 
-    // Mostrar información válida
     fileInfo.innerHTML = `
         <span class="text-success">
             <i class="fas fa-file me-2"></i>${file.name}
@@ -3368,16 +3133,11 @@ function validarArchivoInput(input, tipoDocumento) {
     removeBtn?.classList.remove('d-none');
 }
 
-
 // Variables globales para las gráficas
 let mainChart, typeChart, trendChart, statusChart;
 
 function actualizarGraficas(solicitudes) {
-    // OPTIMIZACIÓN: diferir el render de gráficas al siguiente frame disponible.
-    // Evita que la actualización de 8 Chart.js bloquee el hilo principal mientras
-    // el usuario interactúa con la tabla.
     requestAnimationFrame(() => {
-        // Aplicar filtro por perfil
         let solicitudesFiltradas = filtrarPorPerfil(solicitudes);
 
         actualizarGraficaPrincipal(solicitudesFiltradas);
@@ -3392,7 +3152,6 @@ function actualizarGraficas(solicitudes) {
 }
 
 function actualizarGraficaPrincipal(solicitudes) {
-    // Filtrar para Vinculación Ciudadana si es necesario
     const { esVinculacionCiudadana } = obtenerFiltroEspecial();
     let solicitudesFiltradas = solicitudes;
 
@@ -3585,7 +3344,7 @@ function actualizarGraficaPrincipal(solicitudes) {
                 }
             },
             animation: {
-                duration: 400, // OPTIMIZACIÓN: reducido de 800ms a 400ms
+                duration: 400,
                 easing: 'easeOutQuart'
             }
         }
@@ -3835,23 +3594,18 @@ function actualizarTiemposRespuesta(solicitudes) {
     });
 }
 
-// Función mejorada para exportación múltiple
-// En la función exportAllCharts, agregar la nueva gráfica
 window.exportAllCharts = async () => {
     try {
         const zip = new JSZip();
         const folder = zip.folder("graficas_sisges");
         const date = new Date().toISOString().slice(0, 10);
 
-        // Generar todas las gráficas (incluyendo la nueva)
         await Promise.all(Object.keys(charts).map(async (chartId) => {
             if (chartId === 'quarterlyChart' && !charts[chartId]) {
-                // Si la gráfica trimestral no está inicializada, la creamos
                 actualizarGraficaTrimestral(solicitudesSeguimiento);
             }
 
             if (chartId === 'channelChart' && !charts[chartId]) {
-                // Si la gráfica de canales no está inicializada, la creamos
                 actualizarGraficaCanales(solicitudesSeguimiento);
             }
 
@@ -3871,7 +3625,6 @@ window.exportAllCharts = async () => {
             folder.file(`${chartId}_${date}.png`, blob);
         }));
 
-        // Generar y descargar ZIP
         const content = await zip.generateAsync({ type: "blob" });
         saveAs(content, `graficas_sisges_${date}.zip`);
 
@@ -3880,7 +3633,6 @@ window.exportAllCharts = async () => {
     }
 };
 
-// Modificar función de exportación individual para mejor calidad
 window.exportChart = (chartId, fileName = 'chart') => {
     const chart = charts[chartId];
     if (!chart) return;
@@ -3888,7 +3640,6 @@ window.exportChart = (chartId, fileName = 'chart') => {
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
 
-    // Aumentar resolución para exportación HD
     const scale = 2;
     tempCanvas.width = chart.canvas.width * scale;
     tempCanvas.height = chart.canvas.height * scale;
@@ -3915,12 +3666,10 @@ function obtenerFiltroEspecial() {
     };
 }
 
-// En el evento de clic del botón de confirmar rechazo
 document.getElementById('confirmarRechazar').addEventListener('click', async () => {
     const motivoInput = document.getElementById('motivoRechazo');
     const motivo = motivoInput.value.trim();
 
-    // Validación robusta
     if (!motivo || motivo.length > 500) {
         mostrarError(motivo ? "¡El motivo no puede exceder 500 caracteres!" : "¡Debe ingresar un motivo de rechazo!");
         motivoInput.classList.add('is-invalid');
@@ -3937,7 +3686,6 @@ document.getElementById('confirmarRechazar').addEventListener('click', async () 
     }
 });
 
-// Limpiar el modal al cerrarse
 document.getElementById('confirmarRechazarModal').addEventListener('hidden.bs.modal', () => {
     document.getElementById('motivoRechazo').value = '';
 });
@@ -3950,7 +3698,6 @@ window.mostrarMotivo = function (motivo, usuario, fecha) {
         return;
     }
 
-    // Construir contenido con formato seguro
     const contenidoHTML = `
         <div class="mb-3">
         </div>
@@ -3970,29 +3717,23 @@ window.mostrarJustificacion = function (folio, justificacion) {
     new bootstrap.Modal('#justificacionModal').show();
 };
 
-// Función modificada para confirmar cambio de estado
 window.confirmarCambioEstado = function (nuevoEstado) {
     const justificacion = document.getElementById('justificacionProceso').value.trim();
 
-    // Validar la justificación
     if (!justificacion || justificacion.length < 20) {
         document.getElementById('justificacionProceso').classList.add('is-invalid');
         return;
     }
 
-    // CORRECCIÓN: Pasar la justificación como cuarto parámetro
     cambiarEstado(folioActual, nuevoEstado, '', justificacion);
 
-    // Cerrar modal
     bootstrap.Modal.getInstance('#confirmarProcesoModal').hide();
 };
 
-// Manejo del formulario institucional
 document.getElementById('formNuevaInstitucional').addEventListener('submit', async (e) => {
     e.preventDefault();
 
     try {
-        // Validar campos requeridos
         const camposRequeridos = [
             'asuntoInstitucional',
             'institucionInstitucional',
@@ -4015,7 +3756,6 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
             }
         });
 
-        // Validar formato de teléfono
         const telefono = document.getElementById('telefonoInstitucional');
         if (!/^\d{10}$/.test(telefono.value)) {
             validado = false;
@@ -4023,7 +3763,6 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
             telefono.classList.add('is-invalid');
         }
 
-        // Validar formato de email
         const email = document.getElementById('emailInstitucional');
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email.value)) {
@@ -4034,11 +3773,9 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
 
         if (!validado) return;
 
-        // Obtener archivo
         const docInput = document.getElementById('documentoInstitucional');
         const docFile = docInput.files[0];
 
-        // Validar archivo
         if (!docFile) {
             mostrarError("Debes subir un documento inicial");
             return;
@@ -4051,24 +3788,21 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
             return;
         }
 
-        const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+        const MAX_SIZE = 10 * 1024 * 1024;
         if (docFile.size > MAX_SIZE) {
             mostrarError(`El archivo excede el tamaño máximo de 10MB`);
             return;
         }
 
-        // Generar folio
         const folio = await generarFolio('institucional');
 
-        // Subir documento
         const storagePath = `${folio}/Documento Institucional/${docFile.name}`;
         const docRef = storageRef(storage, storagePath);
         await uploadBytes(docRef, docFile);
         const docUrl = await getDownloadURL(docRef);
 
-        const userEmail = obtenerEmailUsuario(); // ← USAR FUNCIÓN MEJORADA
+        const userEmail = obtenerEmailUsuario();
 
-        // Crear objeto solicitud CON CAMPOS DE CREADOR
         const nuevaSolicitud = {
             tipo: 'institucional',
             fechaCreacion: new Date().toISOString(),
@@ -4084,12 +3818,10 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
             nombreDocumento: docFile.name,
             estado: 'pendiente',
             folio: folio,
-            // Campos específicos para seguimiento
             solicitante: {
                 nombre: document.getElementById('contactoInstitucional').value,
                 telefono: document.getElementById('telefonoInstitucional').value
             },
-            // CAMPOS DE CREADOR AGREGADOS
             creadoPor: userEmail,
             _creadoPor: userEmail,
             usuarioCreacion: userEmail,
@@ -4098,21 +3830,16 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
             creadoPorNombre: obtenerNombreUsuario()
         };
 
-        // Validar que no haya campos undefined
         Object.keys(nuevaSolicitud).forEach(key => {
             if (nuevaSolicitud[key] === undefined) {
                 nuevaSolicitud[key] = null;
             }
         });
 
-        // Guardar en Firebase (en nueva colección)
         await set(ref(database, `solicitudes_institucionales/${folio}`), nuevaSolicitud);
 
-        // Limpiar formulario
         document.getElementById('formNuevaInstitucional').reset();
-        // Restablecer fecha actual
         document.getElementById('fechaInstitucional').value = obtenerFechaHoy();
-        // Limpiar archivo
         docInput.value = '';
         document.getElementById('docInstitucionalInfo').textContent =
             'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
@@ -4126,14 +3853,12 @@ document.getElementById('formNuevaInstitucional').addEventListener('submit', asy
     }
 });
 
-// Evento para el botón de remover archivo
 document.getElementById('removeDocInstitucional').addEventListener('click', () => {
     const fileInput = document.getElementById('documentoInstitucional');
     fileInput.value = '';
     fileInput.dispatchEvent(new Event('change'));
 });
 
-// Evento para mostrar información del archivo
 document.getElementById('documentoInstitucional').addEventListener('change', function (e) {
     const fileInfo = document.getElementById('docInstitucionalInfo');
     const removeBtn = document.getElementById('removeDocInstitucional');
@@ -4152,28 +3877,23 @@ document.getElementById('documentoInstitucional').addEventListener('change', fun
     }
 });
 
-// Inicializar fecha actual
 document.getElementById('fechaInstitucional').value = obtenerFechaHoy();
 
-// Función para obtener el trimestre de una fecha
 function obtenerTrimestre(fecha) {
     const mes = new Date(fecha).getMonth();
     return Math.floor(mes / 3) + 1;
 }
 
-// Función para obtener el año y trimestre en formato "YYYY-T"
 function obtenerPeriodo(fecha) {
     const año = new Date(fecha).getFullYear();
     const trimestre = obtenerTrimestre(fecha);
     return `${año}-T${trimestre}`;
 }
 
-// Función para procesar datos trimestrales
 function procesarDatosTrimestrales(solicitudes) {
     const datosTrimestrales = {};
     const años = new Set();
 
-    // Procesar todas las solicitudes atendidas
     solicitudes.filter(s => s.estado === 'atendida').forEach(solicitud => {
         if (!solicitud.fechaAtencion) return;
 
@@ -4190,7 +3910,6 @@ function procesarDatosTrimestrales(solicitudes) {
 
         datosTrimestrales[periodo].total++;
 
-        // Contabilizar por tipo de solicitud
         const tipo = solicitud.tipoPath === 'solicitudes' ? 'Solicitud' :
             solicitud.tipoPath === 'acuerdos' ? 'Acuerdo' :
                 solicitud.tipoPath === 'oficios' ? 'Oficio' :
@@ -4205,14 +3924,11 @@ function procesarDatosTrimestrales(solicitudes) {
     return { datosTrimestrales, años: Array.from(años).sort() };
 }
 
-// Función para actualizar la gráfica trimestral
 function actualizarGraficaTrimestral(solicitudes) {
     const { datosTrimestrales, años } = procesarDatosTrimestrales(solicitudes);
 
-    // Obtener todos los periodos (trimestres) ordenados
     const periodos = Object.keys(datosTrimestrales).sort();
 
-    // Obtener todos los tipos de solicitudes únicos
     const tiposUnicos = new Set();
     periodos.forEach(periodo => {
         Object.keys(datosTrimestrales[periodo].porTipo).forEach(tipo => {
@@ -4221,7 +3937,6 @@ function actualizarGraficaTrimestral(solicitudes) {
     });
     const tipos = Array.from(tiposUnicos);
 
-    // Preparar datos para la gráfica
     const datasets = tipos.map(tipo => {
         return {
             label: tipo,
@@ -4232,7 +3947,6 @@ function actualizarGraficaTrimestral(solicitudes) {
         };
     });
 
-    // Agregar también el total general
     datasets.push({
         label: 'Total',
         data: periodos.map(periodo => datosTrimestrales[periodo].total),
@@ -4244,7 +3958,6 @@ function actualizarGraficaTrimestral(solicitudes) {
         pointHoverRadius: 7
     });
 
-    // Crear o actualizar la gráfica
     const ctx = document.getElementById('quarterlyChart').getContext('2d');
 
     if (charts.quarterlyChart) {
@@ -4299,7 +4012,6 @@ function actualizarGraficaTrimestral(solicitudes) {
     });
 }
 
-// Función auxiliar para obtener colores según el tipo
 function obtenerColorParaTipo(tipo) {
     const colores = {
         'Solicitud': '#491F42',
@@ -4313,7 +4025,6 @@ function obtenerColorParaTipo(tipo) {
 }
 
 function actualizarGraficaCanales(solicitudes) {
-    // Definir los estados que vamos a mostrar y sus colores
     const estados = [
         { id: 'atendida', label: 'Atendidas', color: '#2E7D32' },
         { id: 'pendiente', label: 'Pendientes', color: '#491F42' },
@@ -4323,7 +4034,6 @@ function actualizarGraficaCanales(solicitudes) {
         { id: 'verificacion', label: 'En Verificación', color: '#FFA500' }
     ];
 
-    // Obtener todos los canales únicos
     const canalesSet = new Set();
     solicitudes.forEach(s => {
         const canal = s.tipo || s.canal || 'Sin especificar';
@@ -4332,7 +4042,6 @@ function actualizarGraficaCanales(solicitudes) {
 
     const canales = Array.from(canalesSet);
 
-    // Preparar datos para la gráfica
     const datasets = estados.map(estado => {
         const data = canales.map(canal => {
             return solicitudes.filter(s => {
@@ -4349,7 +4058,6 @@ function actualizarGraficaCanales(solicitudes) {
         };
     });
 
-    // Calcular totales por canal
     const totalesPorCanal = canales.map(canal => {
         return solicitudes.filter(s => {
             const sCanal = s.tipo || s.canal || 'Sin especificar';
@@ -4357,7 +4065,6 @@ function actualizarGraficaCanales(solicitudes) {
         }).length;
     });
 
-    // Calcular déficit por canal (no atendidas)
     const deficitPorCanal = canales.map(canal => {
         const atendidas = solicitudes.filter(s => {
             const sCanal = s.tipo || s.canal || 'Sin especificar';
@@ -4372,7 +4079,6 @@ function actualizarGraficaCanales(solicitudes) {
         return total - atendidas;
     });
 
-    // Destruir gráfica anterior si existe
     if (charts.channelChart) charts.channelChart.destroy();
 
     const ctx = document.getElementById('channelChart').getContext('2d');
@@ -4446,18 +4152,15 @@ function actualizarGraficaCanales(solicitudes) {
         }
     });
 
-    // Actualizar el título de la gráfica
     const chartHeader = document.querySelector('#channelChart').closest('.chart-card').querySelector('.chart-header h5');
     if (chartHeader) {
         chartHeader.textContent = 'Solicitudes por Canal y Estado';
     }
 }
 
-// También modifica cargarSolicitudesVobo para que no aplique filtros automáticamente
 function cargarSolicitudesVobo() {
     const userEmail = getCookie('email');
 
-    // Verificar explícitamente si es Secretaría General
     if (userEmail !== CORREO_SECRETARIA_GENERAL) {
         return;
     }
@@ -4481,18 +4184,14 @@ function cargarSolicitudesVobo() {
             }
         });
 
-        // Ordenar por fecha de solicitud
         solicitudesVobo.sort((a, b) => new Date(b.fechaSolicitudVobo || b.fechaCreacion) - new Date(a.fechaSolicitudVobo || a.fechaCreacion));
 
-        // Solo aplicar filtros si la sección de VoBo está visible
         const voboSection = document.getElementById('vobo-content');
         if (voboSection && voboSection.style.display !== 'none') {
             aplicarFiltrosVobo();
         }
 
         actualizarEstadisticasVobo(solicitudesVobo);
-
-        // Actualizar también las estadísticas generales
         actualizarEstadisticas(solicitudesSeguimiento);
     });
 }
@@ -4500,7 +4199,6 @@ function cargarSolicitudesVobo() {
 function mostrarPaginaVobo(data) {
     const tabla = document.getElementById('lista-vobo');
 
-    // Verificar que la tabla exista
     if (!tabla) {
         console.warn('Tabla de VoBo no encontrada');
         return;
@@ -4526,7 +4224,6 @@ function mostrarPaginaVobo(data) {
 
     const items = data.slice(start, end);
 
-    // OPTIMIZACIÓN: DocumentFragment para un solo reflow
     const frag = document.createDocumentFragment();
     items.forEach(solicitud => {
         const tr = document.createElement('tr');
@@ -4585,12 +4282,10 @@ function mostrarPaginaVobo(data) {
 }
 
 function actualizarEstadisticasVobo(solicitudes) {
-    // Verificar que los elementos existan antes de intentar actualizarlos
     const statsPendientesVobo = document.getElementById('stats-pendientes-vobo');
     const statsAprobadasHoy = document.getElementById('stats-aprobadas-hoy');
     const statsRechazadasHoy = document.getElementById('stats-rechazadas-hoy');
 
-    // Si no existe ningún elemento, salir de la función
     if (!statsPendientesVobo && !statsAprobadasHoy && !statsRechazadasHoy) {
         return;
     }
@@ -4604,7 +4299,6 @@ function actualizarEstadisticasVobo(solicitudes) {
         s.fechaVoboRechazado && new Date(s.fechaVoboRechazado).toDateString() === hoy
     ).length;
 
-    // Actualizar solo los elementos que existen
     if (statsPendientesVobo) {
         statsPendientesVobo.textContent = solicitudes.length;
     }
@@ -4617,12 +4311,10 @@ function actualizarEstadisticasVobo(solicitudes) {
 }
 
 function aplicarFiltrosVobo() {
-    // Verificar que los elementos del DOM existan antes de acceder a ellos
     const busquedaInput = document.getElementById('busqueda-vobo');
     const secretariaSelect = document.getElementById('filtro-secretaria-vobo');
     const fechaSelect = document.getElementById('filtro-fecha-vobo');
 
-    // Si los elementos no existen, salir de la función
     if (!busquedaInput || !secretariaSelect) {
         console.warn('Elementos de filtro VoBo no encontrados');
         return;
@@ -4630,14 +4322,13 @@ function aplicarFiltrosVobo() {
 
     const busqueda = busquedaInput.value.toLowerCase();
     const secretaria = secretariaSelect.value;
-    const fecha = fechaSelect ? fechaSelect.value : ''; // fechaSelect puede ser null
+    const fecha = fechaSelect ? fechaSelect.value : '';
 
     const hoy = new Date();
     const filtradas = solicitudesVobo.filter(s => {
         const texto = `${s.folio} ${s.asunto} ${s.solicitante?.nombre || ''} ${s.solicitante?.colonia || ''}`.toLowerCase();
         const coincideSecretaria = !secretaria || s.dependencia === secretaria;
 
-        // Filtro por fecha (solo si el elemento existe)
         let coincideFecha = true;
         if (fecha && fechaSelect) {
             const fechaSolicitud = new Date(s.fechaSolicitudVobo || s.fechaCreacion);
@@ -4672,7 +4363,6 @@ function aplicarFiltrosVobo() {
 function actualizarPaginacionVobo(totalItems) {
     const container = document.querySelector('.paginacion-vobo');
 
-    // Verificar que el contenedor exista
     if (!container) {
         return;
     }
@@ -4708,14 +4398,12 @@ function actualizarPaginacionVobo(totalItems) {
 
 window.aprobarVobo = async function (folio) {
     try {
-        // Verificar que el usuario actual es Secretaría General
         const { esSecretariaGeneral } = obtenerFiltroEspecial();
         if (!esSecretariaGeneral) {
             mostrarError('No tienes permisos para aprobar VoBo');
             return;
         }
 
-        // Buscar la solicitud en los datos locales
         const solicitudExistente = solicitudesVobo.find(s => s.key === folio);
 
         if (!solicitudExistente) {
@@ -4726,7 +4414,6 @@ window.aprobarVobo = async function (folio) {
         const usuarioActual = getCookie('nombre') || 'Secretaría General';
         const fechaActual = new Date().toISOString();
 
-        // Actualizar el estado a 'pendiente' y marcar VoBo como aprobado
         await update(docRef, {
             estado: 'pendiente',
             voboAprobado: true,
@@ -4736,13 +4423,11 @@ window.aprobarVobo = async function (folio) {
             comentariosVobo: `VoBo aprobado por ${usuarioActual} el ${new Date().toLocaleDateString()}`
         });
 
-        // Actualizar datos locales
         const indexVobo = solicitudesVobo.findIndex(s => s.key === folio);
         if (indexVobo !== -1) {
             solicitudesVobo.splice(indexVobo, 1);
         }
 
-        // Actualizar también en seguimiento si existe
         const indexSeguimiento = solicitudesSeguimiento.findIndex(s => s.key === folio);
         if (indexSeguimiento !== -1) {
             solicitudesSeguimiento[indexSeguimiento].estado = 'pendiente';
@@ -4751,13 +4436,11 @@ window.aprobarVobo = async function (folio) {
             solicitudesSeguimiento[indexSeguimiento].fechaVoboAprobado = fechaActual;
         }
 
-        // Actualizar UI
         aplicarFiltrosVobo();
         if (typeof actualizarTablaSeguimiento === 'function') {
             actualizarTablaSeguimiento();
         }
 
-        // ACTUALIZACIÓN: Actualizar estadísticas después de aprobar VoBo
         actualizarEstadisticas(solicitudesSeguimiento);
 
         mostrarExito(`VoBo aprobado para ${folio}. La solicitud ha sido turnada a la secretaría correspondiente.`);
@@ -4769,7 +4452,6 @@ window.aprobarVobo = async function (folio) {
 };
 
 window.rechazarVobo = async function (folio) {
-    // Verificar que el usuario actual es Secretaría General
     const { esSecretariaGeneral } = obtenerFiltroEspecial();
     if (!esSecretariaGeneral) {
         mostrarError('No tienes permisos para rechazar VoBo');
@@ -4799,7 +4481,6 @@ window.rechazarVobo = async function (folio) {
         const usuarioActual = getCookie('nombre') || 'Secretaría General';
         const fechaActual = new Date().toISOString();
 
-        // Marcar como rechazado y devolver a estado especial
         await update(docRef, {
             estado: 'rechazado_vobo',
             voboAprobado: false,
@@ -4811,13 +4492,11 @@ window.rechazarVobo = async function (folio) {
             comentariosVobo: `VoBo rechazado por ${usuarioActual} el ${new Date().toLocaleDateString()}. Motivo: ${motivo}`
         });
 
-        // Remover de la lista de VoBo
         const indexVobo = solicitudesVobo.findIndex(s => s.key === folio);
         if (indexVobo !== -1) {
             solicitudesVobo.splice(indexVobo, 1);
         }
 
-        // Actualizar en seguimiento si existe
         const indexSeguimiento = solicitudesSeguimiento.findIndex(s => s.key === folio);
         if (indexSeguimiento !== -1) {
             solicitudesSeguimiento[indexSeguimiento].estado = 'rechazado_vobo';
@@ -4826,13 +4505,11 @@ window.rechazarVobo = async function (folio) {
             solicitudesSeguimiento[indexSeguimiento].motivoRechazoVobo = motivo;
         }
 
-        // Actualizar UI
         aplicarFiltrosVobo();
         if (typeof actualizarTablaSeguimiento === 'function') {
             actualizarTablaSeguimiento();
         }
 
-        // ACTUALIZACIÓN: Actualizar estadísticas después de rechazar VoBo
         actualizarEstadisticas(solicitudesSeguimiento);
 
         mostrarExito(`VoBo rechazado para ${folio}. La solicitud ha sido devuelta a Vinculación Ciudadana.`);
@@ -4846,11 +4523,9 @@ window.rechazarVobo = async function (folio) {
 window.mostrarReenvioVobo = function (folio, motivoRechazo) {
     folioReenvioVobo = folio;
 
-    // Mostrar el motivo de rechazo anterior
     document.getElementById('motivoRechazoAnterior').textContent =
         motivoRechazo || 'No se especificó motivo de rechazo.';
 
-    // Limpiar el formulario
     document.getElementById('nuevoDocumentoVobo').value = '';
     document.getElementById('nuevoDocVoboInfo').textContent =
         'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
@@ -4860,7 +4535,6 @@ window.mostrarReenvioVobo = function (folio, motivoRechazo) {
     new bootstrap.Modal(document.getElementById('reenviarVoboModal')).show();
 };
 
-// Event listener para el botón de confirmación
 document.getElementById('confirmarReenvioVobo')?.addEventListener('click', async () => {
     await reenviarSolicitudVobo();
 });
@@ -4874,7 +4548,6 @@ async function reenviarSolicitudVobo() {
         let nuevoDocumentoUrl = null;
         let nuevoNombreDocumento = null;
 
-        // Si se subió un nuevo archivo, procesarlo
         if (nuevoArchivo) {
             const extension = nuevoArchivo.name.split('.').pop().toLowerCase();
 
@@ -4888,7 +4561,6 @@ async function reenviarSolicitudVobo() {
                 return;
             }
 
-            // Subir nuevo documento
             const storagePath = `${folioReenvioVobo}/Documento Inicial/${nuevoArchivo.name}`;
             const docRef = storageRef(storage, storagePath);
             await uploadBytes(docRef, nuevoArchivo);
@@ -4896,7 +4568,6 @@ async function reenviarSolicitudVobo() {
             nuevoNombreDocumento = nuevoArchivo.name;
         }
 
-        // Preparar actualización
         const actualizacion = {
             estado: 'pendiente_vobo',
             voboRechazado: false,
@@ -4909,16 +4580,13 @@ async function reenviarSolicitudVobo() {
             fechaReenvioVobo: new Date().toISOString()
         };
 
-        // Si hay nuevo documento, actualizar la referencia
         if (nuevoDocumentoUrl) {
             actualizacion.documentoInicial = nuevoDocumentoUrl;
             actualizacion.nombreDocumento = nuevoNombreDocumento;
         }
 
-        // Actualizar en Firebase
         await update(ref(database, `solicitudes/${folioReenvioVobo}`), actualizacion);
 
-        // Actualizar datos locales
         const index = solicitudesSeguimiento.findIndex(s => s.key === folioReenvioVobo);
         if (index !== -1) {
             solicitudesSeguimiento[index] = {
@@ -4927,11 +4595,9 @@ async function reenviarSolicitudVobo() {
             };
         }
 
-        // Cerrar modal y mostrar éxito
         bootstrap.Modal.getInstance(document.getElementById('reenviarVoboModal')).hide();
         mostrarExito('Solicitud reenviada a VoBo exitosamente.');
 
-        // Actualizar UI
         actualizarTablaSeguimiento();
 
     } catch (error) {
@@ -4940,7 +4606,6 @@ async function reenviarSolicitudVobo() {
     }
 }
 
-// Event listeners para el manejo del archivo en el modal de reenvío
 document.getElementById('nuevoDocumentoVobo')?.addEventListener('change', function (e) {
     const fileInfo = document.getElementById('nuevoDocVoboInfo');
     const removeBtn = document.getElementById('removeNuevoDocVobo');
@@ -4965,7 +4630,6 @@ document.getElementById('removeNuevoDocVobo')?.addEventListener('click', () => {
     fileInput.dispatchEvent(new Event('change'));
 });
 
-// Limpiar el modal cuando se cierre
 document.getElementById('reenviarVoboModal')?.addEventListener('hidden.bs.modal', () => {
     document.getElementById('nuevoDocumentoVobo').value = '';
     document.getElementById('nuevoDocVoboInfo').textContent = 'Formatos permitidos: PDF, JPG, PNG, ZIP, RAR (Máx. 10MB)';
@@ -4973,17 +4637,15 @@ document.getElementById('reenviarVoboModal')?.addEventListener('hidden.bs.modal'
     document.getElementById('comentariosReenvio').value = '';
 });
 
-// Función para filtrar solicitudes de Vinculación Ciudadana (SOLO las que ellos enviaron)
 function filtrarSoloVinculacionCiudadana(solicitudes) {
     const { esVinculacionCiudadana } = obtenerFiltroEspecial();
-    const userEmail = obtenerEmailUsuario(); // ← USAR FUNCIÓN MEJORADA
+    const userEmail = obtenerEmailUsuario();
 
     if (!esVinculacionCiudadana) {
         return solicitudes;
     }
 
     return solicitudes.filter(solicitud => {
-        // Verificar múltiples campos donde podría estar almacenado el creador
         const camposCreador = [
             solicitud.creadoPor,
             solicitud._creadoPor,
@@ -5000,12 +4662,10 @@ function obtenerEmailUsuario() {
     const email = getCookie('email');
     if (!email || email === 'undefined' || email === 'null') {
         console.warn('Email no encontrado en cookies, usando valor por defecto');
-        // return 'usuario@tizayuca.gob.mx'; // Valor por defecto seguro
     }
     return email;
 }
 
-// Función para obtener el nombre del usuario de forma segura
 function obtenerNombreUsuario() {
     const nombre = getCookie('nombre');
     if (!nombre || nombre === 'undefined' || nombre === 'null') {
@@ -5018,14 +4678,11 @@ function filtrarSolicitudesVinculacionCiudadana(solicitudes) {
     const { esSecretariaParticular } = obtenerFiltroEspecial();
     const userEmail = obtenerEmailUsuario();
 
-    // Si es el perfil de Esmeralda Merchan, excluir solicitudes de Vinculación Ciudadana
     if (esSecretariaParticular && userEmail === 'oficinadepresidencia@tizayuca.gob.mx') {
         return solicitudes.filter(solicitud => {
-            // Excluir si el canal es "Vinculación Ciudadana"
             if (solicitud.tipo === 'Vinculación Ciudadana') {
                 return false;
             }
-            // Excluir si fue creada por Vinculación Ciudadana
             if (solicitud.creadoPor === CORREO_VINCULACION_CIUDADANA ||
                 solicitud._creadoPor === CORREO_VINCULACION_CIUDADANA ||
                 solicitud.usuarioCreacion === CORREO_VINCULACION_CIUDADANA) {
@@ -5037,23 +4694,17 @@ function filtrarSolicitudesVinculacionCiudadana(solicitudes) {
     return solicitudes;
 }
 
-// Función para filtrar solicitudes según el perfil del usuario
 function filtrarPorPerfil(solicitudes) {
     const { esVinculacionCiudadana, esSecretariaParticular } = obtenerFiltroEspecial();
     const userEmail = obtenerEmailUsuario();
 
-    // Si no es ninguno de estos perfiles especiales, retornar todas las solicitudes
     if (!esVinculacionCiudadana && !esSecretariaParticular) {
         return solicitudes;
     }
 
-    // Para Vinculación Ciudadana: SOLO solicitudes con canal "Vinculación Ciudadana" y creadas por ellos
     if (esVinculacionCiudadana) {
         return solicitudes.filter(solicitud => {
-            // Verificar que sea del canal "Vinculación Ciudadana"
             const esCanalVinculacion = solicitud.tipo === 'Vinculación Ciudadana';
-
-            // Verificar múltiples campos donde podría estar almacenado el creador
             const camposCreador = [
                 solicitud.creadoPor,
                 solicitud._creadoPor,
@@ -5061,21 +4712,16 @@ function filtrarPorPerfil(solicitudes) {
                 solicitud.creadoPorEmail,
                 solicitud._usuarioCreacion
             ];
-
             const esCreadaPorVinculacion = camposCreador.some(campo => campo === userEmail);
-
             return esCanalVinculacion && esCreadaPorVinculacion;
         });
     }
 
-    // Para Oficina de Presidencia: EXCLUIR solicitudes con canal "Vinculación Ciudadana"
     if (esSecretariaParticular && userEmail === 'oficinadepresidencia@tizayuca.gob.mx') {
         return solicitudes.filter(solicitud => {
-            // Excluir si el canal es "Vinculación Ciudadana"
             if (solicitud.tipo === 'Vinculación Ciudadana') {
                 return false;
             }
-            // Excluir si fue creada por Vinculación Ciudadana
             if (solicitud.creadoPor === CORREO_VINCULACION_CIUDADANA ||
                 solicitud._creadoPor === CORREO_VINCULACION_CIUDADANA ||
                 solicitud.usuarioCreacion === CORREO_VINCULACION_CIUDADANA) {
@@ -5088,7 +4734,6 @@ function filtrarPorPerfil(solicitudes) {
     return solicitudes;
 }
 
-// Añadir esta función para limpiar intervalos al salir
 window.addEventListener('beforeunload', () => {
     if (sessionRenewalInterval) clearInterval(sessionRenewalInterval);
     if (activityMonitorInterval) clearInterval(activityMonitorInterval);

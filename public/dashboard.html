@@ -1079,128 +1079,126 @@
             </div>
 
             <!-- Modal para Visualizar Evidencias -->
-            <div class="modal fade" id="evidenciaModal" tabindex="-1">
-                <div class="modal-dialog modal-xl">
-                    <div class="modal-content border-0"
-                        style="background: var(--surface); box-shadow: 0 8px 32px rgba(0,0,0,0.1);">
-                        <!-- Encabezado Responsivo -->
-                        <div class="modal-header p-3 p-md-4"
-                            style="background: var(--secondary); border-bottom: 2px solid var(--border);">
-                            <div class="d-flex flex-column w-100 gap-2 gap-md-3">
-                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                    <div class="d-flex align-items-center gap-2 gap-md-3">
-                                        <i class="fas fa-file-alt fa-lg fa-xl" style="color: var(--surface);"></i>
-                                        <div>
-                                            <h5 class="mb-0 fw-normal" style="color: var(--surface);">Evidencia Digital
-                                            </h5>
-                                            <h2 class="mb-0 fs-6 fs-md-5 fw-bold" id="nombreArchivoCompleto"
-                                                style="color: var(--surface);">-</h2>
-                                        </div>
-                                    </div>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"
-                                        style="filter: invert(1);"></button>
-                                </div>
-
-                                <!-- Metadatos Adaptables -->
-                                <div class="d-flex flex-wrap gap-2 gap-md-4"
-                                    style="color: var(--surface); font-size: 0.9rem;">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <i class="fas fa-hashtag" style="color: var(--surface);"></i>
-                                        <span>Folio: <strong id="folioEvidencia"
-                                                style="color: var(--surface);">#</strong></span>
-                                    </div>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <i class="fas fa-building" style="color: var(--surface);"></i>
-                                        <span>Secretaría de Origen: <strong id="secretariaEvidencia">-</strong></span>
-                                    </div>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <i class="fas fa-calendar-alt" style="color: var(--surface);"></i>
-                                        <span>Fecha: <strong id="fechaEvidencia">-</strong></span>
-                                    </div>
-                                </div>
+<div class="modal fade" id="evidenciaModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content border-0"
+            style="background: var(--surface); box-shadow: 0 8px 32px rgba(0,0,0,0.1);">
+            <!-- Encabezado -->
+            <div class="modal-header p-3 p-md-4"
+                style="background: var(--secondary); border-bottom: 2px solid var(--border);">
+                <div class="d-flex flex-column w-100 gap-2 gap-md-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-2 gap-md-3">
+                            <i class="fas fa-file-alt fa-lg fa-xl" style="color: var(--surface);"></i>
+                            <div>
+                                <h5 class="mb-0 fw-normal" style="color: var(--surface);">Evidencia Digital</h5>
+                                <h2 class="mb-0 fs-6 fs-md-5 fw-bold" id="nombreArchivoCompleto"
+                                    style="color: var(--surface);">-</h2>
                             </div>
                         </div>
-
-                        <!-- Cuerpo Adaptable -->
-                        <div class="modal-body p-0">
-                            <div class="position-relative d-flex flex-column"
-                                style="min-height: 50vh; max-height: 70vh;">
-                                <!-- Loader -->
-                                <div id="loadingPreview" class="d-flex justify-content-center align-items-center h-100">
-                                    <div class="spinner-border" role="status" style="color: var(--primary);">
-                                        <span class="visually-hidden">Cargando...</span>
-                                    </div>
-                                </div>
-
-                                <!-- Contenedor PDF Ajustado -->
-                                <div id="pdfContainer" class="d-none h-100 d-flex flex-column">
-                                    <div
-                                        class="pdf-header bg-light px-4 py-3 border-bottom d-flex align-items-center gap-3">
-                                        <i class="fas fa-file-pdf text-danger fs-5"></i>
-                                        <span class="text-dark small fw-medium" id="pdfMeta">Cargando
-                                            documento...</span>
-                                    </div>
-
-                                    <div class="flex-grow-1 d-flex flex-column px-3 pb-3" style="overflow: hidden;">
-                                        <div class="h-100 bg-white rounded-3 shadow-sm p-2">
-                                            <iframe id="pdfViewer" class="w-100 h-100 border-0 rounded-2"
-                                                style="background: white; min-height: 400px;"></iframe>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Visor de Imágenes Adaptable -->
-                                <div id="imagenContainer" class="d-none h-100">
-                                    <div class="image-wrapper text-center p-2 p-md-4">
-                                        <div class="image-meta mb-2 mb-md-3 small"
-                                            style="color: var(--text-secondary);">
-                                            <i class="fas fa-image me-2" style="color: var(--primary);"></i>
-                                            <span id="imagenDimensions"></span>
-                                        </div>
-                                        <img id="visorImagen" class="img-fluid shadow-lg rounded-3"
-                                            style="max-height: 60vh; object-fit: contain; border: 1px solid var(--border);">
-                                    </div>
-                                </div>
-
-                                <!-- Sección no soportada -->
-                                <div id="visorNoSoportado" class="d-none text-center w-75 mx-auto py-5">
-                                    <div class="p-5 rounded-3"
-                                        style="background: color-mix(in srgb, var(--primary) 8%, transparent); border: 2px dashed var(--primary);">
-                                        <i class="fas fa-file-archive fa-3x mb-4" style="color: var(--primary);"></i>
-                                        <h5 class="mb-3" style="color: var(--text-primary);">Archivo no visualizable
-                                        </h5>
-                                        <p class="mb-0" style="color: var(--text-secondary);">
-                                            Formato: <span id="tipoArchivo" class="fw-bold"
-                                                style="color: var(--text-primary);">-</span>
-                                        </p>
-                                        <a id="descargarEvidencia" class="btn mt-4" style="background-color: var(--primary); 
-                                      color: var(--surface);
-                                      border: 1px solid var(--primary);">
-                                            <i class="fas fa-download me-2"></i>Descargar
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"
+                            style="filter: invert(1);"></button>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 gap-md-4"
+                        style="color: var(--surface); font-size: 0.9rem;">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="fas fa-hashtag" style="color: var(--surface);"></i>
+                            <span>Folio: <strong id="folioEvidencia" style="color: var(--surface);">#</strong></span>
                         </div>
-
-
-
-                        <!-- Pie de Página -->
-                        <div class="modal-footer px-3 px-md-4 py-2" style="border-top: 1px solid var(--border);">
-                            <div class="w-100 d-flex justify-content-between align-items-center gap-2">
-                                <div class="small" style="color: var(--text-secondary);">
-                                    <i class="fas fa-info-circle me-2" style="color: var(--accent);"></i>
-                                    <span id="zoomInfo">Vista Previa</span>
-                                </div>
-                                <button type="button" class="btn px-3 px-md-4" data-bs-dismiss="modal"
-                                    style="background-color: var(--primary); color: var(--surface);">
-                                    Cerrar
-                                </button>
-                            </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="fas fa-building" style="color: var(--surface);"></i>
+                            <span>Secretaría de Origen: <strong id="secretariaEvidencia">-</strong></span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="fas fa-calendar-alt" style="color: var(--surface);"></i>
+                            <span>Fecha: <strong id="fechaEvidencia">-</strong></span>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Cuerpo del modal -->
+            <div class="modal-body p-0">
+                <div class="position-relative d-flex flex-column"
+                    style="min-height: 50vh; max-height: 70vh;">
+                    <!-- Loader -->
+                    <div id="loadingPreview" class="d-flex justify-content-center align-items-center h-100">
+                        <div class="spinner-border" role="status" style="color: var(--primary);">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                    </div>
+
+                    <!-- Contenedor PDF -->
+                    <div id="pdfContainer" class="d-none h-100 d-flex flex-column">
+                        <div class="pdf-header bg-light px-4 py-3 border-bottom d-flex align-items-center gap-3">
+                            <i class="fas fa-file-pdf text-danger fs-5"></i>
+                            <span class="text-dark small fw-medium" id="pdfMeta">Cargando documento...</span>
+                        </div>
+                        <div class="flex-grow-1 d-flex flex-column px-3 pb-3" style="overflow: hidden;">
+                            <div class="h-100 bg-white rounded-3 shadow-sm p-2">
+                                <iframe id="pdfViewer" class="w-100 h-100 border-0 rounded-2"
+                                    style="background: white; min-height: 400px;"></iframe>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visor de Imágenes -->
+                    <div id="imagenContainer" class="d-none h-100">
+                        <div class="image-wrapper text-center p-2 p-md-4">
+                            <div class="image-meta mb-2 mb-md-3 small"
+                                style="color: var(--text-secondary);">
+                                <i class="fas fa-image me-2" style="color: var(--primary);"></i>
+                                <span id="imagenDimensions"></span>
+                            </div>
+                            <img id="visorImagen" class="img-fluid shadow-lg rounded-3"
+                                style="max-height: 60vh; object-fit: contain; border: 1px solid var(--border);">
+                        </div>
+                    </div>
+
+                    <!-- Sección no soportada (se oculta para PDF/Imagen) -->
+                    <div id="visorNoSoportado" class="d-none text-center w-75 mx-auto py-5">
+                        <div class="p-5 rounded-3"
+                            style="background: color-mix(in srgb, var(--primary) 8%, transparent); border: 2px dashed var(--primary);">
+                            <i class="fas fa-file-archive fa-3x mb-4" style="color: var(--primary);"></i>
+                            <h5 class="mb-3" style="color: var(--text-primary);">Archivo no visualizable</h5>
+                            <p class="mb-0" style="color: var(--text-secondary);">
+                                Formato: <span id="tipoArchivo" class="fw-bold"
+                                    style="color: var(--text-primary);">-</span>
+                            </p>
+                            <!-- Botón alternativo (se oculta si ya está el footer) -->
+                            <a id="descargarEvidenciaNoSoportado" class="btn mt-4 d-none" style="background-color: var(--primary); 
+                                          color: var(--surface);
+                                          border: 1px solid var(--primary);">
+                                <i class="fas fa-download me-2"></i>Descargar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ====== PIE DE PÁGINA CON BOTÓN DE DESCARGA SIEMPRE VISIBLE ====== -->
+            <div class="modal-footer px-3 px-md-4 py-2" style="border-top: 1px solid var(--border);">
+                <div class="w-100 d-flex justify-content-between align-items-center gap-2">
+                    <div class="small" style="color: var(--text-secondary);">
+                        <i class="fas fa-info-circle me-2" style="color: var(--accent);"></i>
+                        <span id="zoomInfo">Vista Previa</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <!-- BOTÓN DE DESCARGA (siempre visible) -->
+                        <a id="descargarEvidencia" class="btn px-3 px-md-4" 
+                           style="background-color: var(--success, #2E7D32); color: white; border: none;">
+                            <i class="fas fa-download me-2"></i>Descargar
+                        </a>
+                        <button type="button" class="btn px-3 px-md-4" data-bs-dismiss="modal"
+                            style="background-color: var(--primary, #491F42); color: var(--surface, #fff);">
+                            Cerrar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
             <!-- Modal Confirmar Rechazo de VoBo -->
             <div class="modal fade" id="confirmarRechazoVoboModal">
