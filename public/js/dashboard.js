@@ -475,7 +475,8 @@ function cargarValidadas() {
     } else if (esSecretariaParticular) {
         paths = ['solicitudes', 'oficios'];
     } else if (esOficialMayor) {
-        paths = ['solicitudes_institucionales'];
+        // CAMBIO: incluir oficios
+        paths = ['solicitudes_institucionales', 'oficios'];
     }
 
     solicitudesValidadas = [];
@@ -497,13 +498,21 @@ function cargarValidadas() {
         }
 
         onValue(q, (snapshot) => {
+            // Eliminar los anteriores de este path para evitar duplicados
             solicitudesValidadas = solicitudesValidadas.filter(s => s.tipoPath !== path);
 
             snapshot.forEach(childSnapshot => {
                 const doc = childSnapshot.val();
 
+                // Filtro de dependencia (para no admin)
                 if (userRol !== 3 && userRol !== 4 && !userDependencias.includes(doc.dependencia)) return;
                 if (doc.estado !== 'atendida') return;
+
+                // ─── FILTRO PARA OFICIOS (SOLO OFICIALIA MAYOR) ───
+                if (esOficialMayor && path === 'oficios' && doc.dependencia !== 'oficialia-mayor') {
+                    return;
+                }
+                // ──────────────────────────────────────────────────
 
                 const solicitud = {
                     key: childSnapshot.key,
@@ -1455,7 +1464,8 @@ function cargarVerificacion() {
     } else if (esSecretariaParticular) {
         paths = ['solicitudes', 'oficios'];
     } else if (esOficialMayor) {
-        paths = ['solicitudes_institucionales'];
+        // CAMBIO: incluir oficios
+        paths = ['solicitudes_institucionales', 'oficios'];
     }
 
     solicitudesVerificacion = [];
@@ -1499,6 +1509,12 @@ function cargarVerificacion() {
                 const solicitud = childSnapshot.val();
                 if (userRol !== 3 && userRol !== 4 && !userDependencias.includes(solicitud.dependencia)) return;
                 if (solicitud.estado !== 'verificacion') return;
+
+                // ─── FILTRO PARA OFICIOS (SOLO OFICIALIA MAYOR) ───
+                if (esOficialMayor && path === 'oficios' && solicitud.dependencia !== 'oficialia-mayor') {
+                    return;
+                }
+                // ──────────────────────────────────────────────────
 
                 solicitud.key = childSnapshot.key;
                 solicitud.tipoPath = path;
@@ -1932,7 +1948,8 @@ function cargarSeguimiento() {
     const tabla = document.getElementById('lista-seguimiento');
     let paths = ['solicitudes', 'acuerdos', 'oficios', 'solicitudes_institucionales'];
     if (esOficialMayor) {
-        paths = ['solicitudes_institucionales'];
+        // CAMBIO: Ahora incluye 'oficios' junto a 'solicitudes_institucionales'
+        paths = ['solicitudes_institucionales', 'oficios'];
     } else if (esPresidentaMunicipal) {
         // Mostrar todo - no cambiar paths
     } else if (esJefaturaGabinete) {
@@ -1945,7 +1962,7 @@ function cargarSeguimiento() {
     const userDependencias = getCookie('dependencia') ?
         decodeURIComponent(getCookie('dependencia')).split(',') : [];
 
-    // ─── DEFINICIÓN ÚNICA DEL THROTTLE (ámbito de función) ───
+    // ─── DEFINICIÓN ÚNICA DEL THROTTLE ───
     const _actualizarTablaSeguimientoThrottled = rafThrottle(() => {
         solicitudesSeguimiento = filtrarPorPerfil(solicitudesSeguimiento);
         if (obtenerFiltroEspecial().esVinculacionCiudadana) {
@@ -1979,12 +1996,24 @@ function cargarSeguimiento() {
                 }, { onlyOnce: true });
             });
         })).then(results => {
-            const mergedData = [].concat(...results).reduce((acc, current) => {
+            let mergedData = [].concat(...results).reduce((acc, current) => {
                 if (!acc.find(item => item.key === current.key)) {
                     acc.push(current);
                 }
                 return acc;
             }, []);
+
+            // ─── FILTRO PARA OFICIOS (SOLO OFICIALIA MAYOR) ───
+            if (esOficialMayor) {
+                mergedData = mergedData.filter(item => {
+                    if (item.tipoPath === 'oficios') {
+                        return item.dependencia === 'oficialia-mayor';
+                    }
+                    return true; // institucionales sin filtro
+                });
+            }
+            // ──────────────────────────────────────────────────
+
             solicitudesSeguimiento = mergedData;
             actualizarTablaSeguimiento();
             actualizarEstadisticas(solicitudesSeguimiento);
@@ -1999,6 +2028,10 @@ function cargarSeguimiento() {
                     const nuevaSolicitud = childSnapshot.val();
                     const index = solicitudesSeguimiento.findIndex(s => s.key === childSnapshot.key);
                     if (index === -1) {
+                        // Si es oficio y no es para oficialia-mayor, no lo agregamos
+                        if (esOficialMayor && path === 'oficios' && nuevaSolicitud.dependencia !== 'oficialia-mayor') {
+                            return;
+                        }
                         solicitudesSeguimiento.push({ ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path });
                     } else {
                         solicitudesSeguimiento[index] = { ...nuevaSolicitud, key: childSnapshot.key, tipoPath: path };
