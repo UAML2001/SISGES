@@ -650,7 +650,7 @@ function actualizarPaginacion(tipo, totalItems) {
     });
 }
 
-function aplicarFiltrosValidadas() {
+function obtenerValidadasFiltradas() {
     const busqueda = document.getElementById('busqueda-validadas').value.toLowerCase();
     const secretaria = document.getElementById('filtro-secretaria-validadas').value;
     const canal = document.getElementById('filtro-canal-validadas').value;
@@ -658,43 +658,43 @@ function aplicarFiltrosValidadas() {
 
     let filtradas = filtrarPorPerfil(solicitudesValidadas);
 
-    filtradas = filtradas.filter(doc => {
+    return filtradas.filter(doc => {
         const esAcuerdoAtendido = (doc.tipo === 'Acuerdo' && doc.estado === 'atendida');
 
-        if (esJefaturaGabinete && !esAcuerdoAtendido && doc.tipo !== 'acuerdo')
-            return false;
+        if (esJefaturaGabinete && !esAcuerdoAtendido && doc.tipo !== 'acuerdo') return false;
+        if (esSecretariaParticular && !esAcuerdoAtendido && doc.tipo === 'acuerdo') return false;
 
-        if (esSecretariaParticular && !esAcuerdoAtendido && doc.tipo === 'acuerdo')
-            return false;
-
-        const texto = `${doc.key} ${doc.asunto} ${dependenciasMap[doc.dependencia]} ${doc.tipo}`.toLowerCase();
+        const texto = `${doc.key || ''} ${doc.asunto || ''} ${dependenciasMap[doc.dependencia] || ''} ${doc.tipo || ''}`.toLowerCase();
         const coincideSecretaria = !secretaria || doc.dependencia === secretaria;
         const coincideCanal = !canal || (doc.tipo || '').toLowerCase().includes(canal.toLowerCase());
-
         return texto.includes(busqueda) && coincideSecretaria && coincideCanal;
     });
-
-    mostrarPaginaValidadas(filtradas);
 }
 
-function aplicarFiltrosSeguimiento() {
+function aplicarFiltrosValidadas() {
+    mostrarPaginaValidadas(obtenerValidadasFiltradas());
+}
+
+function obtenerSeguimientoFiltrado() {
     const busqueda = document.getElementById('busqueda-seguimiento').value.toLowerCase();
     const estado = document.getElementById('filtro-estado-seguimiento').value;
     const { esJefaturaGabinete, esSecretariaParticular } = obtenerFiltroEspecial();
 
     let filtradas = filtrarPorPerfil(solicitudesSeguimiento);
 
-    filtradas = filtradas.filter(s => {
+    return filtradas.filter(s => {
         if (esJefaturaGabinete && s.tipoPath !== 'acuerdos') return false;
         if (esSecretariaParticular && s.tipoPath === 'acuerdos') return false;
         if (s.estado === 'atendida') return false;
 
-        const texto = `${s.key} ${s.asunto} ${dependenciasMap[s.dependencia]}`.toLowerCase();
+        const texto = `${s.key || s.folio || ''} ${s.asunto || ''} ${dependenciasMap[s.dependencia] || ''}`.toLowerCase();
         const coincideEstado = !estado || s.estado === estado;
         return texto.includes(busqueda) && coincideEstado;
     });
+}
 
-    mostrarPaginaSeguimiento(filtradas);
+function aplicarFiltrosSeguimiento() {
+    mostrarPaginaSeguimiento(obtenerSeguimientoFiltrado());
 }
 
 function mostrarPaginaSeguimiento(data) {
@@ -1534,13 +1534,16 @@ document.getElementById('busqueda-verificacion').addEventListener('input', debou
     aplicarFiltrosVerificacion();
 }, 300));
 
-function aplicarFiltrosVerificacion() {
+function obtenerVerificacionFiltrada() {
     const busqueda = document.getElementById('busqueda-verificacion').value.toLowerCase();
-    const filtradas = solicitudesVerificacion.filter(s =>
-        s.folio.toLowerCase().includes(busqueda) ||
-        s.asunto.toLowerCase().includes(busqueda)
+    return solicitudesVerificacion.filter(s =>
+        (s.folio || s.key || '').toLowerCase().includes(busqueda) ||
+        (s.asunto || '').toLowerCase().includes(busqueda)
     );
-    mostrarPaginaVerificacion(filtradas);
+}
+
+function aplicarFiltrosVerificacion() {
+    mostrarPaginaVerificacion(obtenerVerificacionFiltrada());
 }
 
 function actualizarPaginacionVerificacion(totalItems) {
@@ -4766,6 +4769,115 @@ function filtrarPorPerfil(solicitudes) {
 
     return solicitudes;
 }
+
+// ===================== EXPORTACIÓN A EXCEL =====================
+function obtenerTipoDocumentoExcel(solicitud) {
+    const tiposPorPath = {
+        solicitudes: 'Solicitud Ciudadana',
+        acuerdos: 'Acuerdo de Gabinete',
+        oficios: 'Oficio',
+        solicitudes_institucionales: 'Solicitud Institucional'
+    };
+    return tiposPorPath[solicitud.tipoPath] || solicitud.tipo || 'Solicitud';
+}
+
+function formatearFechaExcel(valor) {
+    if (!valor) return '';
+    const fecha = new Date(valor);
+    if (Number.isNaN(fecha.getTime())) return String(valor);
+    return fecha.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function limpiarValorExcel(valor) {
+    if (valor === null || valor === undefined) return '';
+    if (typeof valor === 'object') return JSON.stringify(valor);
+    return String(valor);
+}
+
+function nombrePeticionarioExcel(solicitud) {
+    return solicitud.solicitante?.nombre || solicitud.contacto || solicitud.nombre || '';
+}
+
+function telefonoPeticionarioExcel(solicitud) {
+    return solicitud.solicitante?.telefono || solicitud.telefono || '';
+}
+
+function estadoTextoExcel(estado) {
+    return estados[estado]?.texto || estado || '';
+}
+
+function crearArchivoExcel(datos, nombreHoja, nombreArchivo, anchosColumnas = []) {
+    if (!window.XLSX) {
+        if (typeof mostrarError === 'function') mostrarError('No fue posible cargar el componente de Excel. Recarga la página e inténtalo nuevamente.');
+        else alert('No fue posible cargar el componente de Excel.');
+        return;
+    }
+
+    if (!datos.length) {
+        if (typeof mostrarError === 'function') mostrarError('No hay registros para exportar con los filtros actuales.');
+        else alert('No hay registros para exportar con los filtros actuales.');
+        return;
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(datos);
+    worksheet['!autofilter'] = { ref: worksheet['!ref'] };
+    if (anchosColumnas.length) worksheet['!cols'] = anchosColumnas.map(wch => ({ wch }));
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, nombreHoja.substring(0, 31));
+    XLSX.writeFile(workbook, nombreArchivo);
+
+    if (typeof mostrarExito === 'function') mostrarExito(`Excel generado correctamente (${datos.length} registros)`);
+}
+
+window.exportarSeguimientoExcel = function () {
+    const filas = obtenerSeguimientoFiltrado().map(solicitud => ({
+        'Folio': limpiarValorExcel(solicitud.folio || solicitud.key),
+        'Canal / Tipo': limpiarValorExcel(solicitud.tipo || obtenerTipoDocumentoExcel(solicitud)),
+        'Fecha de Turnado': formatearFechaExcel(solicitud.fechaCreacion),
+        'Asunto': limpiarValorExcel(solicitud.asunto),
+        'Secretaría': limpiarValorExcel(dependenciasMap[solicitud.dependencia] || solicitud.dependencia),
+        'Nombre de Peticionario': limpiarValorExcel(nombrePeticionarioExcel(solicitud)),
+        'Teléfono': limpiarValorExcel(telefonoPeticionarioExcel(solicitud)),
+        'Estado': estadoTextoExcel(solicitud.estado),
+        'Días Restantes / Situación': solicitud.estado === 'verificacion' ? 'En Verificación' : solicitud.estado === 'pendiente_vobo' ? 'Esperando VoBo' : solicitud.estado === 'rechazado_vobo' ? 'VoBo Rechazado' : (solicitud.fechaLimite ? calcularTiempoRestante(solicitud.fechaLimite) : ''),
+        'Fecha Límite': formatearFechaExcel(solicitud.fechaLimite),
+        'Documento Inicial': limpiarValorExcel(solicitud.documentoInicial),
+        'Evidencia': limpiarValorExcel(solicitud.evidencias)
+    }));
+    crearArchivoExcel(filas, 'Seguimiento', `SISGES_Seguimiento_${new Date().toISOString().slice(0, 10)}.xlsx`, [16, 24, 18, 45, 36, 30, 16, 20, 28, 18, 45, 45]);
+};
+
+window.exportarVerificacionExcel = function () {
+    const filas = obtenerVerificacionFiltrada().map(solicitud => ({
+        'Folio': limpiarValorExcel(solicitud.folio || solicitud.key),
+        'Asunto': limpiarValorExcel(solicitud.asunto),
+        'Canal / Tipo': obtenerTipoDocumentoExcel(solicitud),
+        'Secretaría': limpiarValorExcel(dependenciasMap[solicitud.dependencia] || solicitud.dependencia),
+        'Nombre de Peticionario': limpiarValorExcel(nombrePeticionarioExcel(solicitud)),
+        'Teléfono': limpiarValorExcel(telefonoPeticionarioExcel(solicitud)),
+        'Fecha Envío a Verificación': formatearFechaExcel(solicitud.fechaVerificacion),
+        'Documento Inicial': limpiarValorExcel(solicitud.documentoInicial),
+        'Evidencia': limpiarValorExcel(solicitud.evidencias)
+    }));
+    crearArchivoExcel(filas, 'Verificacion', `SISGES_Verificacion_${new Date().toISOString().slice(0, 10)}.xlsx`, [16, 45, 24, 36, 30, 16, 25, 45, 45]);
+};
+
+window.exportarAtendidasExcel = function () {
+    const filas = obtenerValidadasFiltradas().map(solicitud => ({
+        'Folio': limpiarValorExcel(solicitud.key || solicitud.folio),
+        'Canal': limpiarValorExcel(solicitud.tipo || obtenerTipoDocumentoExcel(solicitud)),
+        'Asunto': limpiarValorExcel(solicitud.asunto),
+        'Secretaría': limpiarValorExcel(dependenciasMap[solicitud.dependencia] || solicitud.dependencia),
+        'Nombre de Peticionario': limpiarValorExcel(nombrePeticionarioExcel(solicitud)),
+        'Teléfono': limpiarValorExcel(telefonoPeticionarioExcel(solicitud)),
+        'Fecha Atención': formatearFechaExcel(solicitud.fechaAtencion),
+        'Documento Inicial': limpiarValorExcel(solicitud.documentoInicial),
+        'Evidencia': limpiarValorExcel(solicitud.evidencias)
+    }));
+    crearArchivoExcel(filas, 'Atendidas', `SISGES_Atendidas_${new Date().toISOString().slice(0, 10)}.xlsx`, [16, 24, 45, 36, 30, 16, 18, 45, 45]);
+};
+// ===================== FIN EXPORTACIÓN A EXCEL =====================
 
 window.addEventListener('beforeunload', () => {
     if (sessionRenewalInterval) clearInterval(sessionRenewalInterval);

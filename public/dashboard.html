@@ -14,6 +14,46 @@
     <!-- Google Fonts: Poppins -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="css/dashboard.css">
+
+    <style>
+        /* Encabezado ordenado para módulos con exportación */
+        .module-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--accent);
+        }
+
+        .module-header .section-title {
+            margin: 0;
+            padding: 0;
+            border-bottom: 0;
+            flex: 1;
+        }
+
+        .module-header .btn-excel {
+            flex: 0 0 auto;
+            white-space: nowrap;
+            min-height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        @media (max-width: 576px) {
+            .module-header {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .module-header .btn-excel {
+                width: 100%;
+            }
+        }
+    </style>
 </head>
 
 <body>
@@ -293,10 +333,15 @@
             <!-- Sección Nueva Solicitud -->
             <!-- Sección Verificación -->
             <div id="verificacion-content" class="content-section" style="display: none;">
-                <h2 class="section-title">
-                    <i class="fas fa-clipboard-check"></i>
-                    Verificación de Solicitudes
-                </h2>
+                <div class="module-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-clipboard-check"></i>
+                        Verificación de Solicitudes
+                    </h2>
+                    <button type="button" class="btn btn-excel" onclick="exportarVerificacionExcel()">
+                        <i class="fas fa-file-excel me-2"></i>Exportar Excel
+                    </button>
+                </div>
                 <div class="filtros-container mb-4">
                     <div class="input-group">
                         <span class="input-group-text">
@@ -723,10 +768,15 @@
 
             <!-- Sección Seguimiento -->
             <div id="seguimiento-content" class="content-section" style="display: none;">
-                <h2 class="section-title">
-                    <i class="fas fa-search"></i>
-                    Seguimiento de Solicitudes
-                </h2>
+                <div class="module-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-search"></i>
+                        Seguimiento de Solicitudes
+                    </h2>
+                    <button type="button" class="btn btn-excel" onclick="exportarSeguimientoExcel()">
+                        <i class="fas fa-file-excel me-2"></i>Exportar Excel
+                    </button>
+                </div>
                 <div class="filtros-container mb-4">
                     <div class="input-group">
                         <span class="input-group-text">
@@ -770,10 +820,15 @@
 
             <!-- Sección Validadas -->
             <div id="validadas-content" class="content-section" style="display: none;">
-                <h2 class="section-title">
-                    <i class="fa-solid fa-check-double"></i>
-                    Solicitudes Atendidas
-                </h2>
+                <div class="module-header">
+                    <h2 class="section-title">
+                        <i class="fa-solid fa-check-double"></i>
+                        Solicitudes Atendidas
+                    </h2>
+                    <button type="button" class="btn btn-excel" onclick="exportarAtendidasExcel()">
+                        <i class="fas fa-file-excel me-2"></i>Exportar Excel
+                    </button>
+                </div>
                 <div class="filtros-container mb-4">
                     <div class="row g-3">
                         <div class="col-md-4">
@@ -1300,6 +1355,8 @@
             <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js"></script>
             <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
             <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+            <!-- SheetJS: exportación real a archivos .xlsx -->
+            <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
             <script type="module" src="js/dashboard.js"></script>
 
 </body>
