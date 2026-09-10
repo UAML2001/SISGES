@@ -1005,3 +1005,628 @@ body {
 @media (max-width: 576px) {
     .modulo-actions .btn-excel { width: 100%; }
 }
+
+/* ==========================================================================
+   UNIDAD CENTRAL DE CORRESPONDENCIA · MÓDULO DE PRUEBA · 100% RESPONSIVO
+   ========================================================================== */
+
+/* Evita desbordamientos por textos o componentes flex/grid */
+#correspondencia-content,
+#correspondencia-content *,
+#modalNuevaCorrespondencia,
+#modalNuevaCorrespondencia * {
+    box-sizing: border-box;
+}
+
+#correspondencia-content {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+}
+
+.ucc-module-header {
+    min-width: 0;
+}
+
+.ucc-module-header .section-title {
+    min-width: 0;
+    flex-wrap: wrap;
+    column-gap: 0.75rem;
+    row-gap: 0.45rem;
+    line-height: 1.2;
+    font-size: clamp(1.35rem, 2.2vw, 1.8rem);
+    overflow-wrap: anywhere;
+}
+
+.ucc-test-badge {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    padding: 0.3rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(174, 144, 116, 0.18);
+    color: var(--secondary);
+    border: 1px solid rgba(174, 144, 116, 0.55);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 1;
+}
+
+.ucc-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.ucc-header-actions .btn {
+    min-height: 42px;
+    white-space: nowrap;
+}
+
+.ucc-test-alert {
+    border: 1px solid rgba(174, 144, 116, 0.45);
+    background: rgba(174, 144, 116, 0.10);
+    color: var(--text-primary);
+    border-radius: 10px;
+    overflow-wrap: anywhere;
+}
+
+.ucc-test-alert code {
+    color: var(--secondary);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.ucc-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+    width: 100%;
+}
+
+.ucc-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    min-width: 0;
+    min-height: 104px;
+    padding: 1.1rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+
+.ucc-stat-card > div:last-child {
+    min-width: 0;
+}
+
+.ucc-stat-icon {
+    width: 48px;
+    height: 48px;
+    flex: 0 0 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: rgba(73, 31, 66, 0.08);
+    color: var(--primary);
+    font-size: 1.15rem;
+}
+
+.ucc-stat-card span {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    margin-bottom: 0.2rem;
+    overflow-wrap: anywhere;
+}
+
+.ucc-stat-card strong {
+    display: block;
+    color: var(--primary);
+    font-size: clamp(1.4rem, 2.8vw, 1.65rem);
+    line-height: 1;
+}
+
+.ucc-filtros {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(160px, 220px) minmax(160px, 220px);
+    gap: 1rem;
+    align-items: center;
+    width: 100%;
+}
+
+.ucc-filtros > * {
+    min-width: 0;
+    width: 100%;
+}
+
+.ucc-filtros .form-control,
+.ucc-filtros .form-select {
+    min-height: 42px;
+}
+
+/* Escritorio/tablet: scroll horizontal únicamente cuando haga falta. */
+.ucc-table-wrapper {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-gutter: stable;
+}
+
+.ucc-table-wrapper:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.ucc-table {
+    width: 100%;
+    min-width: 1280px;
+    margin-bottom: 0;
+}
+
+.ucc-table th {
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.ucc-table td {
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+}
+
+.ucc-asunto-cell {
+    min-width: 240px;
+    max-width: 380px;
+    white-space: normal;
+}
+
+.ucc-priority-badge,
+.ucc-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 88px;
+    max-width: 100%;
+    padding: 0.32rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.ucc-priority-normal { background: #e9ecef; color: #495057; }
+.ucc-priority-urgente { background: #fde2e1; color: #b42318; }
+.ucc-status-recibido { background: #fff3cd; color: #856404; }
+.ucc-status-turnado { background: #dbeafe; color: #1d4ed8; }
+.ucc-status-concluido { background: #d4edda; color: #155724; }
+
+.ucc-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.btn-ucc-turnar {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.btn-ucc-turnar:hover,
+.btn-ucc-turnar:focus {
+    background: var(--secondary);
+    border-color: var(--secondary);
+    color: white;
+}
+
+.btn-ucc-concluir {
+    background: #198754;
+    border-color: #198754;
+    color: white;
+}
+
+.btn-ucc-concluir:hover,
+.btn-ucc-concluir:focus {
+    background: #157347;
+    border-color: #157347;
+    color: white;
+}
+
+.ucc-modal-header {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    color: white;
+    border-bottom: 0;
+    gap: 1rem;
+}
+
+.ucc-modal-header > div {
+    min-width: 0;
+}
+
+.ucc-modal-header .modal-title,
+.ucc-modal-header small {
+    overflow-wrap: anywhere;
+}
+
+.ucc-modal-header small { opacity: 0.82; }
+
+#modalNuevaCorrespondencia .modal-content {
+    border: 0;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.18);
+}
+
+#modalNuevaCorrespondencia .modal-body {
+    padding: 1.5rem;
+    min-width: 0;
+}
+
+#modalNuevaCorrespondencia .modal-body .row > * {
+    min-width: 0;
+}
+
+#modalNuevaCorrespondencia .form-control,
+#modalNuevaCorrespondencia .form-select,
+#modalNuevaCorrespondencia textarea {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+#modalNuevaCorrespondencia .modal-footer {
+    padding: 1rem 1.5rem 1.25rem;
+    border-top: 1px solid var(--border);
+    gap: 0.75rem;
+}
+
+/* Pantallas medianas: tarjetas estadísticas 2x2 y filtros mejor distribuidos. */
+@media (max-width: 1199.98px) {
+    .ucc-stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ucc-table {
+        min-width: 1160px;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .ucc-filtros {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ucc-filtros .input-group {
+        grid-column: 1 / -1;
+    }
+
+    .ucc-header-actions .btn {
+        flex: 1 1 190px;
+        justify-content: center;
+    }
+}
+
+/* Móvil/tablet vertical: la tabla se transforma en tarjetas legibles sin scroll lateral. */
+@media (max-width: 767.98px) {
+    #correspondencia-content {
+        overflow-x: clip;
+    }
+
+    .ucc-module-header {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .ucc-module-header .section-title {
+        width: 100%;
+    }
+
+    .ucc-header-actions {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ucc-header-actions .btn {
+        width: 100%;
+        min-width: 0;
+        white-space: normal;
+        text-align: center;
+    }
+
+    .ucc-test-alert {
+        padding: 0.9rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .ucc-table-wrapper {
+        overflow: visible;
+        border: 0;
+        box-shadow: none;
+        background: transparent;
+    }
+
+    .ucc-table {
+        display: block;
+        min-width: 0;
+        width: 100%;
+        background: transparent;
+    }
+
+    .ucc-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .ucc-table tbody {
+        display: grid;
+        gap: 1rem;
+        width: 100%;
+    }
+
+    .ucc-table tbody tr:not(.ucc-empty-row) {
+        display: block;
+        width: 100%;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    }
+
+    .ucc-table tbody tr:not(.ucc-empty-row) td {
+        display: grid;
+        grid-template-columns: minmax(115px, 34%) minmax(0, 1fr);
+        gap: 0.75rem;
+        align-items: start;
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        padding: 0.78rem 0.9rem;
+        border-bottom: 1px solid var(--border);
+        white-space: normal;
+        text-align: right;
+        overflow-wrap: anywhere;
+    }
+
+    .ucc-table tbody tr:not(.ucc-empty-row) td:last-child {
+        border-bottom: 0;
+    }
+
+    .ucc-table tbody tr:not(.ucc-empty-row) td::before {
+        content: attr(data-label);
+        color: var(--text-secondary);
+        font-size: 0.76rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+        text-align: left;
+        overflow-wrap: anywhere;
+    }
+
+    .ucc-table tbody tr:not(.ucc-empty-row) td > * {
+        justify-self: end;
+        max-width: 100%;
+    }
+
+    .ucc-table .ucc-asunto-cell {
+        min-width: 0;
+        max-width: none;
+    }
+
+    .ucc-table .ucc-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .ucc-table .ucc-actions .btn,
+    .ucc-table td[data-label="Documento"] .btn {
+        min-height: 38px;
+    }
+
+    .ucc-empty-row {
+        display: block;
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+        overflow: hidden;
+    }
+
+    .ucc-empty-row td {
+        display: block !important;
+        width: 100% !important;
+        padding: 2rem 1rem !important;
+        border: 0 !important;
+        text-align: center !important;
+    }
+
+    .ucc-empty-row td::before {
+        display: none !important;
+        content: none !important;
+    }
+
+    .ucc-paginacion .paginacion-contenedor {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+}
+
+/* Teléfonos: una sola columna y controles táctiles de ancho completo. */
+@media (max-width: 575.98px) {
+    .ucc-header-actions,
+    .ucc-stats-grid,
+    .ucc-filtros {
+        grid-template-columns: 1fr;
+    }
+
+    .ucc-filtros .input-group {
+        grid-column: auto;
+    }
+
+    .ucc-header-actions .btn {
+        min-height: 46px;
+    }
+
+    .ucc-stat-card {
+        min-height: 88px;
+        padding: 0.95rem 1rem;
+        gap: 0.85rem;
+    }
+
+    .ucc-stat-icon {
+        width: 44px;
+        height: 44px;
+        flex-basis: 44px;
+    }
+
+    .ucc-filtros {
+        gap: 0.75rem;
+    }
+
+    .ucc-filtros .form-control,
+    .ucc-filtros .form-select {
+        min-height: 46px;
+        font-size: 16px; /* Evita zoom automático de iOS */
+    }
+
+    .ucc-table tbody tr:not(.ucc-empty-row) td {
+        grid-template-columns: minmax(105px, 38%) minmax(0, 1fr);
+        padding: 0.72rem 0.8rem;
+        gap: 0.6rem;
+        font-size: 0.9rem;
+    }
+
+    .ucc-table tbody tr:not(.ucc-empty-row) td::before {
+        font-size: 0.7rem;
+    }
+
+    .ucc-paginacion .paginacion-contenedor {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.65rem;
+        padding: 0.85rem 0;
+    }
+
+    .ucc-paginacion .info-pagina {
+        grid-column: 1 / -1;
+        grid-row: 1;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .ucc-paginacion .btn-pag {
+        width: 100%;
+        min-width: 0;
+        min-height: 42px;
+    }
+
+    #modalNuevaCorrespondencia .modal-content {
+        min-height: 100dvh;
+        border-radius: 0;
+    }
+
+    #modalNuevaCorrespondencia .modal-header {
+        padding: 0.9rem 1rem;
+        align-items: flex-start;
+    }
+
+    #modalNuevaCorrespondencia .modal-title {
+        font-size: 1.05rem;
+        line-height: 1.25;
+    }
+
+    #modalNuevaCorrespondencia .modal-body {
+        padding: 1rem;
+    }
+
+    #modalNuevaCorrespondencia .modal-footer {
+        display: grid;
+        grid-template-columns: 1fr;
+        padding: 0.85rem 1rem max(0.85rem, env(safe-area-inset-bottom));
+        margin: 0;
+    }
+
+    #modalNuevaCorrespondencia .modal-footer .btn {
+        width: 100%;
+        min-height: 46px;
+        justify-content: center;
+        margin: 0;
+    }
+
+    #modalNuevaCorrespondencia .form-control,
+    #modalNuevaCorrespondencia .form-select,
+    #modalNuevaCorrespondencia textarea {
+        font-size: 16px; /* Evita zoom automático en iPhone */
+    }
+}
+
+/* Teléfonos muy estrechos (320–400 px): etiquetas arriba para máxima legibilidad. */
+@media (max-width: 399.98px) {
+    .ucc-module-header .section-title {
+        font-size: 1.2rem;
+    }
+
+    .ucc-test-badge {
+        font-size: 0.62rem;
+    }
+
+    .ucc-table tbody tr:not(.ucc-empty-row) td {
+        display: block;
+        text-align: left;
+    }
+
+    .ucc-table tbody tr:not(.ucc-empty-row) td::before {
+        display: block;
+        margin-bottom: 0.35rem;
+    }
+
+    .ucc-table tbody tr:not(.ucc-empty-row) td > * {
+        justify-self: auto;
+    }
+
+    .ucc-table .ucc-actions {
+        justify-content: stretch;
+    }
+
+    .ucc-table .ucc-actions .btn,
+    .ucc-table td[data-label="Documento"] .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* Compatibilidad con orientación horizontal y dispositivos de poca altura. */
+@media (max-height: 600px) and (orientation: landscape) {
+    #modalNuevaCorrespondencia .modal-header {
+        padding-top: 0.65rem;
+        padding-bottom: 0.65rem;
+    }
+
+    #modalNuevaCorrespondencia .modal-body {
+        padding-top: 0.85rem;
+        padding-bottom: 0.85rem;
+    }
+
+    #modalNuevaCorrespondencia .modal-footer {
+        padding-top: 0.65rem;
+        padding-bottom: 0.65rem;
+    }
+}

@@ -98,6 +98,12 @@
                         Nueva Solicitud Institucional
                     </a>
                 </li>
+                <li class="nav-item" id="navCorrespondencia" style="display: none;">
+                    <a class="nav-link" href="#correspondencia" data-content="correspondencia">
+                        <i class="fas fa-envelope-open-text"></i>
+                        Unidad Central de Correspondencia
+                    </a>
+                </li>
                 <li class="nav-item">
                     <a class="nav-link" href="#seguimiento" data-content="seguimiento">
                         <i class="fas fa-search"></i>
@@ -763,6 +769,226 @@
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+
+
+            <!-- Módulo de prueba: Unidad Central de Correspondencia -->
+            <div id="correspondencia-content" class="content-section" style="display: none;">
+                <div class="module-header ucc-module-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-envelope-open-text"></i>
+                        Unidad Central de Correspondencia
+                        <span class="ucc-test-badge">BETA</span>
+                    </h2>
+                    <div class="ucc-header-actions">
+                        <button type="button" class="btn btn-excel" onclick="exportarCorrespondenciaExcel()">
+                            <i class="fas fa-file-excel me-2"></i>Exportar Excel
+                        </button>
+                        <button type="button" class="btn btn-custom-primary" data-bs-toggle="modal"
+                            data-bs-target="#modalNuevaCorrespondencia">
+                            <i class="fas fa-plus-circle me-2"></i>Nueva Correspondencia
+                        </button>
+                    </div>
+                </div>
+
+                <div class="alert alert-warning ucc-test-alert mb-4">
+                    <i class="fas fa-flask me-2"></i>
+                    <strong>Entorno de prueba.</strong>
+                    Los registros de este módulo se guardan de forma independiente en
+                    <code>correspondencia_prueba</code> y no modifican el flujo actual de solicitudes de SISGES.
+                </div>
+
+                <div class="ucc-stats-grid mb-4">
+                    <div class="ucc-stat-card">
+                        <div class="ucc-stat-icon"><i class="fas fa-inbox"></i></div>
+                        <div>
+                            <span>Total registrados</span>
+                            <strong id="ucc-stat-total">0</strong>
+                        </div>
+                    </div>
+                    <div class="ucc-stat-card">
+                        <div class="ucc-stat-icon"><i class="fas fa-clock"></i></div>
+                        <div>
+                            <span>Recibidos</span>
+                            <strong id="ucc-stat-recibidos">0</strong>
+                        </div>
+                    </div>
+                    <div class="ucc-stat-card">
+                        <div class="ucc-stat-icon"><i class="fas fa-share-square"></i></div>
+                        <div>
+                            <span>Turnados</span>
+                            <strong id="ucc-stat-turnados">0</strong>
+                        </div>
+                    </div>
+                    <div class="ucc-stat-card">
+                        <div class="ucc-stat-icon"><i class="fas fa-check-circle"></i></div>
+                        <div>
+                            <span>Concluidos</span>
+                            <strong id="ucc-stat-concluidos">0</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ucc-filtros mb-4">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="fas fa-search"></i>
+                        </span>
+                        <input type="text" id="ucc-busqueda" class="form-control"
+                            placeholder="Buscar por folio, remitente, asunto o número de documento...">
+                    </div>
+
+                    <select id="ucc-filtro-estado" class="form-select">
+                        <option value="">Todos los estados</option>
+                        <option value="recibido">Recibidos</option>
+                        <option value="turnado">Turnados</option>
+                        <option value="concluido">Concluidos</option>
+                    </select>
+
+                    <select id="ucc-filtro-prioridad" class="form-select">
+                        <option value="">Todas las prioridades</option>
+                        <option value="normal">Normal</option>
+                        <option value="urgente">Urgente</option>
+                    </select>
+                </div>
+
+                <div class="custom-table ucc-table-wrapper" role="region" aria-label="Listado de correspondencia" tabindex="0">
+                    <table class="table ucc-table">
+                        <thead>
+                            <tr>
+                                <th>Folio</th>
+                                <th>Fecha recepción</th>
+                                <th>Tipo</th>
+                                <th>No. documento</th>
+                                <th>Remitente / Origen</th>
+                                <th>Asunto</th>
+                                <th>Destino</th>
+                                <th>Prioridad</th>
+                                <th>Estado</th>
+                                <th>Documento</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ucc-lista">
+                            <tr class="ucc-empty-row">
+                                <td colspan="11" class="text-center py-4 text-muted">
+                                    <i class="fas fa-inbox me-2"></i>
+                                    Abre el módulo para cargar la correspondencia de prueba.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="ucc-paginacion mt-3"></div>
+            </div>
+
+            <!-- Modal Nueva Correspondencia -->
+            <div class="modal fade" id="modalNuevaCorrespondencia" tabindex="-1"
+                aria-labelledby="modalNuevaCorrespondenciaLabel" aria-hidden="true">
+                <div class="modal-dialog modal-xl modal-dialog-scrollable modal-fullscreen-sm-down ucc-modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header ucc-modal-header">
+                            <div>
+                                <h5 class="modal-title" id="modalNuevaCorrespondenciaLabel">
+                                    <i class="fas fa-envelope-open-text me-2"></i>
+                                    Registrar correspondencia
+                                </h5>
+                                <small>Unidad Central de Correspondencia · Módulo de prueba</small>
+                            </div>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                                aria-label="Cerrar"></button>
+                        </div>
+
+                        <form id="formCorrespondenciaPrueba">
+                            <div class="modal-body">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label for="ucc-fecha-recepcion" class="form-label">Fecha y hora de recepción</label>
+                                        <input type="datetime-local" class="form-control" id="ucc-fecha-recepcion" required>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label for="ucc-tipo-documento" class="form-label">Tipo de documento</label>
+                                        <select class="form-select" id="ucc-tipo-documento" required>
+                                            <option value="">Seleccionar...</option>
+                                            <option value="Oficio">Oficio</option>
+                                            <option value="Solicitud">Solicitud</option>
+                                            <option value="Invitación">Invitación</option>
+                                            <option value="Circular">Circular</option>
+                                            <option value="Escrito">Escrito</option>
+                                            <option value="Otro">Otro</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label for="ucc-numero-documento" class="form-label">Número de documento</label>
+                                        <input type="text" class="form-control" id="ucc-numero-documento"
+                                            placeholder="Ej. SG/123/2026">
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label for="ucc-remitente" class="form-label">Remitente</label>
+                                        <input type="text" class="form-control" id="ucc-remitente" required
+                                            placeholder="Nombre de la persona remitente">
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label for="ucc-institucion-origen" class="form-label">Institución / Dependencia de origen</label>
+                                        <input type="text" class="form-control" id="ucc-institucion-origen"
+                                            placeholder="Institución, dependencia u organización">
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label for="ucc-asunto" class="form-label">Asunto</label>
+                                        <input type="text" class="form-control" id="ucc-asunto" required>
+                                    </div>
+
+                                    <div class="col-md-8">
+                                        <label for="ucc-dependencia-destino" class="form-label">Dependencia destino</label>
+                                        <select class="form-select" id="ucc-dependencia-destino" required>
+                                            <option value="">Seleccionar dependencia...</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label for="ucc-prioridad" class="form-label">Prioridad</label>
+                                        <select class="form-select" id="ucc-prioridad" required>
+                                            <option value="normal" selected>Normal</option>
+                                            <option value="urgente">Urgente</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label for="ucc-observaciones" class="form-label">Observaciones</label>
+                                        <textarea class="form-control" id="ucc-observaciones" rows="3"
+                                            placeholder="Anotaciones internas de recepción o turno"></textarea>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label for="ucc-documento" class="form-label">
+                                            Documento digital <span class="text-muted">(opcional)</span>
+                                        </label>
+                                        <input type="file" class="form-control" id="ucc-documento"
+                                            accept=".pdf,.jpg,.jpeg,.png">
+                                        <div class="form-text">
+                                            Formatos permitidos: PDF, JPG y PNG. Tamaño máximo: 10 MB.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-custom-secondary" data-bs-dismiss="modal">
+                                    <i class="fas fa-times me-2"></i>Cancelar
+                                </button>
+                                <button type="submit" class="btn btn-custom-primary" id="ucc-btn-guardar">
+                                    <i class="fas fa-save me-2"></i>Registrar Correspondencia
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
 

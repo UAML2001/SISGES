@@ -55,6 +55,13 @@ const itemsPerPage = 5;
 let currentPageSeguimiento = 1;
 let currentPageValidadas = 1;
 let currentPageVerificacion = 1;
+
+// Módulo de prueba: Unidad Central de Correspondencia
+let correspondenciaPrueba = [];
+let currentPageCorrespondencia = 1;
+const itemsPerPageCorrespondencia = 8;
+let listenerCorrespondenciaPruebaIniciado = false;
+
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
@@ -2541,6 +2548,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     const navacuerdos = document.querySelector('a[data-content="acuerdo"]').parentElement;
     const navoficios = document.querySelector('a[data-content="oficio"]').parentElement;
     const navInstitucional = document.getElementById('navInstitucional');
+    const navCorrespondencia = document.getElementById('navCorrespondencia');
     const navVobo = document.getElementById('navVobo');
 
     if (esVinculacionCiudadana) {
@@ -2553,6 +2561,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         navacuerdos.style.display = 'none';
         navoficios.style.display = 'none';
         if (navInstitucional) navInstitucional.style.display = 'none';
+        if (navCorrespondencia) navCorrespondencia.style.display = 'none';
         if (navVobo) navVobo.style.display = 'none';
 
         setTimeout(() => {
@@ -2570,6 +2579,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                 navacuerdos.style.display = 'none';
                 navoficios.style.display = 'none';
                 if (navInstitucional) navInstitucional.style.display = 'none';
+                if (navCorrespondencia) navCorrespondencia.style.display = 'none';
                 break;
             case 2:
                 nuevaLi.style.display = 'none';
@@ -2579,6 +2589,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                 navacuerdos.style.display = 'none';
                 navoficios.style.display = 'none';
                 if (navInstitucional) navInstitucional.style.display = 'none';
+                if (navCorrespondencia) navCorrespondencia.style.display = 'none';
                 break;
             case 3:
                 if (userEmail === 'vinculacion.ciudadana@tizayuca.gob.mx' ||
@@ -2590,6 +2601,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
                 navoficios.style.display = 'block';
                 if (navInstitucional) navInstitucional.style.display = 'block';
+                if (navCorrespondencia) navCorrespondencia.style.display = 'block';
                 break;
             default:
                 nuevaLi.style.display = 'none';
@@ -2598,6 +2610,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                 navacuerdos.style.display = 'none';
                 navoficios.style.display = 'none';
                 if (navInstitucional) navInstitucional.style.display = 'none';
+                if (navCorrespondencia) navCorrespondencia.style.display = 'none';
         }
     }
 
@@ -2612,7 +2625,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             allowedTabs.push('seguimiento', 'validadas');
             break;
         case 3:
-            allowedTabs.push('nueva', 'seguimiento', 'validadas');
+            allowedTabs.push('nueva', 'seguimiento', 'validadas', 'correspondencia');
             break;
     }
 
@@ -2715,6 +2728,9 @@ document.addEventListener('DOMContentLoaded', async function () {
             const contentId = this.getAttribute('data-content');
             if (contentId === 'vobo') {
                 aplicarFiltrosVobo();
+            }
+            if (contentId === 'correspondencia') {
+                cargarCorrespondenciaPrueba();
             }
 
             navLinks.forEach(n => n.classList.remove('active'));
@@ -4883,3 +4899,479 @@ window.addEventListener('beforeunload', () => {
     if (sessionRenewalInterval) clearInterval(sessionRenewalInterval);
     if (activityMonitorInterval) clearInterval(activityMonitorInterval);
 });
+
+
+// ============================================================================
+// MÓDULO DE PRUEBA · UNIDAD CENTRAL DE CORRESPONDENCIA
+// Base aislada: correspondencia_prueba
+// ============================================================================
+
+function uccEscapeHtml(valor) {
+    return String(valor ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function obtenerFechaHoraLocalInput() {
+    const ahora = new Date();
+    const local = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+}
+
+function formatearFechaHoraUCC(valor) {
+    if (!valor) return 'N/A';
+    const fecha = new Date(valor);
+    if (Number.isNaN(fecha.getTime())) return valor;
+    return fecha.toLocaleString('es-MX', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function textoEstadoUCC(estado) {
+    const estadosUCC = {
+        recibido: 'Recibido',
+        turnado: 'Turnado',
+        concluido: 'Concluido'
+    };
+    return estadosUCC[estado] || estado || 'Recibido';
+}
+
+function claseEstadoUCC(estado) {
+    const clases = {
+        recibido: 'ucc-status-recibido',
+        turnado: 'ucc-status-turnado',
+        concluido: 'ucc-status-concluido'
+    };
+    return clases[estado] || 'ucc-status-recibido';
+}
+
+function poblarDependenciasCorrespondencia() {
+    const select = document.getElementById('ucc-dependencia-destino');
+    if (!select) return;
+
+    const valorActual = select.value;
+    const dependencias = Object.entries(dependenciasMap)
+        .filter(([, nombre]) => nombre)
+        .sort((a, b) => String(a[1]).localeCompare(String(b[1]), 'es'));
+
+    select.innerHTML = '<option value="">Seleccionar dependencia...</option>';
+
+    dependencias.forEach(([clave, nombre]) => {
+        const option = document.createElement('option');
+        option.value = clave;
+        option.textContent = nombre;
+        select.appendChild(option);
+    });
+
+    if (valorActual && dependenciasMap[valorActual]) {
+        select.value = valorActual;
+    }
+}
+
+async function generarFolioCorrespondenciaPrueba() {
+    const folioRef = ref(database, 'configuracion/ultimoFolioCorrespondenciaPrueba');
+    const snapshot = await get(folioRef);
+    const siguiente = (snapshot.val() || 0) + 1;
+    await set(folioRef, siguiente);
+    return `UCC-${siguiente.toString().padStart(5, '0')}`;
+}
+
+function cargarCorrespondenciaPrueba() {
+    poblarDependenciasCorrespondencia();
+
+    if (listenerCorrespondenciaPruebaIniciado) {
+        aplicarFiltrosCorrespondenciaPrueba();
+        return;
+    }
+
+    listenerCorrespondenciaPruebaIniciado = true;
+
+    onValue(ref(database, 'correspondencia_prueba'), (snapshot) => {
+        const datos = [];
+
+        snapshot.forEach(childSnapshot => {
+            datos.push({
+                folio: childSnapshot.key,
+                ...childSnapshot.val()
+            });
+        });
+
+        correspondenciaPrueba = datos.sort((a, b) => {
+            const fechaA = new Date(a.fechaRecepcion || a.fechaRegistro || 0).getTime();
+            const fechaB = new Date(b.fechaRecepcion || b.fechaRegistro || 0).getTime();
+            return fechaB - fechaA;
+        });
+
+        actualizarEstadisticasCorrespondenciaPrueba();
+        aplicarFiltrosCorrespondenciaPrueba();
+    }, (error) => {
+        console.error('Error cargando correspondencia de prueba:', error);
+        listenerCorrespondenciaPruebaIniciado = false;
+        mostrarError('No fue posible cargar la correspondencia de prueba');
+    });
+}
+
+function obtenerCorrespondenciaFiltrada() {
+    const busqueda = (document.getElementById('ucc-busqueda')?.value || '').trim().toLowerCase();
+    const estado = document.getElementById('ucc-filtro-estado')?.value || '';
+    const prioridad = document.getElementById('ucc-filtro-prioridad')?.value || '';
+
+    return correspondenciaPrueba.filter(item => {
+        const texto = [
+            item.folio,
+            item.numeroDocumento,
+            item.tipoDocumento,
+            item.remitente,
+            item.institucionOrigen,
+            item.asunto,
+            dependenciasMap[item.dependenciaDestino] || item.dependenciaDestino,
+            item.observaciones
+        ].join(' ').toLowerCase();
+
+        const coincideBusqueda = !busqueda || texto.includes(busqueda);
+        const coincideEstado = !estado || item.estado === estado;
+        const coincidePrioridad = !prioridad || item.prioridad === prioridad;
+
+        return coincideBusqueda && coincideEstado && coincidePrioridad;
+    });
+}
+
+function aplicarFiltrosCorrespondenciaPrueba() {
+    currentPageCorrespondencia = Math.max(1, currentPageCorrespondencia);
+    mostrarPaginaCorrespondenciaPrueba(obtenerCorrespondenciaFiltrada());
+}
+
+function actualizarEstadisticasCorrespondenciaPrueba() {
+    const total = correspondenciaPrueba.length;
+    const recibidos = correspondenciaPrueba.filter(item => item.estado === 'recibido').length;
+    const turnados = correspondenciaPrueba.filter(item => item.estado === 'turnado').length;
+    const concluidos = correspondenciaPrueba.filter(item => item.estado === 'concluido').length;
+
+    const valores = {
+        'ucc-stat-total': total,
+        'ucc-stat-recibidos': recibidos,
+        'ucc-stat-turnados': turnados,
+        'ucc-stat-concluidos': concluidos
+    };
+
+    Object.entries(valores).forEach(([id, valor]) => {
+        const elemento = document.getElementById(id);
+        if (elemento) elemento.textContent = valor;
+    });
+}
+
+function mostrarPaginaCorrespondenciaPrueba(data) {
+    const tabla = document.getElementById('ucc-lista');
+    if (!tabla) return;
+
+    const totalPages = Math.max(1, Math.ceil(data.length / itemsPerPageCorrespondencia));
+    if (currentPageCorrespondencia > totalPages) {
+        currentPageCorrespondencia = totalPages;
+    }
+
+    tabla.innerHTML = '';
+
+    if (data.length === 0) {
+        tabla.innerHTML = `
+            <tr class="ucc-empty-row">
+                <td colspan="11" class="text-center py-5 text-muted">
+                    <i class="fas fa-inbox fa-2x mb-3 d-block"></i>
+                    No hay correspondencia que coincida con los filtros.
+                </td>
+            </tr>
+        `;
+        actualizarPaginacionCorrespondenciaPrueba(0);
+        return;
+    }
+
+    const inicio = (currentPageCorrespondencia - 1) * itemsPerPageCorrespondencia;
+    const items = data.slice(inicio, inicio + itemsPerPageCorrespondencia);
+    const frag = document.createDocumentFragment();
+
+    items.forEach(item => {
+        const tr = document.createElement('tr');
+        const nombreDestino = dependenciasMap[item.dependenciaDestino] || item.dependenciaDestino || 'Sin asignar';
+        const origen = [item.remitente, item.institucionOrigen].filter(Boolean).join(' · ') || 'N/A';
+        const prioridad = item.prioridad === 'urgente' ? 'Urgente' : 'Normal';
+
+        let acciones = '';
+        if (item.estado === 'recibido') {
+            acciones = `
+                <button type="button" class="btn btn-sm btn-ucc-turnar"
+                    onclick="cambiarEstadoCorrespondenciaPrueba('${uccEscapeHtml(item.folio)}','turnado')">
+                    <i class="fas fa-share-square me-1"></i>Turnar
+                </button>
+            `;
+        } else if (item.estado === 'turnado') {
+            acciones = `
+                <button type="button" class="btn btn-sm btn-ucc-concluir"
+                    onclick="cambiarEstadoCorrespondenciaPrueba('${uccEscapeHtml(item.folio)}','concluido')">
+                    <i class="fas fa-check me-1"></i>Concluir
+                </button>
+            `;
+        } else {
+            acciones = '<span class="text-success small"><i class="fas fa-check-circle me-1"></i>Finalizado</span>';
+        }
+
+        const documento = item.documentoUrl
+            ? `<a class="btn btn-sm btn-outline-secondary" href="${uccEscapeHtml(item.documentoUrl)}"
+                    target="_blank" rel="noopener noreferrer">
+                    <i class="fas fa-file-alt me-1"></i>Ver
+               </a>`
+            : '<span class="text-muted small">Sin archivo</span>';
+
+        tr.innerHTML = `
+            <td data-label="Folio"><strong>${uccEscapeHtml(item.folio)}</strong></td>
+            <td data-label="Fecha recepción">${uccEscapeHtml(formatearFechaHoraUCC(item.fechaRecepcion))}</td>
+            <td data-label="Tipo">${uccEscapeHtml(item.tipoDocumento || 'N/A')}</td>
+            <td data-label="No. documento">${uccEscapeHtml(item.numeroDocumento || 'S/N')}</td>
+            <td data-label="Remitente / Origen">${uccEscapeHtml(origen)}</td>
+            <td data-label="Asunto" class="ucc-asunto-cell">${uccEscapeHtml(item.asunto || 'N/A')}</td>
+            <td data-label="Destino">${uccEscapeHtml(nombreDestino)}</td>
+            <td data-label="Prioridad">
+                <span class="ucc-priority-badge ${item.prioridad === 'urgente' ? 'ucc-priority-urgente' : 'ucc-priority-normal'}">
+                    ${prioridad}
+                </span>
+            </td>
+            <td data-label="Estado">
+                <span class="ucc-status-badge ${claseEstadoUCC(item.estado)}">
+                    ${uccEscapeHtml(textoEstadoUCC(item.estado))}
+                </span>
+            </td>
+            <td data-label="Documento">${documento}</td>
+            <td data-label="Acciones"><div class="ucc-actions">${acciones}</div></td>
+        `;
+        frag.appendChild(tr);
+    });
+
+    tabla.appendChild(frag);
+    actualizarPaginacionCorrespondenciaPrueba(data.length);
+}
+
+function actualizarPaginacionCorrespondenciaPrueba(totalItems) {
+    const container = document.querySelector('.ucc-paginacion');
+    if (!container) return;
+
+    const totalPages = Math.ceil(totalItems / itemsPerPageCorrespondencia);
+    container.innerHTML = '';
+
+    if (totalPages <= 1) return;
+
+    container.innerHTML = `
+        <div class="paginacion-contenedor">
+            <button class="btn-pag ucc-anterior" ${currentPageCorrespondencia === 1 ? 'disabled' : ''}>
+                Anterior
+            </button>
+            <span class="info-pagina">Página ${currentPageCorrespondencia} de ${totalPages}</span>
+            <button class="btn-pag ucc-siguiente" ${currentPageCorrespondencia === totalPages ? 'disabled' : ''}>
+                Siguiente
+            </button>
+        </div>
+    `;
+
+    container.querySelector('.ucc-anterior')?.addEventListener('click', () => {
+        currentPageCorrespondencia = Math.max(1, currentPageCorrespondencia - 1);
+        mostrarPaginaCorrespondenciaPrueba(obtenerCorrespondenciaFiltrada());
+    });
+
+    container.querySelector('.ucc-siguiente')?.addEventListener('click', () => {
+        currentPageCorrespondencia = Math.min(totalPages, currentPageCorrespondencia + 1);
+        mostrarPaginaCorrespondenciaPrueba(obtenerCorrespondenciaFiltrada());
+    });
+}
+
+window.cambiarEstadoCorrespondenciaPrueba = async function (folio, nuevoEstado) {
+    const textos = {
+        turnado: '¿Deseas marcar esta correspondencia como turnada?',
+        concluido: '¿Deseas marcar esta correspondencia como concluida?'
+    };
+
+    if (!confirm(textos[nuevoEstado] || '¿Deseas actualizar el estado?')) return;
+
+    try {
+        const cambios = {
+            estado: nuevoEstado,
+            ultimaActualizacion: new Date().toISOString(),
+            actualizadoPor: getCookie('nombre') || getCookie('email') || 'Sistema'
+        };
+
+        if (nuevoEstado === 'turnado') {
+            cambios.fechaTurnado = new Date().toISOString();
+        }
+
+        if (nuevoEstado === 'concluido') {
+            cambios.fechaConclusion = new Date().toISOString();
+        }
+
+        await update(ref(database, `correspondencia_prueba/${folio}`), cambios);
+        mostrarExito(`Correspondencia ${textoEstadoUCC(nuevoEstado).toLowerCase()} correctamente`);
+    } catch (error) {
+        console.error('Error actualizando correspondencia:', error);
+        mostrarError('No fue posible actualizar el estado de la correspondencia');
+    }
+};
+
+window.exportarCorrespondenciaExcel = function () {
+    if (typeof XLSX === 'undefined') {
+        mostrarError('No se pudo cargar el componente de exportación Excel');
+        return;
+    }
+
+    const datos = obtenerCorrespondenciaFiltrada();
+
+    if (datos.length === 0) {
+        Toastify({
+            text: 'No hay registros para exportar con los filtros actuales',
+            duration: 3000,
+            className: 'toastify-info'
+        }).showToast();
+        return;
+    }
+
+    const filas = datos.map(item => ({
+        'Folio UCC': item.folio || '',
+        'Fecha recepción': formatearFechaHoraUCC(item.fechaRecepcion),
+        'Tipo de documento': item.tipoDocumento || '',
+        'Número de documento': item.numeroDocumento || '',
+        'Remitente': item.remitente || '',
+        'Institución / Origen': item.institucionOrigen || '',
+        'Asunto': item.asunto || '',
+        'Dependencia destino': dependenciasMap[item.dependenciaDestino] || item.dependenciaDestino || '',
+        'Prioridad': item.prioridad === 'urgente' ? 'Urgente' : 'Normal',
+        'Estado': textoEstadoUCC(item.estado),
+        'Observaciones': item.observaciones || '',
+        'Documento digital': item.documentoUrl || '',
+        'Registró': item.registradoPor || '',
+        'Fecha de registro': formatearFechaHoraUCC(item.fechaRegistro),
+        'Fecha de turno': item.fechaTurnado ? formatearFechaHoraUCC(item.fechaTurnado) : '',
+        'Fecha de conclusión': item.fechaConclusion ? formatearFechaHoraUCC(item.fechaConclusion) : ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(filas);
+    worksheet['!cols'] = [
+        { wch: 14 }, { wch: 19 }, { wch: 20 }, { wch: 22 },
+        { wch: 28 }, { wch: 30 }, { wch: 45 }, { wch: 38 },
+        { wch: 12 }, { wch: 14 }, { wch: 40 }, { wch: 35 },
+        { wch: 28 }, { wch: 19 }, { wch: 19 }, { wch: 19 }
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Correspondencia');
+
+    const fecha = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(workbook, `SISGES_UCC_prueba_${fecha}.xlsx`);
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('formCorrespondenciaPrueba');
+    const modalElement = document.getElementById('modalNuevaCorrespondencia');
+
+    const prepararFormulario = () => {
+        const fecha = document.getElementById('ucc-fecha-recepcion');
+        if (fecha && !fecha.value) fecha.value = obtenerFechaHoraLocalInput();
+        poblarDependenciasCorrespondencia();
+    };
+
+    modalElement?.addEventListener('show.bs.modal', prepararFormulario);
+
+    modalElement?.addEventListener('hidden.bs.modal', () => {
+        form?.reset();
+        const fecha = document.getElementById('ucc-fecha-recepcion');
+        if (fecha) fecha.value = obtenerFechaHoraLocalInput();
+        const prioridad = document.getElementById('ucc-prioridad');
+        if (prioridad) prioridad.value = 'normal';
+    });
+
+    document.getElementById('ucc-busqueda')?.addEventListener('input', debounce(() => {
+        currentPageCorrespondencia = 1;
+        aplicarFiltrosCorrespondenciaPrueba();
+    }, 250));
+
+    document.getElementById('ucc-filtro-estado')?.addEventListener('change', () => {
+        currentPageCorrespondencia = 1;
+        aplicarFiltrosCorrespondenciaPrueba();
+    });
+
+    document.getElementById('ucc-filtro-prioridad')?.addEventListener('change', () => {
+        currentPageCorrespondencia = 1;
+        aplicarFiltrosCorrespondenciaPrueba();
+    });
+
+    form?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const btnGuardar = document.getElementById('ucc-btn-guardar');
+        const archivo = document.getElementById('ucc-documento')?.files?.[0] || null;
+
+        if (archivo && archivo.size > MAX_FILE_SIZE_BYTES) {
+            mostrarError('El documento digital no puede superar los 10 MB');
+            return;
+        }
+
+        if (archivo) {
+            const extension = archivo.name.split('.').pop().toLowerCase();
+            if (!['pdf', 'jpg', 'jpeg', 'png'].includes(extension)) {
+                mostrarError('El documento digital debe ser PDF, JPG o PNG');
+                return;
+            }
+        }
+
+        btnGuardar?.setAttribute('disabled', 'disabled');
+
+        try {
+            const folio = await generarFolioCorrespondenciaPrueba();
+            let documentoUrl = '';
+
+            if (archivo) {
+                const nombreSeguro = archivo.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                const ruta = `correspondencia_prueba/${folio}/${Date.now()}_${nombreSeguro}`;
+                const archivoRef = storageRef(storage, ruta);
+                await uploadBytes(archivoRef, archivo);
+                documentoUrl = await getDownloadURL(archivoRef);
+            }
+
+            const registro = {
+                fechaRecepcion: document.getElementById('ucc-fecha-recepcion').value,
+                tipoDocumento: document.getElementById('ucc-tipo-documento').value,
+                numeroDocumento: document.getElementById('ucc-numero-documento').value.trim(),
+                remitente: document.getElementById('ucc-remitente').value.trim(),
+                institucionOrigen: document.getElementById('ucc-institucion-origen').value.trim(),
+                asunto: document.getElementById('ucc-asunto').value.trim(),
+                dependenciaDestino: document.getElementById('ucc-dependencia-destino').value,
+                prioridad: document.getElementById('ucc-prioridad').value,
+                observaciones: document.getElementById('ucc-observaciones').value.trim(),
+                documentoUrl,
+                estado: 'recibido',
+                fechaRegistro: new Date().toISOString(),
+                registradoPor: getCookie('nombre') || getCookie('email') || 'Sistema',
+                correoRegistro: getCookie('email') || ''
+            };
+
+            await set(ref(database, `correspondencia_prueba/${folio}`), registro);
+
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            modal?.hide();
+
+            mostrarExito(`Correspondencia registrada con folio ${folio}`);
+        } catch (error) {
+            console.error('Error registrando correspondencia de prueba:', error);
+            mostrarError('No fue posible registrar la correspondencia');
+        } finally {
+            btnGuardar?.removeAttribute('disabled');
+        }
+    });
+
+    prepararFormulario();
+});
+
+// ============================================================================
+// FIN MÓDULO DE PRUEBA · UNIDAD CENTRAL DE CORRESPONDENCIA
+// ============================================================================
+
